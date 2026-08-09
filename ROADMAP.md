@@ -144,55 +144,72 @@ celtas-mobile/
 
 ## Checklist por módulos
 
-### 0. Setup inicial
-- [ ] `flutter create celtas_mobile --org com.celtas --platforms=android,ios`
-- [ ] Copiar el export de Claude Design a `design-reference/`
-- [ ] Dependencias en `pubspec.yaml`: `flutter_riverpod`, `dio`, `go_router`, `freezed_annotation`,
-      `json_annotation` (+ `build_runner`, `freezed`, `json_serializable` como dev deps),
-      `flutter_secure_storage`, `google_sign_in`, `firebase_core`, `firebase_messaging`,
-      `flutter_local_notifications`, `cached_network_image`, `url_launcher`, `flutter_dotenv`,
-      `mocktail` (dev)
-- [ ] `.env`/`.env.example` con `API_BASE_URL=https://backend-celtas.onrender.com` (y nota de
-      cómo apuntar al backend local para desarrollo)
-- [ ] Tema visual (`app_theme.dart`) con la paleta exacta, tipografía de `design-reference/`
-- [ ] `api_client.dart`: instancia de `dio` con interceptores (estructura base, se completa en
-      el módulo 1)
-- [ ] Estructura de carpetas completa según el diagrama
-- [ ] `flutter analyze` y `flutter run` limpios (en un emulador o dispositivo)
+### 0. Setup inicial — ✅ COMPLETO
+- [x] `flutter create` + dependencias (Riverpod, dio, go_router, freezed, secure_storage, google_sign_in, firebase_core/messaging, cached_network_image, url_launcher, flutter_dotenv, mocktail)
+- [x] `design-reference/` copiado, tema visual extraído del CSS real (no aproximado): paleta,
+  tipografía (`Cinzel` display/títulos, `Manrope` cuerpo, vía `google_fonts`), radios (`CeltasRadii`)
+- [x] `.env`/`.env.example` con `API_BASE_URL`, nota de `10.0.2.2` para emulador Android
+- [x] `api_client.dart` con estructura base (interceptor completo en módulo 1)
+- [x] Estructura de carpetas completa, `analysis_options.yaml` con `flutter_lints` estricto
+- [x] `flutter analyze` sin issues, `flutter run` (web) compila y sirve 200
+- ⚠️ Nota: esta sesión corrió en el agente `build` por descuido (no `celtas-mobile`) — sin
+  impacto real porque el módulo no requería `@tester` ni las instrucciones específicas del
+  agente, y la skill ya está habilitada a nivel de proyecto. Confirmar el agente correcto con
+  Tab antes del módulo 1 (Auth), donde sí importa.
 
-### 1. Auth
-- [x] Prerrequisito: Client ID de Google creado en Google Cloud (proyecto `celtas-b0bd5`).
-      El Client ID "Web application" (`614499893538-sn5adeq44eog889k15c7s3pmqosapen6...`)
-      vive en `.env` como `GOOGLE_SERVER_CLIENT_ID` y se pasa a
-      `GoogleSignIn.initialize(serverClientId:)`. El de tipo Android se vincula por
-      package name + SHA-1 en Google Cloud (NO requiere `google-services.json`:
-      verificado en dispositivo real Xiaomi — el picker, el consentimiento y el
-      `POST /auth/google` funcionaron sin ese archivo; el README de
-      `google_sign_in_android` documenta `serverClientId` como alternativa a
-      google-services.json).
-- [x] Verificación en dispositivo real (Xiaomi 24117RN76L, debug SHA-1
-      `27:4B:79:B2:5B:7E:5E:C5:D4:6A:3A:1C:CD:9C:3B:2D:0F:EE:F6:5C`): login con Google
-      completo (picker → consentimiento → idToken → sesión persistida → `/home`).
-      Bugs reales encontrados y corregidos: `main.dart` sin `ProviderScope` (crash
-      "No ProviderScope found") y `routerProvider` recreando el `GoRouter` en cada
-      cambio de auth (la app saltaba al Splash tras login/logout; ahora usa
-      `ref.listen` + `router.refresh()`).
-- [x] Modelos (`freezed`): `User`, `AuthTokens` — confirmar contrato real contra el backend
-- [x] `AuthRepository`: login, registro, login con Google (`google_sign_in` 7.x:
-      `initialize()` + `authenticate()` → `idToken` → `POST /auth/google`; cancelación del
-      picker → `GoogleSignInCanceledException` que la UI ignora; 409 → `ApiException` con el
-      mensaje del backend), refresh
+### 1. Auth — ✅ COMPLETO (8/8)
+- [x] Prerrequisito: Client ID de Google (Android) creado con SHA-1 real; login con Google
+  implementado con `google_sign_in` 7.x (`initialize()` una sola vez + `authenticate()`),
+  `GOOGLE_SERVER_CLIENT_ID` en `.env`. **Bug mayor corregido**: `initialize()` se llamaba más de
+  una vez (comportamiento indefinido según la SDK), fijado a llamada única de instancia.
+  Cancelación del picker manejada sin error, 409 de email duplicado con mensaje real del
+  backend. 45/45 tests (repositorio con fake, controller, widget del botón)
+- [x] **Confirmado con evidencia real** (no suposición): `google-services.json` NO es necesario
+  — cero imports de Firebase en `lib/`, cero plugin `google-services` en Gradle, y la
+  documentación del propio paquete confirma que `serverClientId` tiene precedencia sobre ese
+  archivo. El backend se identifica por package name + SHA-1 registrados en Google Cloud
+- [x] **Prueba real en dispositivo** (Xiaomi por USB): login con Google completo de punta a
+  punta — picker nativo, consentimiento OAuth, `idToken` real, backend acepta el token, sesión
+  restaurada al reabrir la app. La prueba encontró y corrigió 2 bugs reales que solo aparecen
+  en dispositivo (los tests automatizados los enmascaraban):
+  1. `ProviderScope` faltante en `main.dart` → crash "Bad state: No ProviderScope found" al
+     arrancar (los widget tests lo ocultaban porque ellos mismos envuelven con su propio
+     `ProviderScope`)
+  2. El router se recreaba en cada cambio de estado de auth → tras login, la app quedaba
+     pegada en el Splash con spinner infinito en vez de navegar a Home. Fix: `ref.listen` +
+     `router.refresh()` en vez de reconstruir el router, + redirect explícito de `/` → `/home`
+     para usuarios autenticados. 2 tests de regresión del router agregados (47/47 verdes)
+- [x] Modelos `freezed`: `User`, `AuthTokens` — contrato verificado contra el backend real
+- [x] `AuthRepository`: login, registro, refresh (Google aislado a propósito)
 - [x] Provider de Riverpod: `accessToken` en memoria, `user` actual
 - [x] `flutter_secure_storage` para el `refreshToken`
-- [x] Interceptor de `dio` completo: agrega el token, maneja 401 con refresh-once (mismo patrón
-      verificado a fondo en el panel admin, incluida la cola de requests pendientes)
-- [x] Pantallas: Splash (con bootstrap de sesión), Login, Registro — según `design-reference/`
+- [x] Interceptor de `dio` completo: request/response/error, refresh-once, cola de pendientes
+  con `Completer`, `/auth/login`+`/auth/refresh`+`/auth/register` excluidos del ciclo
+- [x] Pantallas Splash/Login/Registro según `design-reference/`, con aviso de backend lento (5s)
 - [x] Persistencia de sesión al reabrir la app
+- [x] **Deadlock teórico corregido**: una request encolada reintentada no marcaba `_retry`, así
+  que si el token recién rotado fallaba en su reintento, se re-encolaba esperando un
+  `_flushQueue` que ya no iba a llegar — colgada para siempre. Verificado bidireccionalmente
+  (falla sin el fix con `TimeoutException`, pasa con el fix)
+- [x] **Bug de clase encontrado vía widget test del Splash**: `parseSvgPath` no soportaba
+  notación compacta ni comandos relativos/arcos SVG — `CeltasFlame` y `GoogleLogo` habrían
+  crasheado la app en la primera pantalla (compilaba bien, fallaba en runtime al pintar).
+  Parser reescrito con la gramática SVG completa, 6 tests con los paths reales
+- [x] Auditado por `@tester` + código verificado por mí (evidencia cruda de ambos archivos
+  clave): 27/27 tests, `flutter analyze` limpio
 
-### 2. Navegación base
-- [ ] `go_router` con shell route: bottom nav bar (Inicio, Pedidos, Cupones, Perfil)
-- [ ] Guard de rutas: pantallas protegidas requieren sesión
-- [ ] Tema aplicado consistente en toda la navegación
+### 2. Navegación base — ✅ COMPLETO (3/3)
+- [x] `go_router` con shell route: bottom nav bar (Inicio, Pedidos, Cupones, Perfil)
+- [x] Guard de rutas: pantallas protegidas requieren sesión
+- [x] Tema aplicado consistente en toda la navegación
+- [x] `StatefulShellRoute.indexedStack` (cada tab mantiene su propio stack — necesario
+      para los módulos 3-8). Bottom nav custom con valores exactos del mockup (alto 78px,
+      fondo `#111010`, borde `#241F19`, íconos SVG 21px stroke 2.2 activo naranja / 2
+      inactivo `#6B6357`, labels 10px). Guard por prefijo cubre rutas anidadas futuras
+      (`/orders/123`). Patrón `ref.listen` + `router.refresh()` conservado (sin bug de
+      recreación). 50/50 tests, `flutter analyze` limpio, probado en dispositivo real
+      (registro → shell → 4 tabs → reabrir app con sesión persistida). Auditado por
+      `@tester`: veredicto LISTO
 
 ### 3. Home
 - [ ] Consume `GET /banners/active` — carrusel de banners

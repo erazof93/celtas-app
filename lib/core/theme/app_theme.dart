@@ -18,6 +18,7 @@ class CeltasColors {
 
   // --- Escala neutra / superficies y bordes (del CSS real del mockup).
   static const card = Color(0xFF141110); // tarjetas/cards
+  static const navBar = Color(0xFF111010); // fondo del bottom nav (mockup)
   static const surface = Color(0xFF17130F); // inputs, chips, fondos internos
   static const surfaceSelected = Color(0xFF1B140D); // tarjeta/input seleccionado
   static const border = Color(0xFF2A231C);
