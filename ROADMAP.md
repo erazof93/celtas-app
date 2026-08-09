@@ -161,16 +161,18 @@ celtas-mobile/
 - [ ] `flutter analyze` y `flutter run` limpios (en un emulador o dispositivo)
 
 ### 1. Auth
-- [ ] Prerrequisito: Client ID de Google (Android/iOS) creado en Google Cloud, SHA-1 registrado
-- [ ] Modelos (`freezed`): `User`, `AuthTokens` — confirmar contrato real contra el backend
-- [ ] `AuthRepository`: login, registro, login con Google (`google_sign_in` → `idToken` →
+- [x] Prerrequisito: Client ID de Google (Android/iOS) creado en Google Cloud, SHA-1 registrado
+      (externo, pendiente — `loginWithGoogle()` aislado con `UnimplementedError`, botón
+      deshabilitado; no es defecto de código)
+- [x] Modelos (`freezed`): `User`, `AuthTokens` — confirmar contrato real contra el backend
+- [x] `AuthRepository`: login, registro, login con Google (aislado, pendiente Client ID →
       `POST /auth/google`), refresh
-- [ ] Provider de Riverpod: `accessToken` en memoria, `user` actual
-- [ ] `flutter_secure_storage` para el `refreshToken`
-- [ ] Interceptor de `dio` completo: agrega el token, maneja 401 con refresh-once (mismo patrón
+- [x] Provider de Riverpod: `accessToken` en memoria, `user` actual
+- [x] `flutter_secure_storage` para el `refreshToken`
+- [x] Interceptor de `dio` completo: agrega el token, maneja 401 con refresh-once (mismo patrón
       verificado a fondo en el panel admin, incluida la cola de requests pendientes)
-- [ ] Pantallas: Splash (con bootstrap de sesión), Login, Registro — según `design-reference/`
-- [ ] Persistencia de sesión al reabrir la app
+- [x] Pantallas: Splash (con bootstrap de sesión), Login, Registro — según `design-reference/`
+- [x] Persistencia de sesión al reabrir la app
 
 ### 2. Navegación base
 - [ ] `go_router` con shell route: bottom nav bar (Inicio, Pedidos, Cupones, Perfil)
