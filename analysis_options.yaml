@@ -1,1 +1,34 @@
+# Análisis estático estricto de la app.
+# Base: reglas recomendadas de Flutter (flutter_lints). Se agregan reglas
+# estrictas adicionales; nada se desactiva sin justificarlo.
+
 include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - build/**
+
+linter:
+  rules:
+    # --- Estilos de código ---
+    - always_use_package_imports
+    - avoid_redundant_argument_values
+    - prefer_const_constructors
+    - prefer_const_constructors_in_immutables
+    - prefer_const_declarations
+    - prefer_final_fields
+    - prefer_final_locals
+    - unnecessary_const
+    - unnecessary_new
+    - unnecessary_this
+    - sort_pub_dependencies
+    - directives_ordering
+
+    # --- Correctness ---
+    - avoid_void_async
+    - cancel_subscriptions
+    - close_sinks
+    - literal_only_boolean_expressions
+    - unawaited_futures
+    - use_super_parameters
+    - library_private_types_in_public_api
