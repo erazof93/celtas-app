@@ -21,6 +21,7 @@ solo cuando pasa lo aplicable de este checklist.
 - [ ] `accessToken` nunca se persiste (solo en memoria vía Riverpod)
 - [ ] `refreshToken` sí persiste, en `flutter_secure_storage` (no `SharedPreferences`)
 - [ ] Login con Google nunca envía `password` en el body
+- [ ] Login con Google: `GoogleSignIn.initialize()` se llama UNA sola vez (la SDK documenta "undefined behavior" si se llama más de una vez); cancelación del picker no muestra error; 409 muestra el mensaje real del backend
 - [ ] Un 401 dispara el refresh una sola vez, no un loop
 - [ ] Si el refresh falla con 401 definitivo, limpia sesión y redirige a Login; errores
       transitorios (red, 5xx) NO limpian la sesión

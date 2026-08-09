@@ -121,6 +121,9 @@ class AuthController extends Notifier<AuthState> implements AuthSessionBridge {
   }
 
   Future<void> logout() async {
+    // Cierra la sesión de Google en la SDK (best-effort) para que el próximo
+    // login pida elegir cuenta en vez de auto-seleccionar la anterior.
+    await _repository.signOutFromGoogle();
     await _repository.clearRefreshToken();
     state = const AuthState.unauthenticated();
   }

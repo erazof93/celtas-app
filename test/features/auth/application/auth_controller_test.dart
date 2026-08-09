@@ -1,3 +1,4 @@
+import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
 import 'package:celtas_mobile/features/auth/application/auth_state.dart';
 import 'package:celtas_mobile/features/auth/data/auth_repository.dart';
@@ -173,8 +174,10 @@ void main() {
       verify(() => repository.saveRefreshToken('refresh-1')).called(1);
     });
 
-    test('logout → limpia refreshToken y queda sin sesión', () async {
+    test('logout → cierra sesión de Google, limpia refreshToken y queda sin '
+        'sesión', () async {
       when(() => repository.readRefreshToken()).thenAnswer((_) async => null);
+      when(() => repository.signOutFromGoogle()).thenAnswer((_) async {});
       when(() => repository.clearRefreshToken()).thenAnswer((_) async {});
 
       await container.read(authControllerProvider.notifier).logout();
@@ -183,7 +186,77 @@ void main() {
         container.read(authControllerProvider).status,
         AuthStatus.unauthenticated,
       );
+      verify(() => repository.signOutFromGoogle()).called(1);
       verify(() => repository.clearRefreshToken()).called(1);
+    });
+  });
+
+  group('loginWithGoogle', () {
+    test('éxito → persiste refreshToken y queda authenticated', () async {
+      final tokens = AuthTokens(
+        accessToken: 'access-google',
+        refreshToken: 'refresh-google',
+        user: user,
+      );
+      when(() => repository.readRefreshToken()).thenAnswer((_) async => null);
+      when(() => repository.loginWithGoogle()).thenAnswer((_) async => tokens);
+      when(() => repository.saveRefreshToken('refresh-google'))
+          .thenAnswer((_) async {});
+
+      await pumpBootstrap();
+      await container.read(authControllerProvider.notifier).loginWithGoogle();
+
+      final state = container.read(authControllerProvider);
+      expect(state.status, AuthStatus.authenticated);
+      expect(state.accessToken, 'access-google');
+      expect(state.user, user);
+      verify(() => repository.saveRefreshToken('refresh-google')).called(1);
+    });
+
+    test('usuario cierra el picker → propaga la cancelación y NO cambia el '
+        'estado', () async {
+      when(() => repository.readRefreshToken()).thenAnswer((_) async => null);
+      when(() => repository.loginWithGoogle())
+          .thenThrow(const GoogleSignInCanceledException());
+
+      await pumpBootstrap();
+      await expectLater(
+        container.read(authControllerProvider.notifier).loginWithGoogle(),
+        throwsA(isA<GoogleSignInCanceledException>()),
+      );
+
+      expect(
+        container.read(authControllerProvider).status,
+        AuthStatus.unauthenticated,
+      );
+      verifyNever(() => repository.saveRefreshToken(any()));
+    });
+
+    test('409 del backend → propaga el ApiException sin cambiar el estado',
+        () async {
+      when(() => repository.readRefreshToken()).thenAnswer((_) async => null);
+      when(() => repository.loginWithGoogle()).thenThrow(
+        const ApiException(
+          'Este correo ya está registrado con contraseña. '
+          'Inicia sesión tradicional o usa "olvidé mi contraseña".',
+          statusCode: 409,
+        ),
+      );
+
+      await pumpBootstrap();
+      await expectLater(
+        container.read(authControllerProvider.notifier).loginWithGoogle(),
+        throwsA(
+          isA<ApiException>()
+              .having((e) => e.statusCode, 'statusCode', 409),
+        ),
+      );
+
+      expect(
+        container.read(authControllerProvider).status,
+        AuthStatus.unauthenticated,
+      );
+      verifyNever(() => repository.saveRefreshToken(any()));
     });
   });
 }

@@ -1,6 +1,7 @@
 import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
+import 'package:celtas_mobile/features/auth/data/auth_repository.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_flame.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_text_field.dart';
@@ -24,6 +25,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordController = TextEditingController();
 
   bool _submitting = false;
+  bool _googleSubmitting = false;
   String? _errorMessage;
 
   @override
@@ -59,6 +61,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String _messageFor(Object e) {
     if (e is ApiException) return e.message;
     return 'Ocurrió un error inesperado. Inténtalo de nuevo.';
+  }
+
+  /// Login con Google: la SDK abre el picker, obtiene el `idToken` y el
+  /// backend lo verifica (`POST /auth/google`). Si el usuario cierra el picker
+  /// no es un error: no se muestra ningún mensaje.
+  Future<void> _handleGoogleSignIn() async {
+    setState(() {
+      _googleSubmitting = true;
+      _errorMessage = null;
+    });
+    try {
+      await ref.read(authControllerProvider.notifier).loginWithGoogle();
+      // El router redirige a /home al pasar a authenticated.
+    } on GoogleSignInCanceledException {
+      // El usuario cerró el picker de Google: no es un error.
+    } catch (e) {
+      setState(() {
+        _errorMessage = _messageFor(e);
+      });
+    } finally {
+      if (mounted) setState(() => _googleSubmitting = false);
+    }
   }
 
   @override
@@ -188,8 +212,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ],
                 ),
                 const SizedBox(height: 22),
-                // Botón de Google — deshabilitado hasta que la integración
-                // esté lista (parte 2: Client ID de Google + google_sign_in).
+                // Botón de Google: login con la SDK real (idToken →
+                // POST /auth/google). El picker de Google es nativo; el
+                // `POST /auth/google` puede tardar por el cold start de Render.
                 SizedBox(
                   width: double.infinity,
                   child: Material(
@@ -197,6 +222,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     borderRadius: BorderRadius.circular(CeltasRadii.input),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(CeltasRadii.input),
+                      onTap: _googleSubmitting ? null : _handleGoogleSignIn,
                       child: Container(
                         height: 52,
                         alignment: Alignment.center,
@@ -206,7 +232,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             const GoogleLogo(),
                             const SizedBox(width: 10),
                             Text(
-                              'Continuar con Google',
+                              _googleSubmitting
+                                  ? 'Conectando con Google…'
+                                  : 'Continuar con Google',
                               style: textTheme.bodyLarge?.copyWith(
                                 color: CeltasColors.textSubtle,
                                 fontSize: 15,
@@ -219,16 +247,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Center(
-                  child: Text(
-                    'Próximamente',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: CeltasColors.textMuted,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
+                if (_googleSubmitting) ...[
+                  const SizedBox(height: 12),
+                  const SlowBackendNotice(),
+                ],
                 const SizedBox(height: 16),
                 // Footer: ir a Registro.
                 Center(

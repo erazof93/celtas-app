@@ -1,6 +1,16 @@
+import 'package:celtas_mobile/core/config/env.dart';
+import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/features/auth/data/models/auth_tokens.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+
+/// El usuario cerró el picker de Google sin completar el login.
+///
+/// No es un error: la UI lo captura y no muestra ningún mensaje.
+class GoogleSignInCanceledException implements Exception {
+  const GoogleSignInCanceledException();
+}
 
 /// Repositorio de auth contra el backend real.
 ///
@@ -21,16 +31,27 @@ class AuthRepository {
 
   static const _refreshTokenKey = 'celtas_refresh_token';
 
+  /// La SDK de Google exige `initialize()` UNA sola vez por proceso (llamarlo
+  /// más de una vez es "undefined behavior" según su documentación). La app
+  /// tiene un único `AuthRepository` (provider singleton), así que un flag de
+  /// instancia alcanza; si `initialize()` falla, el flag queda en false y el
+  /// próximo intento reintenta.
+  bool _googleInitialized = false;
+
   /// Login tradicional (email + password).
   Future<AuthTokens> login({
     required String email,
     required String password,
   }) async {
-    final response = await _dio.post<Map<String, dynamic>>(
-      '/auth/login',
-      data: {'email': email, 'password': password},
-    );
-    return AuthTokens.fromJson(response.data!);
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/auth/login',
+        data: {'email': email, 'password': password},
+      );
+      return AuthTokens.fromJson(response.data!);
+    } on DioException catch (e) {
+      throw apiExceptionFromDio(e);
+    }
   }
 
   /// Registro tradicional (email + password + fullName, phone opcional).
@@ -40,29 +61,82 @@ class AuthRepository {
     String? phone,
     required String password,
   }) async {
-    final response = await _dio.post<Map<String, dynamic>>(
-      '/auth/register',
-      data: {
-        'fullName': fullName,
-        'email': email,
-        'phone': phone,
-        'password': password,
-      },
-    );
-    return AuthTokens.fromJson(response.data!);
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/auth/register',
+        data: {
+          'fullName': fullName,
+          'email': email,
+          'phone': phone,
+          'password': password,
+        },
+      );
+      return AuthTokens.fromJson(response.data!);
+    } on DioException catch (e) {
+      throw apiExceptionFromDio(e);
+    }
   }
 
   /// Login/registro con Google: obtiene el `idToken` real de la SDK de Google
   /// y lo envía al backend. NUNCA envía `password` en este flujo.
   ///
-  /// PARTE 2 (pendiente): la integración con `google_sign_in` está aislada
-  /// acá. El botón de la UI está deshabilitado hasta que se configure el
-  /// Client ID de Google (prerrequisito del módulo 1 del ROADMAP).
+  /// Patrón de `google_sign_in` 7.x: `initialize()` (UNA sola vez, con el
+  /// Client ID "Web application" del backend) + `authenticate()` (picker
+  /// interactivo).
+  ///
+  /// Errores:
+  ///   - El usuario cierra el picker → `GoogleSignInCanceledException` (la UI
+  ///     lo ignora silenciosamente, no es un error).
+  ///   - Fallo de red/plataforma de Google → `ApiException` con mensaje claro.
+  ///   - El backend responde 409 (email ya existe como cuenta local) →
+  ///     `ApiException` con el mensaje del backend.
   Future<AuthTokens> loginWithGoogle() async {
-    // TODO(parte 2): GoogleSignIn().signIn() → idToken → POST /auth/google.
-    throw UnimplementedError(
-      'Login con Google: pendiente de configurar (Client ID de Google).',
-    );
+    final signIn = GoogleSignIn.instance;
+    try {
+      if (!_googleInitialized) {
+        await signIn.initialize(serverClientId: AppConfig.googleServerClientId);
+        _googleInitialized = true;
+      }
+      final account = await signIn.authenticate();
+
+      final idToken = account.authentication.idToken;
+      if (idToken == null || idToken.isEmpty) {
+        throw const ApiException(
+          'Google no devolvió un token válido. Inténtalo de nuevo.',
+        );
+      }
+
+      try {
+        final response = await _dio.post<Map<String, dynamic>>(
+          '/auth/google',
+          data: {'idToken': idToken},
+        );
+        return AuthTokens.fromJson(response.data!);
+      } on DioException catch (e) {
+        throw apiExceptionFromDio(e);
+      }
+    } on GoogleSignInException catch (e) {
+      // Cerrar el picker o que la UI no esté disponible NO es un error.
+      if (e.code == GoogleSignInExceptionCode.canceled ||
+          e.code == GoogleSignInExceptionCode.interrupted ||
+          e.code == GoogleSignInExceptionCode.uiUnavailable) {
+        throw const GoogleSignInCanceledException();
+      }
+      throw const ApiException(
+        'No se pudo conectar con Google. Revisa tu conexión e inténtalo de nuevo.',
+      );
+    }
+  }
+
+  /// Cierra la sesión de Google en la SDK (best-effort): evita que el próximo
+  /// login auto-seleccione la cuenta anterior en dispositivos compartidos.
+  Future<void> signOutFromGoogle() async {
+    try {
+      await GoogleSignIn.instance.signOut();
+    } catch (_) {
+      // Best-effort: si la SDK no está inicializada o falla, no bloquea el
+      // logout de la app.
+    }
   }
 
   /// Renueva el access token con el refresh token (rotación: devuelve un

@@ -15,20 +15,27 @@ import 'package:go_router/go_router.dart';
 /// Guard de sesión: mientras el estado es `unknown` (bootstrap en curso) el
 /// Splash decide; autenticado → se bloquea Login/Registro y se va a /home;
 /// sin sesión → las rutas protegidas redirigen a /login.
+///
+/// IMPORTANTE: el `GoRouter` se crea UNA sola vez. Recrearlo en cada cambio de
+/// estado de auth (como hacía un `ref.watch` directo) lo reinicia en
+/// `initialLocation` (`/`) y la app "salta" al Splash tras cada login/logout.
+/// En su lugar, `ref.listen` + `router.refresh()` re-ejecuta el redirect con el
+/// estado nuevo sin perder la ubicación actual.
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authControllerProvider);
-
-  return GoRouter(
+  final router = GoRouter(
     initialLocation: '/',
     redirect: (context, state) {
-      final status = authState.status;
+      final status = ref.read(authControllerProvider).status;
       if (status == AuthStatus.unknown) return null;
 
       final location = state.matchedLocation;
       final isProtected = location == '/home';
 
       if (status == AuthStatus.authenticated) {
-        if (location == '/login' || location == '/register') {
+        // `/` es el Splash: con sesión activa no tiene sentido quedarse ahí.
+        if (location == '/login' ||
+            location == '/register' ||
+            location == '/') {
           return '/home';
         }
         return null;
@@ -57,4 +64,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
   );
+
+  // Re-ejecuta el redirect cuando cambia el estado de auth, sin recrear el
+  // router (evita el salto al Splash tras login/logout).
+  ref.listen(authControllerProvider, (_, _) => router.refresh());
+
+  return router;
 });

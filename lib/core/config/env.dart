@@ -9,4 +9,14 @@ class AppConfig {
 
   static final String apiBaseUrl =
       dotenv.env['API_BASE_URL'] ?? 'https://backend-celtas.onrender.com';
+
+  /// Client ID "Web application" de Google Cloud (proyecto `celtas-b0bd5`),
+  /// el mismo que usa el backend para verificar el `idToken` en
+  /// `POST /auth/google`. Se pasa a `GoogleSignIn.initialize(serverClientId:)`
+  /// para que la SDK emita un idToken verificable por el servidor.
+  ///
+  /// En Android el Client ID de tipo "Android" se vincula por package name +
+  /// SHA-1 (google-services.json), no se pega en código.
+  static final String? googleServerClientId =
+      dotenv.env['GOOGLE_SERVER_CLIENT_ID'];
 }

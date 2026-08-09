@@ -90,6 +90,7 @@ class ApiClient {
     '/auth/login',
     '/auth/refresh',
     '/auth/register',
+    '/auth/google',
   };
 
   bool _isRefreshing = false;

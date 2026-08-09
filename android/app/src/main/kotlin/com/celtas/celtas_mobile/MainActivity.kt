@@ -1,4 +1,4 @@
-package com.example.celtas_mobile
+package com.celtas.celtas_mobile
 
 import io.flutter.embedding.android.FlutterActivity
 

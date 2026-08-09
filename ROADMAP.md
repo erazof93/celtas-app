@@ -161,12 +161,27 @@ celtas-mobile/
 - [ ] `flutter analyze` y `flutter run` limpios (en un emulador o dispositivo)
 
 ### 1. Auth
-- [x] Prerrequisito: Client ID de Google (Android/iOS) creado en Google Cloud, SHA-1 registrado
-      (externo, pendiente — `loginWithGoogle()` aislado con `UnimplementedError`, botón
-      deshabilitado; no es defecto de código)
+- [x] Prerrequisito: Client ID de Google creado en Google Cloud (proyecto `celtas-b0bd5`).
+      El Client ID "Web application" (`614499893538-sn5adeq44eog889k15c7s3pmqosapen6...`)
+      vive en `.env` como `GOOGLE_SERVER_CLIENT_ID` y se pasa a
+      `GoogleSignIn.initialize(serverClientId:)`. El de tipo Android se vincula por
+      package name + SHA-1 en Google Cloud (NO requiere `google-services.json`:
+      verificado en dispositivo real Xiaomi — el picker, el consentimiento y el
+      `POST /auth/google` funcionaron sin ese archivo; el README de
+      `google_sign_in_android` documenta `serverClientId` como alternativa a
+      google-services.json).
+- [x] Verificación en dispositivo real (Xiaomi 24117RN76L, debug SHA-1
+      `27:4B:79:B2:5B:7E:5E:C5:D4:6A:3A:1C:CD:9C:3B:2D:0F:EE:F6:5C`): login con Google
+      completo (picker → consentimiento → idToken → sesión persistida → `/home`).
+      Bugs reales encontrados y corregidos: `main.dart` sin `ProviderScope` (crash
+      "No ProviderScope found") y `routerProvider` recreando el `GoRouter` en cada
+      cambio de auth (la app saltaba al Splash tras login/logout; ahora usa
+      `ref.listen` + `router.refresh()`).
 - [x] Modelos (`freezed`): `User`, `AuthTokens` — confirmar contrato real contra el backend
-- [x] `AuthRepository`: login, registro, login con Google (aislado, pendiente Client ID →
-      `POST /auth/google`), refresh
+- [x] `AuthRepository`: login, registro, login con Google (`google_sign_in` 7.x:
+      `initialize()` + `authenticate()` → `idToken` → `POST /auth/google`; cancelación del
+      picker → `GoogleSignInCanceledException` que la UI ignora; 409 → `ApiException` con el
+      mensaje del backend), refresh
 - [x] Provider de Riverpod: `accessToken` en memoria, `user` actual
 - [x] `flutter_secure_storage` para el `refreshToken`
 - [x] Interceptor de `dio` completo: agrega el token, maneja 401 con refresh-once (mismo patrón
