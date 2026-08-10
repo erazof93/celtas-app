@@ -4,6 +4,7 @@ import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
 import 'package:celtas_mobile/features/auth/data/auth_repository.dart';
 import 'package:celtas_mobile/features/auth/data/models/auth_tokens.dart';
 import 'package:celtas_mobile/features/auth/data/models/user.dart';
+import 'package:celtas_mobile/features/home/application/home_providers.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_bottom_nav.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -37,6 +38,14 @@ void main() {
     );
   });
 
+  /// Overrides comunes: auth fake + Home sin requests reales (banners y menú
+  /// vacíos — el Home real los carga del backend).
+  List<Override> overrides(MockAuthRepository repository) => [
+        authRepositoryProvider.overrideWithValue(repository),
+        activeBannersProvider.overrideWith((ref) async => const []),
+        publicMenuProvider.overrideWith((ref) async => const []),
+      ];
+
   /// Login rápido de punta a punta (Splash → Login → sesión activa).
   Future<void> login(WidgetTester tester, MockAuthRepository repository) async {
     when(() => repository.readRefreshToken()).thenAnswer((_) async => null);
@@ -51,7 +60,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [authRepositoryProvider.overrideWithValue(repository)],
+        overrides: overrides(repository),
         child: const CeltasApp(),
       ),
     );
@@ -81,8 +90,7 @@ void main() {
     // Autenticado → shell con bottom nav persistente, tab Inicio activo.
     expect(find.byType(CeltasBottomNav), findsOneWidget);
     expect(activeTabIndex(tester), 0);
-    expect(find.text('Sesión iniciada'), findsOneWidget);
-    expect(find.text('Cliente de Prueba'), findsOneWidget);
+    expect(find.text('Entregar en'), findsOneWidget);
     // NO debe volver al Splash.
     expect(find.text('COMENZAR'), findsNothing);
   });
@@ -134,7 +142,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
     expect(activeTabIndex(tester), 0);
-    expect(find.text('Sesión iniciada'), findsOneWidget);
+    expect(find.text('Entregar en'), findsOneWidget);
   });
 
   testWidgets('ruta protegida sin sesión → redirige a /login', (tester) async {
@@ -143,7 +151,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [authRepositoryProvider.overrideWithValue(repository)],
+        overrides: overrides(repository),
         child: const CeltasApp(),
       ),
     );
@@ -174,7 +182,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [authRepositoryProvider.overrideWithValue(repository)],
+        overrides: overrides(repository),
         child: const CeltasApp(),
       ),
     );
@@ -183,26 +191,29 @@ void main() {
     // Autenticado directo → shell con bottom nav, tab Inicio activo.
     expect(find.byType(CeltasBottomNav), findsOneWidget);
     expect(activeTabIndex(tester), 0);
-    expect(find.text('Sesión iniciada'), findsOneWidget);
+    expect(find.text('Entregar en'), findsOneWidget);
     expect(find.text('COMENZAR'), findsNothing);
     expect(find.text('Bienvenido de nuevo'), findsNothing);
   });
 
-  testWidgets('logout desde /home → vuelve al Login (onboarding)',
-      (tester) async {
+  testWidgets('logout → vuelve al Login (onboarding)', (tester) async {
     final repository = MockAuthRepository();
     await login(tester, repository);
     when(() => repository.signOutFromGoogle()).thenAnswer((_) async {});
     when(() => repository.clearRefreshToken()).thenAnswer((_) async {});
 
-    expect(find.text('Sesión iniciada'), findsOneWidget);
+    expect(find.text('Entregar en'), findsOneWidget);
 
-    // Logout → sin sesión → el router refresca y redirige a /login.
-    await tester.tap(find.text('CERRAR SESIÓN'));
+    // Logout (el botón vive en Perfil, módulo 6; acá se invoca el controller
+    // para cubrir la regresión del router) → sin sesión → redirige a /login.
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(CeltasApp)),
+    );
+    await container.read(authControllerProvider.notifier).logout();
     await tester.pumpAndSettle();
 
     expect(find.text('Bienvenido de nuevo'), findsOneWidget);
     expect(find.byType(CeltasBottomNav), findsNothing);
-    expect(find.text('Sesión iniciada'), findsNothing);
+    expect(find.text('Entregar en'), findsNothing);
   });
 }

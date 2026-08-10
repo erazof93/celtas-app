@@ -4,7 +4,7 @@ import 'package:celtas_mobile/features/auth/presentation/login_screen.dart';
 import 'package:celtas_mobile/features/auth/presentation/register_screen.dart';
 import 'package:celtas_mobile/features/auth/presentation/splash_screen.dart';
 import 'package:celtas_mobile/features/coupons/presentation/coupons_placeholder_screen.dart';
-import 'package:celtas_mobile/features/home/presentation/home_placeholder_screen.dart';
+import 'package:celtas_mobile/features/home/presentation/home_screen.dart';
 import 'package:celtas_mobile/features/orders/presentation/orders_placeholder_screen.dart';
 import 'package:celtas_mobile/features/profile/presentation/profile_placeholder_screen.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_bottom_nav.dart';
@@ -81,7 +81,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: '/home',
-                builder: (context, state) => const HomePlaceholderScreen(),
+                builder: (context, state) => const HomeScreen(),
               ),
             ],
           ),

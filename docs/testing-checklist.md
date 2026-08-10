@@ -34,8 +34,10 @@ solo cuando pasa lo aplicable de este checklist.
 
 ## Home / Menú
 
-- [ ] Banners respetan vigencia (ya calculada por el backend)
-- [ ] Menú agrupado por categoría, con imágenes cacheadas correctamente
+- [x] Banners respetan vigencia (ya calculada por el backend)
+- [x] Menú agrupado por categoría, con imágenes cacheadas correctamente
+- [x] Error de banners visible con reintento (no tragado en silencio)
+- [x] Pull-to-refresh sin excepción async sin manejar
 
 ## Carrito / Checkout
 

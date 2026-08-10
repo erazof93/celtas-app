@@ -211,11 +211,16 @@ celtas-mobile/
       (registro → shell → 4 tabs → reabrir app con sesión persistida). Auditado por
       `@tester`: veredicto LISTO
 
-### 3. Home
-- [ ] Consume `GET /banners/active` — carrusel de banners
-- [ ] Consume `GET /menu` — categorías + productos, con botón rápido de "+" para agregar al
+### 3. Home — ✅ COMPLETO (3/3)
+- [x] Consume `GET /banners/active` — carrusel de banners
+- [x] Consume `GET /menu` — categorías + productos, con botón rápido de "+" para agregar al
       carrito sin entrar al detalle
-- [ ] Imágenes vía `cached_network_image`
+- [x] Imágenes vía `cached_network_image`
+      (carrusel con puntos indicadores, chips de categorías con filtro, estados loading/error/
+      vacío explícitos para banners y menú, error de banners con REINTENTAR, pull-to-refresh sin
+      excepción async, gradiente del banner con `CeltasColors.black.withValues(alpha: 0.85)` +
+      `Colors.transparent` = CSS real `rgba(13,13,13,.85) 20% → transparent 70%`, placeholder
+      eliminado. 79/79 tests, `flutter analyze` limpio. Auditado por `@tester`: veredicto LISTO)
 
 ### 4. Producto + Carrito
 - [ ] Pantalla de detalle de producto (selector de cantidad, agregar al carrito)
