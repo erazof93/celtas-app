@@ -5,6 +5,7 @@ import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
 import 'package:celtas_mobile/features/auth/application/auth_state.dart';
 import 'package:celtas_mobile/features/coupons/application/coupon_providers.dart';
 import 'package:celtas_mobile/features/notifications/application/notification_providers.dart';
+import 'package:celtas_mobile/features/notifications/application/notification_target.dart';
 import 'package:celtas_mobile/features/orders/application/order_history_providers.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -147,25 +148,25 @@ class NotificationService {
   }
 
   void _invalidateFor(Map<String, dynamic> data) {
-    final orderId = data['orderId'] as String?;
-    if (orderId != null) {
-      _container.invalidate(orderListProvider);
-      _container.invalidate(orderDetailProvider(orderId));
-      return;
-    }
-    if (data.containsKey('couponCode')) {
-      _container.invalidate(userCouponListProvider);
+    switch (NotificationTarget.fromPayload(data)) {
+      case OrderNotificationTarget(:final orderId):
+        _container.invalidate(orderListProvider);
+        _container.invalidate(orderDetailProvider(orderId));
+      case CouponNotificationTarget():
+        _container.invalidate(userCouponListProvider);
+      case NoneNotificationTarget():
+        break;
     }
   }
 
   void _navigateFor(Map<String, dynamic> data) {
-    final orderId = data['orderId'] as String?;
-    if (orderId != null) {
-      _container.read(routerProvider).push('/orders/$orderId');
-      return;
-    }
-    if (data.containsKey('couponCode')) {
-      _container.read(routerProvider).go('/coupons');
+    switch (NotificationTarget.fromPayload(data)) {
+      case OrderNotificationTarget(:final orderId):
+        _container.read(routerProvider).push('/orders/$orderId');
+      case CouponNotificationTarget():
+        _container.read(routerProvider).go('/coupons');
+      case NoneNotificationTarget():
+        break;
     }
   }
 

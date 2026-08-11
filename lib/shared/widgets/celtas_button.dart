@@ -31,15 +31,19 @@ class CeltasButton extends StatelessWidget {
     final enabled = onPressed != null && !loading;
     final textTheme = Theme.of(context).textTheme;
 
-    // Botones con ícono (ej. CTA de WhatsApp) usan 15px como el CSS real del
-    // mockup — el resto (COMENZAR, CONTINUAR, etc.) sigue en 16px.
+    // Botones con ícono (ej. CTA de WhatsApp) usan 14px — el CSS real del
+    // mockup pide 15px, pero con el label completo ("CONFIRMAR PEDIDO POR
+    // WHATSAPP") + ícono + gap, 15px se corta con ellipsis en dispositivos
+    // reales de 1080px de ancho físico (bug encontrado en la auditoría del
+    // módulo 10, dispositivo real Xiaomi) — el resto (COMENZAR, CONTINUAR,
+    // etc.) sigue en 16px.
     final labelText = Text(
       label,
       textAlign: TextAlign.center,
       overflow: TextOverflow.ellipsis,
       maxLines: 1,
       style: textTheme.labelLarge?.copyWith(
-        fontSize: icon == null ? 16 : 15,
+        fontSize: icon == null ? 16 : 14,
         fontWeight: FontWeight.w800,
         color: enabled ? CeltasColors.black : CeltasColors.textSubtle,
       ),
@@ -74,7 +78,7 @@ class CeltasButton extends StatelessWidget {
         child: Container(
           height: 52,
           alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: EdgeInsets.symmetric(horizontal: icon == null ? 24 : 16),
           child: content,
         ),
       ),
