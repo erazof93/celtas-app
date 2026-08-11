@@ -329,11 +329,36 @@ celtas-mobile/
       estados comparados lado a lado se distinguen claramente, distinción de tipo de descuento
       visible, pull-to-refresh sin errores. Auditado por `@tester`: veredicto LISTO)
 
-### 9. Notificaciones push
-- [ ] Configurar Firebase en la app (archivos de configuración del proyecto ya existente)
-- [ ] Registrar el `fcmToken` del dispositivo (`PATCH /users/me/fcm-token`) tras login
-- [ ] Manejo de notificaciones en foreground/background/terminated
-- [ ] Probar recibiendo una notificación real (cupón generado o cambio de estado de pedido)
+### 9. Notificaciones push — ✅ COMPLETO
+- [x] Configurar Firebase en la app (archivos de configuración del proyecto ya existente)
+- [x] Registrar el `fcmToken` del dispositivo (`PATCH /users/me/fcm-token`) tras login
+- [x] Manejo de notificaciones en foreground/background/terminated
+- [x] Probar recibiendo una notificación real (cupón generado o cambio de estado de pedido)
+      (contrato verificado contra el backend real, no contra Swagger, que no documenta el
+      response de este endpoint: `PATCH /users/me/fcm-token` identifica al usuario por JWT, sin
+      id en el body — no aplica el patrón de bug de clase ya conocido. El payload de push no
+      trae un campo `type` explícito; se infiere por la llave presente en `data` (`orderId` +
+      `status` para pedidos, `couponCode` para cupones), confirmado 1:1 contra
+      `orders.service.ts`/`coupons.service.ts` reales. `NotificationService` es un singleton
+      inicializado en `main.dart` con un `ProviderContainer` creado a mano
+      (`UncontrolledProviderScope`), necesario porque `getInitialMessage()` se resuelve antes de
+      que exista un `BuildContext`. El registro del token solo se dispara en la transición hacia
+      `authenticated` (no en cada refresh silencioso) y en `onTokenRefresh`, fire-and-forget para
+      no bloquear el login si falla. Foreground muestra notificación local vía
+      `flutter_local_notifications` e invalida el provider correspondiente de inmediato;
+      background/terminated los maneja el SDK nativo de FCM solo (canal `celtas_default`
+      unificado vía meta-data en el manifest, sin duplicar canal con el de la notificación
+      local), con `onMessageOpenedApp`/`getInitialMessage` invalidando y navegando al detalle
+      correcto. 189/189 tests, `flutter analyze` limpio. Verificado en dispositivo real (Xiaomi)
+      cambiando estados de pedido y generando cupones desde el panel admin real, con logcat en
+      vivo confirmando el camino nativo de FCM en background: foreground mostró la notificación
+      local y refrescó la lista de Pedidos a CONFIRMADO sin acción manual; background navegó
+      directo al detalle del pedido con estado ENTREGADO al tocar la notificación; terminated
+      arrancó desde el Splash y navegó a Mis Cupones al tocar una notificación de cupón nuevo.
+      Auditado por `@tester`: veredicto LISTO — riesgo documentado y no bloqueante: la lógica de
+      ruteo/invalidación (`_invalidateFor`/`_navigateFor`) no tiene cobertura automatizada, solo
+      la prueba manual en dispositivo real; configuración de iOS todavía pendiente, fuera de
+      alcance del módulo 10 que solo pide APK de Android)
 
 ### 10. Deploy y Calidad
 - [ ] Pase de auditoría general: estados de carga/error en todas las pantallas, sin datos

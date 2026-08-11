@@ -67,8 +67,8 @@ solo cuando pasa lo aplicable de este checklist.
 
 ## Notificaciones
 
-- [ ] Token de FCM se registra tras login (`PATCH /users/me/fcm-token`)
-- [ ] Falla de registro de token no rompe el flujo de login
+- [x] Token de FCM se registra tras login (`PATCH /users/me/fcm-token`)
+- [x] Falla de registro de token no rompe el flujo de login
 
 ---
 
