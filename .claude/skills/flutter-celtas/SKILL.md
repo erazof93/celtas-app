@@ -80,6 +80,20 @@ Antes de escribir cualquier request de actualización, confirmar contra el DTO r
 va en el path únicamente (el caso normal) o si el backend lo espera también en el body
 (inusual, pero verificar, no asumir).
 
+## Nunca depender de la respuesta de un PATCH — invalidar y re-fetchear
+
+Bug real encontrado en el módulo 6 (`updateAddress`): el backend puede devolver una entidad
+parcial/incompleta en la respuesta de un `PATCH` (bug de backend ya corregido, pero el patrón
+correcto del cliente no debería depender de eso ni aunque el backend esté perfecto). Regla del
+proyecto: después de una mutación (`PATCH`/`PUT`/`DELETE`), **invalida el provider/query
+correspondiente y vuelve a pedir la lista completa con `GET`** — nunca parsees ni uses
+directamente el body de la respuesta de la mutación para actualizar el estado local, salvo un
+caso ya documentado y con manejo explícito (ver `lib/features/orders/merge.ts` — ahí SÍ se lee
+la respuesta de un `PATCH` a propósito, porque el backend no recarga la relación `items`, y el
+merge selectivo está intencionalmente diseñado y testeado para ese caso puntual).
+`celtas-admin` ya sigue este patrón consistentemente (invalidate + refetch) en sus hooks de
+React Query — es el mismo patrón que hay que replicar acá con los providers de Riverpod.
+
 ## Checkout — regla de negocio no negociable
 
 - La app **nunca** calcula ni envía el total del pedido — lo calcula el backend a partir de
@@ -87,8 +101,12 @@ va en el path únicamente (el caso normal) o si el backend lo espera también en
   y además es la superficie de fraude más obvia si se llegara a usar.
 - La app **nunca** implementa ni sugiere un flujo de pago procesado internamente. El backend
   devuelve `whatsappUrl` ya armado en la respuesta de `POST /orders`; la app solo lo abre con
-  `url_launcher` (`canLaunchUrl` antes de `launchUrl`, y manejar el caso de que WhatsApp no esté
-  instalado con un mensaje claro, no un crash silencioso).
+  `url_launcher`.
+- **No uses `canLaunchUrl` antes de `launchUrl` para `wa.me`** — se confirmó en el módulo 5 que
+  su resolución es ambigua/poco confiable específicamente para ese dominio (falsos negativos
+  entre WhatsApp y el navegador). Llama `launchUrl` directo y trata `false`/`PlatformException`
+  como la señal real de fallo (WhatsApp no instalado u otro problema), mostrando un mensaje
+  claro — nunca un crash silencioso.
 
 ## Manejo de "el backend puede estar dormido"
 

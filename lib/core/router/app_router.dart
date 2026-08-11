@@ -1,3 +1,4 @@
+import 'package:celtas_mobile/features/addresses/presentation/addresses_screen.dart';
 import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
 import 'package:celtas_mobile/features/auth/application/auth_state.dart';
 import 'package:celtas_mobile/features/auth/presentation/login_screen.dart';
@@ -9,7 +10,7 @@ import 'package:celtas_mobile/features/coupons/presentation/coupons_placeholder_
 import 'package:celtas_mobile/features/home/presentation/home_screen.dart';
 import 'package:celtas_mobile/features/menu/presentation/product_detail_screen.dart';
 import 'package:celtas_mobile/features/orders/presentation/orders_placeholder_screen.dart';
-import 'package:celtas_mobile/features/profile/presentation/profile_placeholder_screen.dart';
+import 'package:celtas_mobile/features/profile/presentation/profile_screen.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_bottom_nav.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,6 +28,7 @@ const _protectedPaths = [
   '/product',
   '/cart',
   '/checkout',
+  '/addresses',
 ];
 
 bool _isProtectedPath(String location) =>
@@ -102,6 +104,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/checkout',
         builder: (context, state) => const CheckoutScreen(),
       ),
+      // Direcciones guardadas: CRUD completo, empujada desde Perfil (módulo 6,
+      // mockup 09, sin bottom nav).
+      GoRoute(
+        path: '/addresses',
+        builder: (context, state) => const AddressesScreen(),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) => _ShellScaffold(
           navigationShell: navigationShell,
@@ -135,7 +143,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: '/profile',
-                builder: (context, state) => const ProfilePlaceholderScreen(),
+                builder: (context, state) => const ProfileScreen(),
               ),
             ],
           ),

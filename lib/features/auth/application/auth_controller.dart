@@ -4,6 +4,7 @@ import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
 import 'package:celtas_mobile/features/auth/application/auth_state.dart';
 import 'package:celtas_mobile/features/auth/data/auth_repository.dart';
 import 'package:celtas_mobile/features/auth/data/models/auth_tokens.dart';
+import 'package:celtas_mobile/features/auth/data/models/user.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -118,6 +119,18 @@ class AuthController extends Notifier<AuthState> implements AuthSessionBridge {
       user: tokens.user,
       accessToken: tokens.accessToken,
     );
+  }
+
+  /// Sincroniza el `user` en memoria tras editar el perfil (módulo 6), para
+  /// que cualquier pantalla que lea `authControllerProvider` (no solo la de
+  /// Perfil) refleje el nombre/teléfono nuevos sin esperar al próximo
+  /// refresh de sesión.
+  void updateUser(User user) {
+    final accessToken = state.accessToken;
+    if (state.status != AuthStatus.authenticated || accessToken == null) {
+      return;
+    }
+    state = AuthState.authenticated(user: user, accessToken: accessToken);
   }
 
   Future<void> logout() async {

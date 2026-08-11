@@ -2,10 +2,10 @@ import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/addresses/application/address_providers.dart';
 import 'package:celtas_mobile/features/addresses/data/models/address.dart';
+import 'package:celtas_mobile/features/addresses/presentation/widgets/address_form_card.dart';
 import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
 import 'package:celtas_mobile/features/checkout/application/checkout_providers.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
-import 'package:celtas_mobile/shared/widgets/celtas_text_field.dart';
 import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
 import 'package:celtas_mobile/shared/widgets/svg_path.dart';
 import 'package:flutter/material.dart';
@@ -235,7 +235,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     }),
                     onToggleAddForm: () =>
                         setState(() => _showAddForm = !_showAddForm),
-                    addForm: _AddAddressForm(
+                    addForm: AddressFormCard(
+                      title: 'Nueva dirección',
                       formKey: _addressFormKey,
                       aliasController: _aliasController,
                       fullAddressController: _fullAddressController,
@@ -247,6 +248,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       onCancel: addressesAsync.valueOrNull?.isNotEmpty == true
                           ? () => setState(() => _showAddForm = false)
                           : null,
+                      submitLabel: 'GUARDAR DIRECCIÓN',
+                      aliasFieldKey: const ValueKey('checkout-address-alias'),
+                      fullAddressFieldKey:
+                          const ValueKey('checkout-address-full'),
+                      districtFieldKey:
+                          const ValueKey('checkout-address-district'),
+                      referenceFieldKey:
+                          const ValueKey('checkout-address-reference'),
+                      submitButtonKey:
+                          const ValueKey('checkout-address-save'),
                     ),
                   ),
                   const SizedBox(height: 22),
@@ -519,135 +530,6 @@ class _AddressCard extends StatelessWidget {
                       color: CeltasColors.black,
                     )
                   : null,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AddAddressForm extends StatelessWidget {
-  const _AddAddressForm({
-    required this.formKey,
-    required this.aliasController,
-    required this.fullAddressController,
-    required this.referenceController,
-    required this.districtController,
-    required this.submitting,
-    required this.error,
-    required this.onSubmit,
-    required this.onCancel,
-  });
-
-  final GlobalKey<FormState> formKey;
-  final TextEditingController aliasController;
-  final TextEditingController fullAddressController;
-  final TextEditingController referenceController;
-  final TextEditingController districtController;
-  final bool submitting;
-  final String? error;
-  final VoidCallback onSubmit;
-  final VoidCallback? onCancel;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: CeltasColors.surface,
-        border: Border.all(color: CeltasColors.border),
-        borderRadius: BorderRadius.circular(CeltasRadii.card),
-      ),
-      child: Form(
-        key: formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Nueva dirección',
-              style: textTheme.bodyLarge?.copyWith(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: CeltasColors.cream,
-              ),
-            ),
-            const SizedBox(height: 12),
-            CeltasTextField(
-              key: const ValueKey('checkout-address-alias'),
-              label: 'ALIAS',
-              controller: aliasController,
-              hintText: 'Casa, Trabajo…',
-              textInputAction: TextInputAction.next,
-              validator: (v) =>
-                  (v ?? '').trim().isEmpty ? 'Ingresá un alias' : null,
-            ),
-            const SizedBox(height: 12),
-            CeltasTextField(
-              key: const ValueKey('checkout-address-full'),
-              label: 'DIRECCIÓN COMPLETA',
-              controller: fullAddressController,
-              hintText: 'Av. Los Álamos 123',
-              textInputAction: TextInputAction.next,
-              validator: (v) => (v ?? '').trim().isEmpty
-                  ? 'Ingresá la dirección completa'
-                  : null,
-            ),
-            const SizedBox(height: 12),
-            CeltasTextField(
-              key: const ValueKey('checkout-address-district'),
-              label: 'DISTRITO',
-              controller: districtController,
-              hintText: 'San Juan de Miraflores',
-              textInputAction: TextInputAction.next,
-              validator: (v) =>
-                  (v ?? '').trim().isEmpty ? 'Ingresá el distrito' : null,
-            ),
-            const SizedBox(height: 12),
-            CeltasTextField(
-              key: const ValueKey('checkout-address-reference'),
-              label: 'REFERENCIA (OPCIONAL)',
-              controller: referenceController,
-              hintText: 'Portón verde, tercer piso',
-              textInputAction: TextInputAction.done,
-              onFieldSubmitted: (_) => submitting ? null : onSubmit(),
-            ),
-            if (error != null) ...[
-              const SizedBox(height: 10),
-              Text(
-                error!,
-                style: textTheme.bodySmall?.copyWith(
-                  color: CeltasColors.redLight,
-                  fontSize: 12.5,
-                ),
-              ),
-            ],
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                if (onCancel != null) ...[
-                  Expanded(
-                    child: TextButton(
-                      onPressed: submitting ? null : onCancel,
-                      style: TextButton.styleFrom(
-                        foregroundColor: CeltasColors.textMuted,
-                      ),
-                      child: const Text('CANCELAR'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                ],
-                Expanded(
-                  flex: onCancel != null ? 2 : 1,
-                  child: CeltasButton(
-                    key: const ValueKey('checkout-address-save'),
-                    label: 'GUARDAR DIRECCIÓN',
-                    loading: submitting,
-                    onPressed: submitting ? null : onSubmit,
-                  ),
-                ),
-              ],
             ),
           ],
         ),
