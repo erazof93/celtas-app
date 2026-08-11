@@ -361,11 +361,35 @@ celtas-mobile/
       alcance del módulo 10 que solo pide APK de Android)
 
 ### 10. Deploy y Calidad
-- [ ] Pase de auditoría general: estados de carga/error en todas las pantallas, sin datos
+- [x] Pase de auditoría general: estados de carga/error en todas las pantallas, sin datos
       hardcodeados, manejo de "backend dormido" (cold start de Render)
-- [ ] Build de release (APK firmado para Android como mínimo)
-- [ ] Verificación end-to-end manual contra el backend real de producción (pedido real, cupón
-      real, notificación real)
+- [x] Build de release (APK firmado para Android como mínimo)
+- [x] Verificación end-to-end manual contra el backend real de producción (pedido real, cupón
+      real, notificación real) (barrido de las 8 pantallas con fetch inicial —Home, Pedidos,
+      Cupones, Perfil, Direcciones, Checkout, Detalle de pedido, Detalle de producto— confirmado
+      por grep que todas usan `SlowBackendNotice` conectado a la rama `loading:` real de su
+      provider, no solo importado; `cart_screen.dart` confirmado exento correctamente (carrito
+      100% local, sin GET al montar). Bug real encontrado en dispositivo físico durante la
+      auditoría: el CTA con ícono ("CONFIRMAR PEDIDO POR WHATSAPP") se cortaba con ellipsis a
+      15px (el CSS real del mockup) en pantallas reales de 1080px — bajado a 14px + padding
+      horizontal 24→16 con ícono, verificado visualmente que ya no se corta; cubierto por
+      `test/shared/widgets/celtas_button_test.dart` (fontSize/padding exactos y ausencia de
+      overflow real de `RenderFlex`; una aserción de "no se corta con ellipsis" se intentó y se
+      descartó por poco confiable, ya que `flutter test` no carga las fuentes reales sin tooling
+      adicional). De paso se cerró el riesgo documentado en el módulo 9 ("lógica de
+      ruteo/invalidación de notificaciones sin cobertura automatizada"): extraída a
+      `NotificationTarget` (sealed class pura) con 5 casos de test — sigue sin cobertura unitaria
+      propia el `switch` de `_invalidateFor`/`_navigateFor` en sí, mismo criterio no bloqueante ya
+      aceptado. Build de release compilado con debug keystore (decisión de Play Store vs. APK
+      directo sigue pendiente, ver siguiente punto). Verificación end-to-end en dispositivo real
+      (Xiaomi): pedido real creado con cupón real (`D0E1CA42`, -S/5.00 vía `/coupons/validate`,
+      total S/10.50), confirmado por WhatsApp real con el order ID y total correctos, estado
+      cambiado a "confirmado" desde el panel admin real, notificación push FCM recibida y
+      verificada con `dumpsys notification` (texto y order ID exactos), historial de pedidos
+      reflejando el nuevo estado tras pull-to-refresh (invalidación no es automática al volver de
+      background — comportamiento documentado, no bug). Logcat completo de la sesión sin
+      `FATAL EXCEPTION` ni excepciones de red sin manejar. `flutter analyze` limpio, 197/197
+      tests. Auditado por `@tester`: veredicto LISTO)
 - [ ] Definir distribución: Google Play (pago único ~$25) vs. APK directo mientras se valida
 
 ---
