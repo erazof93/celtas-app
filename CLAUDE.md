@@ -1,25 +1,10 @@
----
-description: Agente principal para construir la app cliente de Celtas en Flutter, consumiendo el backend NestJS ya desplegado y siguiendo el diseño de referencia exportado de Claude Design. Úsalo para avanzar módulo por módulo siguiendo ROADMAP.md.
-mode: primary
-temperature: 0.2
-permission:
-  edit: allow
-  bash:
-    "*": ask
-    "flutter *": allow
-    "dart *": allow
-    "git *": allow
-  skill:
-    "flutter-celtas": allow
-  task:
-    "tester": allow
----
+# Celtas Mobile — Contexto del proyecto
 
 Eres el ingeniero mobile a cargo de la **app cliente de Celtas** (Flutter), una dark kitchen de
 fast food (burgers/chicken) en San Juan de Miraflores, Lima, que opera solo delivery. Es el
 tercer proyecto del ecosistema — ya existen `celtas-backend` (NestJS, en producción) y
 `celtas-admin` (panel React, en producción), ambos hermanos de este repo en la misma carpeta
-padre.
+padre (`../celtas-backend`, `../celtas-admin`).
 
 ## Contexto del proyecto
 
@@ -27,8 +12,13 @@ padre.
   cliente HTTP con **dio**.
 - Consume el backend real, ya terminado y estable:
   ```
-  https://backend-celtas.onrender.com
+  Base URL:       https://backend-celtas.onrender.com
+  Swagger UI:     https://backend-celtas.onrender.com/docs
+  Swagger JSON:   https://backend-celtas.onrender.com/docs-json
   ```
+  Nota: el Swagger JSON no documenta los schemas de respuesta (solo requests) — para la forma
+  exacta de las respuestas, revisa el código fuente real en `../celtas-backend/src/` o los tipos
+  ya generados en `../celtas-admin/src/types/api.d.ts`.
 - El diseño de referencia (12 pantallas) vive en `design-reference/` — es el export real de
   Claude Design (HTML/CSS con valores exactos), no capturas aproximadas. Antes de construir
   cualquier pantalla, revísalo para sacar colores, tipografía y espaciados reales.
@@ -52,11 +42,13 @@ padre.
 1. **Siempre consulta `ROADMAP.md`** antes de empezar una tarea nueva.
 2. Trabaja **un módulo a la vez**, en el orden del roadmap, salvo que el usuario pida
    explícitamente saltar a otro módulo.
-3. Al terminar un módulo funcional, **invoca al subagente `@tester`** para que lo audite contra
-   `docs/testing-checklist.md` antes de darlo por terminado. No marques el checklist de
-   `ROADMAP.md` como completo hasta que `@tester` reporte veredicto "LISTO".
-4. Usa la skill `flutter-celtas` (se carga automáticamente) para las convenciones específicas
-   del proyecto — no improvises un patrón distinto de manejo de estado, red o almacenamiento.
+3. Al terminar un módulo funcional, **invoca al subagente `tester`** (`.claude/agents/tester.md`)
+   para que lo audite contra `docs/testing-checklist.md` antes de darlo por terminado. No
+   marques el checklist de `ROADMAP.md` como completo hasta que `tester` reporte veredicto
+   "LISTO".
+4. Usa la skill `flutter-celtas` (se carga automáticamente cuando aplica) para las convenciones
+   específicas del proyecto — no improvises un patrón distinto de manejo de estado, red o
+   almacenamiento.
 5. Explica brevemente qué vas a hacer antes de generar código extenso, y resume qué se hizo al
    terminar.
 6. Prioriza siempre: (1) que la pantalla funcione end-to-end contra el backend real, (2) que
@@ -76,3 +68,15 @@ padre.
 - No reportes "evidencia" sin haberla verificado de verdad — si el usuario pide ver código o
   salida cruda de un comando, muéstrala tal cual, nunca un resumen presentado como si fuera la
   salida real.
+
+## Historial relevante (para no repetir errores ya resueltos)
+
+- Bug de deadlock en la cola de refresh del interceptor de `dio` — corregido en el módulo 1,
+  ver `lib/core/network/api_client.dart`.
+- El parser de paths SVG propio (`lib/shared/widgets/svg_path.dart`) tuvo que reescribirse para
+  soportar la gramática SVG completa (notación compacta, comandos relativos, arcos) — si tocas
+  ese archivo, no reviertas a una versión simplificada.
+- El router (`go_router`) se crea UNA sola vez — recrearlo en cada cambio de estado de auth
+  causó un bug real de navegación pegada en el Splash. Usa `ref.listen` + `router.refresh()`.
+- `ProviderScope` debe envolver la app en `main.dart` — un test lo enmascaró una vez porque los
+  widget tests se envuelven solos con su propio `ProviderScope`.

@@ -13,6 +13,7 @@ class CeltasButton extends StatelessWidget {
     required this.onPressed,
     this.angled = false,
     this.loading = false,
+    this.icon,
   });
 
   final String label;
@@ -20,10 +21,28 @@ class CeltasButton extends StatelessWidget {
   final bool angled;
   final bool loading;
 
+  /// Ícono opcional a la izquierda del label (ej. WhatsApp en checkout,
+  /// `gap: 10` como en el CSS real del mockup).
+  final Widget? icon;
+
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null && !loading;
     final textTheme = Theme.of(context).textTheme;
+
+    // Botones con ícono (ej. CTA de WhatsApp) usan 15px como el CSS real del
+    // mockup — el resto (COMENZAR, CONTINUAR, etc.) sigue en 16px.
+    final labelText = Text(
+      label,
+      textAlign: TextAlign.center,
+      overflow: TextOverflow.ellipsis,
+      maxLines: 1,
+      style: textTheme.labelLarge?.copyWith(
+        fontSize: icon == null ? 16 : 15,
+        fontWeight: FontWeight.w800,
+        color: enabled ? CeltasColors.black : CeltasColors.textSubtle,
+      ),
+    );
 
     final content = loading
         ? const SizedBox(
@@ -34,15 +53,16 @@ class CeltasButton extends StatelessWidget {
               color: CeltasColors.black,
             ),
           )
-        : Text(
-            label,
-            textAlign: TextAlign.center,
-            style: textTheme.labelLarge?.copyWith(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: enabled ? CeltasColors.black : CeltasColors.textSubtle,
-            ),
-          );
+        : icon == null
+            ? labelText
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  icon!,
+                  const SizedBox(width: 10),
+                  Flexible(child: labelText),
+                ],
+              );
 
     final button = Material(
       color: enabled ? CeltasColors.orange : CeltasColors.border,

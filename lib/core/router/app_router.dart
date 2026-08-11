@@ -4,7 +4,7 @@ import 'package:celtas_mobile/features/auth/presentation/login_screen.dart';
 import 'package:celtas_mobile/features/auth/presentation/register_screen.dart';
 import 'package:celtas_mobile/features/auth/presentation/splash_screen.dart';
 import 'package:celtas_mobile/features/cart/presentation/cart_screen.dart';
-import 'package:celtas_mobile/features/checkout/presentation/checkout_placeholder_screen.dart';
+import 'package:celtas_mobile/features/checkout/presentation/checkout_screen.dart';
 import 'package:celtas_mobile/features/coupons/presentation/coupons_placeholder_screen.dart';
 import 'package:celtas_mobile/features/home/presentation/home_screen.dart';
 import 'package:celtas_mobile/features/menu/presentation/product_detail_screen.dart';
@@ -97,10 +97,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/cart',
         builder: (context, state) => const CartScreen(),
       ),
-      // Checkout: placeholder del módulo 5.
+      // Checkout: dirección + resumen + confirmación por WhatsApp (módulo 5).
       GoRoute(
         path: '/checkout',
-        builder: (context, state) => const CheckoutPlaceholderScreen(),
+        builder: (context, state) => const CheckoutScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) => _ShellScaffold(

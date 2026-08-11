@@ -4,7 +4,7 @@ description: Convenciones y patrones específicos de la app Flutter de Celtas (m
 license: MIT
 metadata:
   project: celtas-mobile
-  audience: opencode-agent
+  audience: claude-code
 ---
 
 ## Cuándo usar esta skill

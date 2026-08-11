@@ -41,5 +41,13 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Requerido por url_launcher (Android 11+/API 30, package visibility)
+             para poder detectar/abrir el whatsappUrl (https://wa.me/...) del
+             checkout — sin esto, canLaunchUrl devuelve false aunque WhatsApp
+             esté instalado. Ver README de url_launcher: sección Android. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
     </queries>
 </manifest>

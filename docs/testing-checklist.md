@@ -41,12 +41,12 @@ solo cuando pasa lo aplicable de este checklist.
 
 ## Carrito / Checkout
 
-- [ ] El total lo calcula el backend, la app nunca lo envía ni lo asume
-- [ ] Ningún flujo de pago procesado dentro de la app en ningún punto
-- [ ] `whatsappUrl` se abre correctamente; caso de WhatsApp no instalado manejado con mensaje
+- [x] El total lo calcula el backend, la app nunca lo envía ni lo asume
+- [x] Ningún flujo de pago procesado dentro de la app en ningún punto
+- [x] `whatsappUrl` se abre correctamente; caso de WhatsApp no instalado manejado con mensaje
       claro, no crash
-- [ ] Carrito se limpia tras confirmar pedido exitosamente
-- [ ] Validación de cupón (`/coupons/validate`) no lo marca como usado antes de confirmar
+- [x] Carrito se limpia tras confirmar pedido exitosamente
+- [x] Validación de cupón (`/coupons/validate`) no lo marca como usado antes de confirmar
 
 ## Perfil / Direcciones
 

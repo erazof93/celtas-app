@@ -233,12 +233,43 @@ celtas-mobile/
       2/2 — flujo Home→detalle→carrito→cupón inválido. Fix de bug de clase: SnackBar que tapaba
       CTAs al navegar. Auditado por `@tester`: veredicto LISTO)
 
-### 5. Checkout
-- [ ] Selector de dirección guardada (o agregar nueva)
-- [ ] Resumen del pedido con descuento aplicado
-- [ ] `POST /orders` con `items` + `addressId`/`addressSnapshot` + `couponCode` opcional
-- [ ] Al recibir la respuesta, abrir el `whatsappUrl` con `url_launcher`
-- [ ] Limpiar el carrito local tras confirmar
+### 5. Checkout — ✅ COMPLETO (5/5)
+- [x] Selector de dirección guardada (o agregar nueva): `GET /users/me/addresses` con
+      loading/error(REINTENTAR)/vacío explícitos; sin direcciones guardadas se muestra el
+      formulario inline directamente; la dirección principal (`isDefault`) queda preseleccionada
+      (el backend ya ordena `isDefault DESC, createdAt ASC`)
+- [x] Resumen del pedido con descuento aplicado: items + subtotal + descuento del cupón
+      ya validado en el carrito (módulo 4, `POST /coupons/validate` sin marcarlo usado) + total,
+      fidelidad exacta al mockup 07 · CHECKOUT (colores `#C9A96A`/`#E8590C`/`#8A8378`/`#FFB800`
+      ya definidos en `CeltasColors`, sin `Color(0xFF...)` sueltos)
+- [x] `POST /orders` con `items` ([{menuItemId, quantity}]) + `addressId` (el checkout siempre
+      persiste la dirección nueva vía `POST /users/me/addresses` antes de armar el pedido, así
+      que `addressSnapshot` queda soportado en el repositorio para uso futuro pero no se ejercita
+      todavía desde la UI) + `couponCode` opcional — contrato verificado contra
+      `create-order.dto.ts` + `orders.service.ts`. El total NUNCA lo envía el cliente
+- [x] Al recibir la respuesta, abrir el `whatsappUrl` con `url_launcher`. **Desviación
+      justificada de la skill**: NO usa `canLaunchUrl` como gate — confirmado en dispositivo real
+      (Xiaomi, Android 15) que devuelve `false` para `wa.me` aunque WhatsApp esté instalado
+      (`resolveActivity(MATCH_DEFAULT_ONLY)` da `null` con más de una app candidata sin default
+      fijado). `launchUrl` directo sí es la señal confiable: `false`/`PlatformException` se tratan
+      como "no se pudo abrir" con mensaje claro y botón "ABRIR WHATSAPP" para reintentar, sin
+      perder el pedido ya creado
+- [x] Limpiar el carrito local tras confirmar: se limpia apenas el backend confirma el pedido
+      (antes de intentar abrir WhatsApp), para no reenviarlo por error aunque WhatsApp falle al
+      abrirse
+- [x] **Prueba real en dispositivo** (Xiaomi por USB, dos corridas): confirmó y corrigió 3 bugs
+      reales que solo aparecen fuera de los widget tests:
+      1. Overflow de 31px en el botón CTA (`Row` de ícono+label sin `Flexible`) — fix:
+         `Flexible` en el label + fontSize 15 para botones con ícono (coincide con el CSS real)
+      2. `AndroidManifest.xml` sin `<queries>` para `ACTION_VIEW`/`https` (Android 11+) — sin
+         esto `url_launcher` no podía resolver ninguna app externa
+      3. `canLaunchUrl` no confiable para `wa.me` (ver desviación arriba) — resuelto con
+         `launchUrl` directo. Confirmado por el usuario: pedido real creado, WhatsApp abierto con
+         el mensaje correcto, `total` calculado por el backend, `status: "pendiente"`
+- [x] 10 widget tests nuevos del checkout (selector vacío/con datos/error, agregar dirección,
+      resumen con cupón, confirmar con éxito, error real del backend, WhatsApp no instalado,
+      `PlatformException`, carrito vacío deshabilita el botón) — 132/132 tests totales,
+      `flutter analyze` limpio. Auditado por `@tester`: veredicto LISTO
 
 ### 6. Perfil + Direcciones
 - [ ] Ver/editar perfil (`GET`/`PATCH /users/me`)
