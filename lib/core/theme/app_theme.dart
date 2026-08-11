@@ -32,6 +32,17 @@ class CeltasColors {
   static const textMuted = Color(0xFF8A8378); // descripciones, subtítulos
   static const textSubtle = Color(0xFF6B6357); // tabs inactivas, menos énfasis
   static const textLabel = Color(0xFFC9A96A); // labels de formularios (EMAIL, etc.)
+
+  /// Único color fuera de la paleta cálida, y a propósito: el mockup original
+  /// pintaba `confirmado` (naranja relleno) y `en_camino` (naranja contorno)
+  /// con el MISMO color, distinguibles solo por relleno vs. contorno, y
+  /// `en_camino`/`cancelado` compartían el estilo de contorno con colores
+  /// cálidos vecinos (naranja vs. rojo claro) — difícil de distinguir de un
+  /// vistazo rápido y peor aún para usuarios con daltonismo rojo-verde
+  /// (protanopia/deuteranopia confunden naranja y rojo). Ver
+  /// `OrderStatusBadge` (`lib/features/orders/presentation/widgets/
+  /// order_status_badge.dart`) para el mapeo completo de los 5 estados.
+  static const statusEnCamino = Color(0xFF3B7DDE);
 }
 
 /// Radios que se repiten en el mockup (`border-radius` real del CSS).

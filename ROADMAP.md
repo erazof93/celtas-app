@@ -271,14 +271,39 @@ celtas-mobile/
       `PlatformException`, carrito vacío deshabilita el botón) — 132/132 tests totales,
       `flutter analyze` limpio. Auditado por `@tester`: veredicto LISTO
 
-### 6. Perfil + Direcciones
-- [ ] Ver/editar perfil (`GET`/`PATCH /users/me`)
-- [ ] CRUD de direcciones (`GET/POST/PATCH/DELETE /users/me/addresses`)
-- [ ] Logout
+### 6. Perfil + Direcciones — ✅ COMPLETO
+- [x] Ver/editar perfil (`GET`/`PATCH /users/me`)
+- [x] CRUD de direcciones (`GET/POST/PATCH/DELETE /users/me/addresses`)
+- [x] Logout
+- [x] **Bug de backend encontrado y corregido**: `AddressesService.update()` (y dos services más
+  del mismo módulo) usaban `Object.assign(entity, dto)` para aplicar un `UpdateDto` parcial —
+  como el DTO declara todos sus campos como propiedad propia aunque no se hayan enviado, los
+  ausentes llegan `undefined` y sobrescriben los del entity antes de serializar la respuesta del
+  `PATCH` (la fila en base de datos queda íntegra porque TypeORM ignora columnas `undefined` al
+  armar el `UPDATE`, pero el body HTTP de respuesta sí pierde esos campos). Corregido a
+  `repository.merge(entity, dto)` en los 3 services, ya deployado en producción.
+- [x] **Fix del lado mobile** (no depender del bug del backend, ni aunque ya esté corregido):
+  `AddressRepository.updateAddress()` no parsea el body del `PATCH` (`Future<void>`, ver
+  `lib/features/addresses/data/address_repository.dart:79`), y
+  `AddressListNotifier.updateAddress()`/`removeAddress()` invalidan y vuelven a pedir la lista
+  completa con `GET` (`lib/features/addresses/application/address_providers.dart:56-66,86-94`).
+  Regla documentada en la skill `flutter-celtas` ("Nunca depender de la respuesta de un PATCH").
+- [x] Verificado: 148/148 tests (`flutter test`), `flutter analyze` sin issues
 
-### 7. Historial de pedidos
-- [ ] Listado (`GET /orders/me`), badges de estado con la paleta ajustada (ver nota de diseño)
-- [ ] Detalle de pedido (items, dirección, estado, total)
+### 7. Historial de pedidos — ✅ COMPLETO
+- [x] Listado (`GET /orders/me`), badges de estado con la paleta ajustada (ver nota de diseño)
+- [x] Detalle de pedido (items, dirección, estado, total)
+      (`GET /orders/me` sin paginar y `GET /orders/:id` — contrato verificado contra
+      `order.entity.ts`/`order-item.entity.ts` reales, sin campos inventados; `addressSnapshot`
+      decodificado del JSON string crudo; badge de 5 estados con `CeltasColors.statusEnCamino`
+      nuevo (azul, fuera de la paleta cálida) para separar `en_camino` de `confirmado`, según la
+      nota de diseño ya documentada arriba; `cancelado` es el único con contorno rojo; historial
+      se invalida y refetchea tras confirmar un pedido en checkout, nunca se inserta a mano; sin
+      `Color(0xFF...)` sueltos, sin texto en inglés, loading/error/vacío explícitos en ambas
+      pantallas. 166/166 tests, `flutter analyze` limpio. Verificado en dispositivo real (Xiaomi):
+      pedidos reales del checkout aparecen en el listado, los 5 estados comparados lado a lado
+      tras cambiar estados desde el panel admin se distinguen claramente, detalle de un pedido
+      "en_camino" correcto. Auditado por `@tester`: veredicto LISTO)
 
 ### 8. Mis cupones
 - [ ] Listado (`GET /coupons/me`), distinción visual clara entre activo/usado/expirado

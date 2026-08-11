@@ -39,21 +39,32 @@ class CeltasColors {
 Definidos una sola vez en `lib/core/config/theme.dart`, nunca como `Color(0xFF...)` suelto
 dentro de un widget.
 
-### Badges de estado de pedido — separación cromática deliberada
+### Badges de estado de pedido — separación cromática deliberada (resuelto en el módulo 7)
 
-El mockup usa una escala cálida (dorado→naranja→rojo) para los 5 estados, y `en_camino` se
-confunde visualmente con `cancelado`. Al implementar, usar esta asignación con más contraste
-entre sí:
+El mockup original (pantalla 10 · Historial de pedidos) usaba el MISMO color naranja para
+`confirmado` (relleno) y `en_camino` (contorno) — distinguibles solo por relleno vs. contorno —
+y `en_camino`/`cancelado` compartían el estilo de contorno con colores cálidos vecinos (naranja
+vs. rojo claro), difícil de distinguir de un vistazo y peor para daltonismo rojo-verde
+(protanopia/deuteranopia confunden naranja y rojo). `pendiente` (dorado relleno) y `entregado`
+(crema relleno) ya eran distinguibles en el mockup original y se mantuvieron igual.
+
+Paleta final implementada (`OrderStatusBadge`, `lib/features/orders/presentation/widgets/
+order_status_badge.dart`):
 
 ```dart
-Color statusColor(OrderStatus status) => switch (status) {
-  OrderStatus.pendiente => CeltasColors.gold,
-  OrderStatus.confirmado => CeltasColors.orange,
-  OrderStatus.enCamino => Colors.blueAccent,       // fuera de la paleta cálida a propósito
-  OrderStatus.entregado => Colors.greenAccent,     // fuera de la paleta cálida a propósito
-  OrderStatus.cancelado => CeltasColors.redLight,  // el único que usa rojo
-};
+OrderStatus.pendiente  => fondo CeltasColors.gold,   texto negro   // igual al mockup
+OrderStatus.confirmado => fondo CeltasColors.orange, texto crema   // igual al mockup
+OrderStatus.enCamino   => fondo CeltasColors.statusEnCamino (#3B7DDE, azul), texto crema
+                           // ÚNICO color fuera de la paleta cálida, a propósito: ya no
+                           // comparte hue con `confirmado` ni con `cancelado`
+OrderStatus.entregado  => fondo CeltasColors.cream,  texto negro   // igual al mockup
+OrderStatus.cancelado  => contorno CeltasColors.redLight (sin relleno), texto redLight
+                           // el ÚNICO estado que usa rojo, y el único con contorno en vez
+                           // de relleno (refuerza que es el estado "negativo")
 ```
+
+`CeltasColors.statusEnCamino` es la única constante de color del proyecto definida fuera de la
+paleta de marca — documentada con esa justificación directamente en `app_theme.dart`.
 
 ## Auth (Riverpod + flutter_secure_storage)
 

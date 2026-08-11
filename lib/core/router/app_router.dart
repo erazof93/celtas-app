@@ -9,7 +9,8 @@ import 'package:celtas_mobile/features/checkout/presentation/checkout_screen.dar
 import 'package:celtas_mobile/features/coupons/presentation/coupons_placeholder_screen.dart';
 import 'package:celtas_mobile/features/home/presentation/home_screen.dart';
 import 'package:celtas_mobile/features/menu/presentation/product_detail_screen.dart';
-import 'package:celtas_mobile/features/orders/presentation/orders_placeholder_screen.dart';
+import 'package:celtas_mobile/features/orders/presentation/order_detail_screen.dart';
+import 'package:celtas_mobile/features/orders/presentation/orders_screen.dart';
 import 'package:celtas_mobile/features/profile/presentation/profile_screen.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_bottom_nav.dart';
 import 'package:flutter/material.dart';
@@ -110,6 +111,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/addresses',
         builder: (context, state) => const AddressesScreen(),
       ),
+      // Detalle de pedido: empujado desde el listado del tab Pedidos (módulo
+      // 7, mockup 11, sin bottom nav — igual que detalle de producto).
+      GoRoute(
+        path: '/orders/:id',
+        builder: (context, state) => OrderDetailScreen(
+          orderId: state.pathParameters['id']!,
+        ),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) => _ShellScaffold(
           navigationShell: navigationShell,
@@ -127,7 +136,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: '/orders',
-                builder: (context, state) => const OrdersPlaceholderScreen(),
+                builder: (context, state) => const OrdersScreen(),
               ),
             ],
           ),

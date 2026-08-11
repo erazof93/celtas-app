@@ -56,8 +56,13 @@ solo cuando pasa lo aplicable de este checklist.
 
 ## Pedidos / Cupones
 
-- [ ] Badges de estado de pedido visualmente distinguibles entre sí (los 5 estados)
-- [ ] Paginación de historial funciona
+- [x] Badges de estado de pedido visualmente distinguibles entre sí (los 5 estados)
+- [x] Historial de pedidos trae la lista completa vía `GET /orders/me` — confirmado que ese
+      endpoint NO pagina ni filtra por status para el cliente (solo `GET /orders`, admin-only,
+      lo hace); no debe asumirse ni construirse paginación para `/orders/me` ni `/coupons/me`
+      (mismo patrón sin paginar)
+- [x] El historial refleja un pedido recién creado al volver del checkout (invalidar +
+      re-fetchear, no insertar a mano)
 - [ ] Cupones muestran estado (activo/usado/expirado) correctamente
 
 ## Notificaciones

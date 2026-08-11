@@ -5,6 +5,7 @@ import 'package:celtas_mobile/features/addresses/data/models/address.dart';
 import 'package:celtas_mobile/features/addresses/presentation/widgets/address_form_card.dart';
 import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
 import 'package:celtas_mobile/features/checkout/application/checkout_providers.dart';
+import 'package:celtas_mobile/features/orders/application/order_history_providers.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
 import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
 import 'package:celtas_mobile/shared/widgets/svg_path.dart';
@@ -118,6 +119,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       // punto (aunque WhatsApp no llegue a abrirse) — el carrito local ya
       // cumplió su función y se limpia para no reenviarlo por error.
       ref.read(cartProvider.notifier).clear();
+      // Invalida el historial para que el pedido recién creado aparezca al
+      // volver a la pestaña Pedidos, según la regla de "invalidar y
+      // re-fetchear" — no se intenta insertarlo a mano en la lista local.
+      ref.invalidate(orderListProvider);
       final opened = await _openWhatsapp(result.whatsappUrl);
       if (!mounted) return;
       if (opened) {

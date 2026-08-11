@@ -11,6 +11,8 @@ import 'package:celtas_mobile/features/checkout/data/order_repository.dart';
 import 'package:celtas_mobile/features/checkout/presentation/checkout_screen.dart';
 import 'package:celtas_mobile/features/coupons/data/models/validated_coupon.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
+import 'package:celtas_mobile/features/orders/application/order_history_providers.dart';
+import 'package:celtas_mobile/features/orders/data/order_history_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -25,6 +27,9 @@ import 'package:url_launcher_platform_interface/url_launcher_platform_interface.
 class MockAddressRepository extends Mock implements AddressRepository {}
 
 class MockOrderRepository extends Mock implements OrderRepository {}
+
+class MockOrderHistoryRepository extends Mock
+    implements OrderHistoryRepository {}
 
 /// Fake del canal de plataforma de `url_launcher` — sin esto, `launchUrl`
 /// lanza `MissingPluginException` en widget tests (no hay un dispositivo real
@@ -99,13 +104,19 @@ void main() {
     WidgetTester tester, {
     required MockAddressRepository addressRepository,
     required MockOrderRepository orderRepository,
+    MockOrderHistoryRepository? orderHistoryRepository,
     List<PublicMenuItem> items = const [],
     ValidatedCoupon? coupon,
   }) async {
+    final historyRepo = orderHistoryRepository ?? MockOrderHistoryRepository();
+    if (orderHistoryRepository == null) {
+      when(() => historyRepo.getMyOrders()).thenAnswer((_) async => []);
+    }
     final container = ProviderContainer(
       overrides: [
         addressRepositoryProvider.overrideWithValue(addressRepository),
         orderRepositoryProvider.overrideWithValue(orderRepository),
+        orderHistoryRepositoryProvider.overrideWithValue(historyRepo),
       ],
     );
     addTearDown(container.dispose);
@@ -457,6 +468,51 @@ void main() {
       expect(find.textContaining('Tu pedido #order-77 se registró'),
           findsOneWidget);
       expect(find.text('ABRIR WHATSAPP'), findsOneWidget);
+    });
+
+    testWidgets(
+        'pedido confirmado → invalida el historial para que aparezca al volver a Pedidos',
+        (tester) async {
+      final addressRepo = MockAddressRepository();
+      when(() => addressRepo.getAddresses())
+          .thenAnswer((_) async => [home]);
+
+      final orderRepo = MockOrderRepository();
+      when(() => orderRepo.createOrder(
+            items: any(named: 'items'),
+            addressId: any(named: 'addressId'),
+            couponCode: any(named: 'couponCode'),
+          )).thenAnswer(
+        (_) async => const OrderResult(
+          id: 'order-nuevo',
+          total: 15.5,
+          whatsappUrl: 'https://wa.me/51999999999?text=hola',
+        ),
+      );
+
+      final historyRepo = MockOrderHistoryRepository();
+      when(() => historyRepo.getMyOrders()).thenAnswer((_) async => []);
+
+      final container = await pumpCheckout(
+        tester,
+        addressRepository: addressRepo,
+        orderRepository: orderRepo,
+        orderHistoryRepository: historyRepo,
+        items: [burger],
+      );
+
+      // Se lee una vez antes de confirmar (ej. si el usuario ya visitó el
+      // tab Pedidos), simulando que el provider tiene un valor cacheado.
+      await container.read(orderListProvider.future);
+      verify(() => historyRepo.getMyOrders()).called(1);
+
+      await tester.tap(find.byKey(const ValueKey('checkout-confirm')));
+      await tester.pumpAndSettle();
+
+      // Tras confirmar, el provider fue invalidado: leerlo de nuevo dispara
+      // un nuevo `GET /orders/me` en vez de devolver el valor cacheado.
+      await container.read(orderListProvider.future);
+      verify(() => historyRepo.getMyOrders()).called(1);
     });
 
     testWidgets('carrito vacío → botón de confirmar deshabilitado',
