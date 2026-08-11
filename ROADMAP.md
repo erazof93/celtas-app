@@ -222,11 +222,16 @@ celtas-mobile/
       `Colors.transparent` = CSS real `rgba(13,13,13,.85) 20% → transparent 70%`, placeholder
       eliminado. 79/79 tests, `flutter analyze` limpio. Auditado por `@tester`: veredicto LISTO)
 
-### 4. Producto + Carrito
-- [ ] Pantalla de detalle de producto (selector de cantidad, agregar al carrito)
-- [ ] Estado del carrito 100% local (Riverpod `StateNotifier` o `Notifier`)
-- [ ] Pantalla de carrito: editar cantidades, aplicar cupón (`POST /coupons/validate` antes de
+### 4. Producto + Carrito — ✅ COMPLETO
+- [x] Pantalla de detalle de producto (selector de cantidad, agregar al carrito)
+- [x] Estado del carrito 100% local (Riverpod `Notifier`)
+- [x] Pantalla de carrito: editar cantidades, aplicar cupón (`POST /coupons/validate` antes de
       confirmar, no solo al final)
+      (detalle con hero 400px + stepper + botón precio×cantidad, carrito con steppers/subtotales/
+      total + cupón con error real del backend, checkout placeholder → módulo 5. 122/122 tests,
+      `flutter analyze` limpio, test de integración en dispositivo real contra el backend real
+      2/2 — flujo Home→detalle→carrito→cupón inválido. Fix de bug de clase: SnackBar que tapaba
+      CTAs al navegar. Auditado por `@tester`: veredicto LISTO)
 
 ### 5. Checkout
 - [ ] Selector de dirección guardada (o agregar nueva)

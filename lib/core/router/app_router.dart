@@ -3,8 +3,11 @@ import 'package:celtas_mobile/features/auth/application/auth_state.dart';
 import 'package:celtas_mobile/features/auth/presentation/login_screen.dart';
 import 'package:celtas_mobile/features/auth/presentation/register_screen.dart';
 import 'package:celtas_mobile/features/auth/presentation/splash_screen.dart';
+import 'package:celtas_mobile/features/cart/presentation/cart_screen.dart';
+import 'package:celtas_mobile/features/checkout/presentation/checkout_placeholder_screen.dart';
 import 'package:celtas_mobile/features/coupons/presentation/coupons_placeholder_screen.dart';
 import 'package:celtas_mobile/features/home/presentation/home_screen.dart';
+import 'package:celtas_mobile/features/menu/presentation/product_detail_screen.dart';
 import 'package:celtas_mobile/features/orders/presentation/orders_placeholder_screen.dart';
 import 'package:celtas_mobile/features/profile/presentation/profile_placeholder_screen.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_bottom_nav.dart';
@@ -12,13 +15,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-/// Rutas raíz de los branches del shell (protegidas). Las rutas anidadas de
-/// cada tab (ej. `/orders/123`, `/profile/addresses`) heredan la protección
-/// por prefijo.
-const _shellPaths = ['/home', '/orders', '/coupons', '/profile'];
+/// Rutas que requieren sesión (prefijos del shell + rutas a pantalla completa
+/// empujadas sobre el shell: detalle de producto, carrito, checkout). Las
+/// rutas anidadas de cada tab (ej. `/orders/123`) heredan la protección por
+/// prefijo.
+const _protectedPaths = [
+  '/home',
+  '/orders',
+  '/coupons',
+  '/profile',
+  '/product',
+  '/cart',
+  '/checkout',
+];
 
-bool _isShellPath(String location) =>
-    _shellPaths.any((p) => location == p || location.startsWith('$p/'));
+bool _isProtectedPath(String location) =>
+    _protectedPaths.any((p) => location == p || location.startsWith('$p/'));
 
 /// Router de la app.
 ///
@@ -56,7 +68,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       // unauthenticated o error transitorio: rutas del shell → login.
-      if (_isShellPath(location)) return '/login';
+      if (_isProtectedPath(location)) return '/login';
       return null;
     },
     routes: [
@@ -71,6 +83,24 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/register',
         builder: (context, state) => const RegisterScreen(),
+      ),
+      // Detalle de producto: se empuja sobre el shell (sin bottom nav,
+      // como el mockup 05). El producto se resuelve desde el menú ya cargado.
+      GoRoute(
+        path: '/product/:id',
+        builder: (context, state) => ProductDetailScreen(
+          productId: state.pathParameters['id']!,
+        ),
+      ),
+      // Carrito: pantalla completa sobre el shell (mockup 06, sin bottom nav).
+      GoRoute(
+        path: '/cart',
+        builder: (context, state) => const CartScreen(),
+      ),
+      // Checkout: placeholder del módulo 5.
+      GoRoute(
+        path: '/checkout',
+        builder: (context, state) => const CheckoutPlaceholderScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) => _ShellScaffold(

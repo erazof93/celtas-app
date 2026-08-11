@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:celtas_mobile/core/theme/app_theme.dart';
+import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
 import 'package:celtas_mobile/features/home/application/home_providers.dart';
 import 'package:celtas_mobile/features/home/data/models/banner.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_category.dart';
@@ -50,22 +51,27 @@ void main() {
     );
   });
 
-  Future<void> pumpHome(
+  Future<ProviderContainer> pumpHome(
     WidgetTester tester, {
     List<Banner> banners = const [],
     List<PublicMenuCategory> menu = const [],
   }) async {
+    final container = ProviderContainer(
+      overrides: [
+        activeBannersProvider.overrideWith((ref) async => banners),
+        publicMenuProvider.overrideWith((ref) async => menu),
+      ],
+    );
+    addTearDown(container.dispose);
     await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          activeBannersProvider.overrideWith((ref) async => banners),
-          publicMenuProvider.overrideWith((ref) async => menu),
-        ],
+      UncontrolledProviderScope(
+        container: container,
         child: MaterialApp(theme: AppTheme.dark, home: const HomeScreen()),
       ),
     );
     // Resuelve los FutureProviders (banners + menú) antes de inspeccionar.
     await tester.pumpAndSettle();
+    return container;
   }
 
   testWidgets('header con pin de ubicación y campana', (tester) async {
@@ -103,8 +109,9 @@ void main() {
     expect(find.text('S/ 9.90'), findsOneWidget);
   });
 
-  testWidgets('botón "+" → SnackBar "Agregado"', (tester) async {
-    await pumpHome(tester, menu: [category]);
+  testWidgets('botón "+" → agrega al carrito local y muestra SnackBar',
+      (tester) async {
+    final container = await pumpHome(tester, menu: [category]);
 
     // Hay un botón "+" por producto.
     expect(find.byKey(const ValueKey('add-i-1')), findsOneWidget);
@@ -114,6 +121,36 @@ void main() {
     await tester.pump();
 
     expect(find.text('Agregado: Celtas Burgues Clasica'), findsOneWidget);
+
+    // El carrito local quedó con el ítem (módulo 4: el "+" ya no es solo aviso).
+    final state = container.read(cartProvider);
+    expect(state.items, hasLength(1));
+    expect(state.items.single.menuItemId, 'i-1');
+    expect(state.items.single.quantity, 1);
+    expect(state.totalCount, 1);
+  });
+
+  testWidgets('el badge del carrito refleja la cantidad de unidades',
+      (tester) async {
+    final container = await pumpHome(tester, menu: [category]);
+
+    // Sin items: ícono sin badge.
+    expect(find.byKey(const ValueKey('home-cart-badge')), findsNothing);
+
+    // Dos toques al "+" del mismo producto → badge con 2.
+    await tester.tap(find.byKey(const ValueKey('add-i-1')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('add-i-1')));
+    await tester.pump();
+
+    expect(container.read(cartProvider).totalCount, 2);
+    expect(find.byKey(const ValueKey('home-cart-badge')), findsOneWidget);
+    expect(find.text('2'), findsOneWidget);
+
+    // Otro producto → badge con 3.
+    await tester.tap(find.byKey(const ValueKey('add-i-2')));
+    await tester.pump();
+    expect(find.text('3'), findsOneWidget);
   });
 
   testWidgets('chips de categorías: filtrar por categoría', (tester) async {

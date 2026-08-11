@@ -5,6 +5,8 @@ import 'package:celtas_mobile/features/auth/data/auth_repository.dart';
 import 'package:celtas_mobile/features/auth/data/models/auth_tokens.dart';
 import 'package:celtas_mobile/features/auth/data/models/user.dart';
 import 'package:celtas_mobile/features/home/application/home_providers.dart';
+import 'package:celtas_mobile/features/home/data/models/public_menu_category.dart';
+import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_bottom_nav.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -40,14 +42,21 @@ void main() {
 
   /// Overrides comunes: auth fake + Home sin requests reales (banners y menú
   /// vacíos — el Home real los carga del backend).
-  List<Override> overrides(MockAuthRepository repository) => [
+  List<Override> overrides(
+    MockAuthRepository repository, {
+    List<PublicMenuCategory> menu = const [],
+  }) => [
         authRepositoryProvider.overrideWithValue(repository),
         activeBannersProvider.overrideWith((ref) async => const []),
-        publicMenuProvider.overrideWith((ref) async => const []),
+        publicMenuProvider.overrideWith((ref) async => menu),
       ];
 
   /// Login rápido de punta a punta (Splash → Login → sesión activa).
-  Future<void> login(WidgetTester tester, MockAuthRepository repository) async {
+  Future<void> login(
+    WidgetTester tester,
+    MockAuthRepository repository, {
+    List<PublicMenuCategory> menu = const [],
+  }) async {
     when(() => repository.readRefreshToken()).thenAnswer((_) async => null);
     when(
       () => repository.login(
@@ -60,7 +69,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: overrides(repository),
+        overrides: overrides(repository, menu: menu),
         child: const CeltasApp(),
       ),
     );
@@ -215,5 +224,73 @@ void main() {
     expect(find.text('Bienvenido de nuevo'), findsOneWidget);
     expect(find.byType(CeltasBottomNav), findsNothing);
     expect(find.text('Entregar en'), findsNothing);
+  });
+
+  testWidgets('tocar una tarjeta de producto → detalle de producto',
+      (tester) async {
+    final repository = MockAuthRepository();
+    await login(tester, repository, menu: [
+      const PublicMenuCategory(
+        id: 'c-1',
+        name: 'Hamburguesa',
+        items: [
+          PublicMenuItem(
+            id: 'i-1',
+            name: 'Berserker Burger',
+            price: 15.5,
+          ),
+        ],
+      ),
+    ]);
+
+    await tester.tap(find.text('Berserker Burger'));
+    await tester.pumpAndSettle();
+
+    // Detalle: nombre + selector de cantidad + botón con precio.
+    expect(find.text('Berserker Burger'), findsOneWidget);
+    expect(find.text('CANTIDAD'), findsOneWidget);
+    expect(find.text('AGREGAR AL CARRITO · S/ 15.50'), findsOneWidget);
+    // Sin bottom nav en el detalle (pantalla completa sobre el shell).
+    expect(find.byType(CeltasBottomNav), findsNothing);
+  });
+
+  testWidgets('ícono de carrito del header → pantalla de carrito',
+      (tester) async {
+    final repository = MockAuthRepository();
+    await login(tester, repository);
+
+    await tester.tap(find.byKey(const ValueKey('home-cart-icon')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tu carrito'), findsOneWidget);
+    expect(find.byType(CeltasBottomNav), findsNothing);
+  });
+
+  testWidgets('rutas /product/:id y /cart sin sesión → redirigen a /login',
+      (tester) async {
+    final repository = MockAuthRepository();
+    when(() => repository.readRefreshToken()).thenAnswer((_) async => null);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: overrides(repository),
+        child: const CeltasApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(CeltasApp)),
+    );
+
+    container.read(routerProvider).go('/product/i-1');
+    await tester.pumpAndSettle();
+    expect(find.text('Bienvenido de nuevo'), findsOneWidget);
+    expect(find.byType(CeltasBottomNav), findsNothing);
+
+    container.read(routerProvider).go('/cart');
+    await tester.pumpAndSettle();
+    expect(find.text('Bienvenido de nuevo'), findsOneWidget);
+    expect(find.byType(CeltasBottomNav), findsNothing);
   });
 }

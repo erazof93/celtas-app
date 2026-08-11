@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:celtas_mobile/core/theme/app_theme.dart';
+import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
 import 'package:celtas_mobile/features/home/application/home_providers.dart';
 import 'package:celtas_mobile/features/home/data/models/banner.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_category.dart';
@@ -9,13 +10,15 @@ import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
 import 'package:celtas_mobile/shared/widgets/svg_stroke_icon.dart';
 import 'package:flutter/material.dart' hide Banner;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 /// Pantalla Home: carrusel de banners + menú por categorías.
 ///
-/// Módulo 3. Consume `GET /banners/active` (carrusel con indicador de puntos)
+/// Módulo 3: consume `GET /banners/active` (carrusel con indicador de puntos)
 /// y `GET /menu` (categorías con tarjetas de producto). El botón "+" de cada
-/// tarjeta muestra un SnackBar "Agregado" — el carrito real llega en el módulo
-/// 4 (estado 100% local en Riverpod).
+/// tarjeta agrega directo al carrito local (`cartProvider`, módulo 4); tocar
+/// la tarjeta abre el detalle (`/product/:id`). El ícono de carrito del header
+/// muestra el total de unidades en un badge.
 ///
 /// Estados:
 ///   - Carga: spinner + `SlowBackendNotice` (el backend de Render puede tardar
@@ -100,13 +103,17 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-// ─── Header (pin de ubicación + campana) ────────────────────────────────────
+// ─── Header (pin de ubicación + carrito con badge + campana) ────────────────
 
-class _HomeHeader extends StatelessWidget {
+class _HomeHeader extends ConsumerWidget {
   const _HomeHeader();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cartCount = ref.watch(
+      cartProvider.select((state) => state.totalCount),
+    );
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(CeltasSpacing.page, 14, CeltasSpacing.page, 8),
       child: Row(
@@ -141,6 +148,11 @@ class _HomeHeader extends StatelessWidget {
               ],
             ),
           ),
+          // Carrito con badge de unidades. El mockup no contempla un ícono de
+          // carrito en el shell (bottom nav de 4 tabs), así que vive acá, en
+          // el header del Home, junto a la campana.
+          _CartIconButton(count: cartCount),
+          const SizedBox(width: 16),
           const SvgStrokeIcon(
             path:
                 'M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9'
@@ -148,6 +160,62 @@ class _HomeHeader extends StatelessWidget {
             size: 20,
             color: CeltasColors.cream,
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Ícono de carrito del header con badge naranja con la cantidad de unidades.
+class _CartIconButton extends StatelessWidget {
+  const _CartIconButton({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      key: const ValueKey('home-cart-icon'),
+      onTap: () {
+        // Ocultar el SnackBar "Agregado" antes de navegar: persiste en el
+        // ScaffoldMessenger raíz y tapa los CTAs del carrito.
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        context.push('/cart');
+      },
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          const SvgStrokeIcon(
+            // Mismo path de carrito que el tab "Pedidos" del mockup.
+            path: 'M3 3h2l2.6 13h11.8L21 8H6'
+                'M9 18.6a1.4 1.4 0 1 0 0 2.8a1.4 1.4 0 1 0 0-2.8'
+                'M18 18.6a1.4 1.4 0 1 0 0 2.8a1.4 1.4 0 1 0 0-2.8',
+            size: 20,
+            color: CeltasColors.cream,
+          ),
+          if (count > 0)
+            Positioned(
+              right: -6,
+              top: -6,
+              child: Container(
+                key: const ValueKey('home-cart-badge'),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: const BoxDecoration(
+                  color: CeltasColors.orange,
+                  shape: BoxShape.circle,
+                ),
+                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                alignment: Alignment.center,
+                child: Text(
+                  '$count',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        color: CeltasColors.black,
+                      ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -410,13 +478,16 @@ class _CategoryChip extends StatelessWidget {
 /// Tarjeta de producto del mockup: fila con imagen 76x76, nombre, descripción,
 /// precio dorado y botón "+" circular naranja. Esquina superior derecha cortada
 /// (`clip-path: polygon(12px 0, ...)` del CSS real).
-class _ProductCard extends StatelessWidget {
+///
+/// Tocar la tarjeta abre el detalle (`/product/:id`); el botón "+" agrega
+/// directo al carrito local sin entrar al detalle.
+class _ProductCard extends ConsumerWidget {
   const _ProductCard({required this.item});
 
   final PublicMenuItem item;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return ClipPath(
       clipper: const _CardCornerClipper(12),
       child: Container(
@@ -430,49 +501,59 @@ class _ProductCard extends StatelessWidget {
             _ProductImage(item: item),
             const SizedBox(width: 12),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    item.name,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: CeltasColors.cream,
-                        ),
-                  ),
-                  const SizedBox(height: 2),
-                  if (item.description != null &&
-                      item.description!.isNotEmpty) ...[
+              child: GestureDetector(
+                key: ValueKey('product-${item.id}'),
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  // El SnackBar "Agregado" persiste en el ScaffoldMessenger raíz
+                  // al navegar y tapa el CTA inferior del detalle: ocultarlo.
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  context.push('/product/${item.id}');
+                },
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
                     Text(
-                      item.description!,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            fontSize: 12,
-                            color: CeltasColors.textMuted,
+                      item.name,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: CeltasColors.cream,
                           ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 2),
+                    if (item.description != null &&
+                        item.description!.isNotEmpty) ...[
+                      Text(
+                        item.description!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontSize: 12,
+                              color: CeltasColors.textMuted,
+                            ),
+                      ),
+                      const SizedBox(height: 6),
+                    ],
+                    Text(
+                      'S/ ${item.price.toStringAsFixed(2)}',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: CeltasColors.gold,
+                          ),
+                    ),
                   ],
-                  Text(
-                    'S/ ${item.price.toStringAsFixed(2)}',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: CeltasColors.gold,
-                        ),
-                  ),
-                ],
+                ),
               ),
             ),
             const SizedBox(width: 12),
-            // Botón "+" rápido: agrega al carrito sin entrar al detalle.
-            // El carrito real llega en el módulo 4; por ahora solo avisa.
+            // Botón "+" rápido: agrega al carrito local sin entrar al detalle.
             _AddButton(
               key: ValueKey('add-${item.id}'),
               onTap: () {
+                ref.read(cartProvider.notifier).addItem(item);
                 ScaffoldMessenger.of(context)
                   ..hideCurrentSnackBar()
                   ..showSnackBar(

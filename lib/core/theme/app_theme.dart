@@ -21,9 +21,11 @@ class CeltasColors {
   static const navBar = Color(0xFF111010); // fondo del bottom nav (mockup)
   static const surface = Color(0xFF17130F); // inputs, chips, fondos internos
   static const surfaceSelected = Color(0xFF1B140D); // tarjeta/input seleccionado
+  static const buttonSurface = Color(0xFF221C15); // fondo de botón secundario (mockup: "Aplicar")
   static const border = Color(0xFF2A231C);
   static const borderStrong = Color(0xFF3A342C);
   static const cardBorder = Color(0xFF241F19);
+  static const divider = Color(0xFF1C1712); // separadores y bordes internos del mockup
   static const placeholder = Color(0xFF5C5548); // texto fantasma de inputs
 
   // --- Texto secundario/muted.

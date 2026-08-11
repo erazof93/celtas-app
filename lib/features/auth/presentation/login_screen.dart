@@ -265,7 +265,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         WidgetSpan(
                           alignment: PlaceholderAlignment.middle,
                           child: GestureDetector(
-                            onTap: () => context.go('/register'),
+                            onTap: () {
+                              // Mismo patrón que el flujo de carrito: ocultar
+                              // el SnackBar antes de navegar, o persiste en el
+                              // ScaffoldMessenger raíz tapando los CTAs del
+                              // registro.
+                              ScaffoldMessenger.of(context)
+                                  .hideCurrentSnackBar();
+                              context.go('/register');
+                            },
                             child: Text(
                               'Registrate',
                               style: textTheme.bodyMedium?.copyWith(
