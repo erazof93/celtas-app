@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "614499893538",
+    "project_id": "celtas-b0bd5",
+    "storage_bucket": "celtas-b0bd5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:614499893538:android:a39fb1ffb1525e06a3657b",
+        "android_client_info": {
+          "package_name": "com.celtas.celtas_mobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "614499893538-sn5adeq44eog889k15c7s3pmqosapen6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDs9r3l2FwThUIBp9XRM-Q-UxSxHfy7CbA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "614499893538-sn5adeq44eog889k15c7s3pmqosapen6.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

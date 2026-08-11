@@ -1,4 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Android 13+ (API 33): permiso en tiempo de ejecución requerido para
+         mostrar notificaciones, incluidas las de FCM. Sin esto, las
+         notificaciones en background/terminated tampoco se muestran en API
+         33+ aunque el usuario nunca vea el diálogo de permiso. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="celtas_mobile"
         android:name="${applicationName}"
@@ -30,6 +35,19 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Canal por defecto que usa el SDK de FCM para mostrar la
+             notificación nativamente en background/terminated — debe
+             coincidir con el `AndroidNotificationChannel` que crea
+             `NotificationService` para el foreground, si no la app tendría
+             dos canales distintos (uno "Miscellaneous" genérico de FCM, otro
+             "Celtas" propio) y el usuario podría silenciar uno sin afectar
+             al otro. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="celtas_default" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@mipmap/ic_launcher" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
