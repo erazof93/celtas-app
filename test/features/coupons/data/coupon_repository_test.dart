@@ -170,4 +170,86 @@ void main() {
       );
     });
   });
+
+  group('getMyCoupons', () {
+    const listJson = [
+      {
+        'id': 'c-1',
+        'code': 'VIKINGO10',
+        'discountType': 'percentage',
+        'discountValue': 10.0,
+        'status': 'active',
+        'expiresAt': '2026-12-31T00:00:00.000Z',
+        'usedAt': null,
+      },
+      {
+        'id': 'c-2',
+        'code': 'FUEGO3000',
+        'discountType': 'fixed_amount',
+        'discountValue': 15.0,
+        'status': 'used',
+        'expiresAt': '2026-08-20T00:00:00.000Z',
+        'usedAt': '2026-08-05T00:00:00.000Z',
+      },
+    ];
+
+    test('éxito: GET /coupons/me y parsea la lista completa', () async {
+      when(() => dio.get<List<dynamic>>('/coupons/me')).thenAnswer(
+        (_) async => Response<List<dynamic>>(
+          requestOptions: RequestOptions(path: '/coupons/me'),
+          data: listJson,
+        ),
+      );
+
+      final coupons = await repository.getMyCoupons();
+
+      expect(coupons, hasLength(2));
+      expect(coupons.first.code, 'VIKINGO10');
+      expect(coupons.first.status.name, 'active');
+      expect(coupons.last.code, 'FUEGO3000');
+      expect(coupons.last.usedAt, DateTime.utc(2026, 8, 5));
+      verify(() => dio.get<List<dynamic>>('/coupons/me')).called(1);
+    });
+
+    test('respuesta vacía (sin data) → lista vacía, no crashea', () async {
+      when(() => dio.get<List<dynamic>>('/coupons/me')).thenAnswer(
+        (_) async => Response<List<dynamic>>(
+          requestOptions: RequestOptions(path: '/coupons/me'),
+        ),
+      );
+
+      final coupons = await repository.getMyCoupons();
+
+      expect(coupons, isEmpty);
+    });
+
+    test('error del backend → ApiException con el mensaje real', () async {
+      when(() => dio.get<List<dynamic>>('/coupons/me')).thenThrow(
+        DioException(
+          requestOptions: RequestOptions(path: '/coupons/me'),
+          response: Response(
+            requestOptions: RequestOptions(path: '/coupons/me'),
+            statusCode: 401,
+            data: {
+              'success': false,
+              'message': 'Sin token o token inválido',
+              'statusCode': 401,
+            },
+          ),
+          type: DioExceptionType.badResponse,
+        ),
+      );
+
+      await expectLater(
+        repository.getMyCoupons(),
+        throwsA(
+          isA<ApiException>().having(
+            (e) => e.message,
+            'message',
+            'Sin token o token inválido',
+          ),
+        ),
+      );
+    });
+  });
 }

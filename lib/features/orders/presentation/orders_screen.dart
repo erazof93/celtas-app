@@ -4,27 +4,11 @@ import 'package:celtas_mobile/features/orders/application/order_history_provider
 import 'package:celtas_mobile/features/orders/data/models/order.dart';
 import 'package:celtas_mobile/features/orders/data/models/order_status.dart';
 import 'package:celtas_mobile/features/orders/presentation/widgets/order_status_badge.dart';
+import 'package:celtas_mobile/shared/utils/spanish_date.dart';
 import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
-const _months = [
-  'ene',
-  'feb',
-  'mar',
-  'abr',
-  'may',
-  'jun',
-  'jul',
-  'ago',
-  'sep',
-  'oct',
-  'nov',
-  'dic',
-];
-
-String _formatOrderDate(DateTime date) => '${date.day} ${_months[date.month - 1]}';
 
 /// Historial de pedidos (mockup 10 · HISTORIAL DE PEDIDOS).
 ///
@@ -149,7 +133,7 @@ class _OrderCard extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                '${_formatOrderDate(order.createdAt)} · ${order.itemsCount} '
+                '${formatShortDate(order.createdAt)} · ${order.itemsCount} '
                 '${order.itemsCount == 1 ? 'item' : 'items'}',
                 style: textTheme.bodySmall?.copyWith(
                   fontSize: 13,

@@ -6,7 +6,7 @@ import 'package:celtas_mobile/features/auth/presentation/register_screen.dart';
 import 'package:celtas_mobile/features/auth/presentation/splash_screen.dart';
 import 'package:celtas_mobile/features/cart/presentation/cart_screen.dart';
 import 'package:celtas_mobile/features/checkout/presentation/checkout_screen.dart';
-import 'package:celtas_mobile/features/coupons/presentation/coupons_placeholder_screen.dart';
+import 'package:celtas_mobile/features/coupons/presentation/coupons_screen.dart';
 import 'package:celtas_mobile/features/home/presentation/home_screen.dart';
 import 'package:celtas_mobile/features/menu/presentation/product_detail_screen.dart';
 import 'package:celtas_mobile/features/orders/presentation/order_detail_screen.dart';
@@ -144,7 +144,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: '/coupons',
-                builder: (context, state) => const CouponsPlaceholderScreen(),
+                builder: (context, state) => const CouponsScreen(),
               ),
             ],
           ),

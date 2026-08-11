@@ -305,8 +305,29 @@ celtas-mobile/
       tras cambiar estados desde el panel admin se distinguen claramente, detalle de un pedido
       "en_camino" correcto. Auditado por `@tester`: veredicto LISTO)
 
-### 8. Mis cupones
-- [ ] Listado (`GET /coupons/me`), distinción visual clara entre activo/usado/expirado
+### 8. Mis cupones — ✅ COMPLETO
+- [x] Listado (`GET /coupons/me`), distinción visual clara entre activo/usado/expirado
+      (contrato verificado contra `coupon.entity.ts` — `CouponStatus`/`CouponDiscountType`
+      reales, sin campos inventados. **Bug real de negocio encontrado y corregido antes de
+      llegar a producción**: el backend solo mueve `status` de `active` → `expired` con un
+      cron diario (`handleDailyMaintenance`, 1am) — un cupón puede seguir marcado `active` en
+      la respuesta hasta 24h después de que `expiresAt` ya pasó (el propio backend no confía
+      en el campo a solas: `validateCoupon` hace la misma comparación contra `Date.now()`).
+      `UserCoupon.effectiveStatus` replica esa comparación del lado del cliente y es lo único
+      que pinta la UI (nunca `status` crudo), cubierto con el caso explícito del cron
+      desfasado y el caso "`used` no se revierte a `expired`" en
+      `user_coupon_test.dart`/`coupons_screen_test.dart`. Rediseño justificado del mockup:
+      unificado el acento "activo" a un solo dorado (el mockup usaba dorado/naranja sin
+      relación con ningún campo real, misma confusión ya corregida en los badges de pedidos
+      del módulo 7), estado `used` diseñado desde cero (el mockup nunca lo mostraba), y
+      eliminada la línea "Pedido mínimo $X" del mockup — no existe ese campo en la entidad
+      `Coupon` real. Montos en `S/ X.XX` (2 decimales), no el separador de miles del mockup.
+      `AngledClipper` extraído a `shared/widgets/` (antes vivía privado en `celtas_button.dart`)
+      y `spanish_date.dart` extraído de `orders_screen.dart` (`formatShortDate`/
+      `formatLongDate`), ambos reutilizados sin duplicación. 183/183 tests, `flutter analyze`
+      limpio. Verificado en dispositivo real (Xiaomi): cupones reales del usuario, los 3
+      estados comparados lado a lado se distinguen claramente, distinción de tipo de descuento
+      visible, pull-to-refresh sin errores. Auditado por `@tester`: veredicto LISTO)
 
 ### 9. Notificaciones push
 - [ ] Configurar Firebase en la app (archivos de configuración del proyecto ya existente)

@@ -63,7 +63,7 @@ solo cuando pasa lo aplicable de este checklist.
       (mismo patrón sin paginar)
 - [x] El historial refleja un pedido recién creado al volver del checkout (invalidar +
       re-fetchear, no insertar a mano)
-- [ ] Cupones muestran estado (activo/usado/expirado) correctamente
+- [x] Cupones muestran estado (activo/usado/expirado) correctamente
 
 ## Notificaciones
 

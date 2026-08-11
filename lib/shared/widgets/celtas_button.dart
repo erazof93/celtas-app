@@ -1,4 +1,5 @@
 import 'package:celtas_mobile/core/theme/app_theme.dart';
+import 'package:celtas_mobile/shared/widgets/angled_clipper.dart';
 import 'package:flutter/material.dart';
 
 /// Botón principal de Celtas con las dos variantes del mockup:
@@ -82,32 +83,8 @@ class CeltasButton extends StatelessWidget {
     if (!angled) return button;
 
     return ClipPath(
-      clipper: const _AngledClipper(16),
+      clipper: const AngledClipper(16),
       child: button,
     );
   }
-}
-
-/// Recorta las esquinas inferiores-izquierda y superiores-derecha en diagonal,
-/// replicando el `clip-path: polygon(16px 0,100% 0,100% calc(100% - 16px),
-/// calc(100% - 16px) 100%,0 100%,0 16px)` del CSS real del mockup.
-class _AngledClipper extends CustomClipper<Path> {
-  const _AngledClipper(this.cut);
-
-  final double cut;
-
-  @override
-  Path getClip(Size size) {
-    return Path()
-      ..moveTo(cut, 0)
-      ..lineTo(size.width, 0)
-      ..lineTo(size.width, size.height - cut)
-      ..lineTo(size.width - cut, size.height)
-      ..lineTo(0, size.height)
-      ..lineTo(0, cut)
-      ..close();
-  }
-
-  @override
-  bool shouldReclip(_AngledClipper oldClipper) => oldClipper.cut != cut;
 }
