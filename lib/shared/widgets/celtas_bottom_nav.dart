@@ -58,25 +58,34 @@ class CeltasBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // El fondo/borde cubre hasta el borde físico de la pantalla (incluida el
+    // área de la barra de navegación del sistema, tanto gestos como botones)
+    // para que no quede un hueco negro debajo; `SafeArea` empuja los ítems
+    // tocables por encima de esa barra sin recortar el fondo.
     return Container(
-      height: 78,
       decoration: const BoxDecoration(
         color: CeltasColors.navBar,
         border: Border(top: BorderSide(color: CeltasColors.cardBorder)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Row(
-          children: [
-            for (var i = 0; i < CeltasNavItem.values.length; i++)
-              Expanded(
-                child: _NavItem(
-                  item: CeltasNavItem.values[i],
-                  selected: i == currentIndex,
-                  onTap: () => onDestinationSelected(i),
-                ),
-              ),
-          ],
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 78,
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                for (var i = 0; i < CeltasNavItem.values.length; i++)
+                  Expanded(
+                    child: _NavItem(
+                      item: CeltasNavItem.values[i],
+                      selected: i == currentIndex,
+                      onTap: () => onDestinationSelected(i),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );

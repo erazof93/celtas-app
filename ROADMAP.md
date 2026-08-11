@@ -389,7 +389,19 @@ celtas-mobile/
       reflejando el nuevo estado tras pull-to-refresh (invalidación no es automática al volver de
       background — comportamiento documentado, no bug). Logcat completo de la sesión sin
       `FATAL EXCEPTION` ni excepciones de red sin manejar. `flutter analyze` limpio, 197/197
-      tests. Auditado por `@tester`: veredicto LISTO)
+      tests. Auditado por `@tester`: veredicto LISTO. Segundo bug real encontrado en dispositivo
+      físico, en una segunda pasada por la app ya instalada: la bottom nav (`CeltasBottomNav`,
+      módulo 2) quedaba superpuesta ~111px detrás de la barra de navegación del sistema Android en
+      todas las pantallas del shell — el `Container` no envolvía el contenido en `SafeArea`.
+      Corregido envolviendo el `Row` de ítems en `SafeArea(top: false)` dentro del `Container` de
+      fondo (para que el color/borde siga llegando hasta el borde físico sin dejar un hueco negro,
+      mientras los ítems tocables quedan por encima del inset del sistema). Verificado con
+      `uiautomator dump` en los dos modos de navegación de Android, cambiando el modo en vivo vía
+      `adb shell cmd overlay enable/disable com.android.internal.systemui.navbar.*` y revirtiendo
+      al terminar: modo botones (bounds del nav terminan en y=2245, barra de sistema empieza en
+      y=2267, margen 22px) y modo gestos (nav termina en y=2333, barra empieza en y=2355, mismo
+      margen de 22px) — confirma que el fix usa el inset real que reporta el SO en vez de un valor
+      fijo por modo. `flutter analyze` limpio, 197/197 tests sin regresión)
 - [ ] Definir distribución: Google Play (pago único ~$25) vs. APK directo mientras se valida
 
 ---
