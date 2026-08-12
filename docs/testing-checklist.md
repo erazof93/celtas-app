@@ -29,8 +29,32 @@ solo cuando pasa lo aplicable de este checklist.
 
 ## Navegación
 
-- [ ] Rutas protegidas redirigen a Login sin sesión
-- [ ] Bottom nav funciona y refleja la pantalla activa
+- [x] Rutas protegidas redirigen a Login sin sesión
+- [x] Bottom nav funciona y refleja la pantalla activa
+- [x] **Doble-atrás para salir** (`_ShellScaffold`, `lib/core/router/app_router.dart`): `PopScope
+      canPop: false` en el `Scaffold` del shell — primer back muestra `SnackBar` "Presiona de
+      nuevo para salir" (mismo patrón visual que `cart_screen.dart`/`product_detail_screen.dart`/
+      `home_screen.dart`: `bodyMedium` + `CeltasColors.cream`, `backgroundColor:
+      CeltasColors.surface`, `SnackBarBehavior.floating`, 2s), segundo back dentro de esa
+      ventana llama `SystemNavigator.pop()`. Confirmado por lectura de código (no solo por el
+      test) que el `PopScope` solo puede dispararse cuando el shell es la ruta visible: las
+      pantallas empujadas (`/cart`, `/checkout`, `/product/:id`, `/orders/:id`, `/addresses`)
+      son `GoRoute` top-level sobre el `Navigator` raíz, así que el back del sistema las pop-ea
+      directo sin llegar al `PopScope` del shell — cubierto con test explícito. `flutter analyze`
+      limpio, 234/234 tests (232 + 2 agregados por `@tester`). Sin bloqueadores.
+      Hallazgos documentados (no bugs, comportamiento verificado y razonable):
+      - Cambiar de tab entre el primer y el segundo back NO resetea la ventana de 2s (el `State`
+        de `_ShellScaffold` persiste entre tabs porque `IndexedStack` no lo recrea) — test de
+        regresión agregado para que un cambio futuro sea intencional.
+      - Logout con una ventana de confirmación pendiente no arrastra estado a la sesión
+        siguiente: el shell se desmonta por completo al redirigir a `/login` (fuera del
+        `StatefulShellRoute`), así que `_ShellScaffoldState` se destruye — confirmado con test
+        explícito de logout + login de nuevo dentro del mismo árbol de widgets.
+      Riesgo de mantenimiento (no bloqueante): este es ya el 4º lugar del proyecto con el mismo
+      bloque `ScaffoldMessenger..hideCurrentSnackBar()..showSnackBar(SnackBar(...))` duplicado
+      byte a byte (`cart_screen.dart`, `product_detail_screen.dart`, `home_screen.dart`, y ahora
+      `app_router.dart`) — candidato a un helper compartido (`showCeltasSnackBar(context, text)`)
+      cuando se toque de nuevo cualquiera de estos archivos.
 
 ## Home / Menú
 

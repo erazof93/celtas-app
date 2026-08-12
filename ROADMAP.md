@@ -210,6 +210,15 @@ celtas-mobile/
       recreación). 50/50 tests, `flutter analyze` limpio, probado en dispositivo real
       (registro → shell → 4 tabs → reabrir app con sesión persistida). Auditado por
       `@tester`: veredicto LISTO
+- [x] **Mejora post-cierre — doble-atrás para salir** (`_ShellScaffold`,
+      `lib/core/router/app_router.dart`): `PopScope canPop: false` en el shell; primer back
+      muestra el aviso "Presiona de nuevo para salir" (mismo patrón visual de `SnackBar` que
+      `cart_screen.dart`/`product_detail_screen.dart`/`home_screen.dart`), segundo back dentro
+      de 2s cierra la app con `SystemNavigator.pop()`. Solo se dispara con el shell como ruta
+      visible — las pantallas empujadas sobre el shell (carrito, checkout, detalle, direcciones)
+      son rutas top-level, así que el back del sistema las pop-ea antes de llegar al `PopScope`
+      del shell. `flutter analyze` limpio, 234/234 tests. Auditado por `@tester`: veredicto
+      LISTO (detalle en `docs/testing-checklist.md`, sección Navegación)
 
 ### 3. Home — ✅ COMPLETO (3/3)
 - [x] Consume `GET /banners/active` — carrusel de banners

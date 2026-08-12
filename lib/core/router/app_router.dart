@@ -1,3 +1,4 @@
+import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/addresses/presentation/addresses_screen.dart';
 import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
 import 'package:celtas_mobile/features/auth/application/auth_state.dart';
@@ -14,6 +15,7 @@ import 'package:celtas_mobile/features/orders/presentation/orders_screen.dart';
 import 'package:celtas_mobile/features/profile/presentation/profile_screen.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_bottom_nav.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -171,22 +173,71 @@ final routerProvider = Provider<GoRouter>((ref) {
 /// Scaffold del shell: el body es el `navigationShell` (el tab activo) y el
 /// bottom nav es persistente. El tema (fondo negro, tipografía) viene del
 /// `MaterialApp.router` y aplica a todo el shell.
-class _ShellScaffold extends StatelessWidget {
+///
+/// Las 4 rutas del shell (`/home`, `/orders`, `/coupons`, `/profile`) son la
+/// base de la pila de navegación — todo lo demás (carrito, checkout, detalle
+/// de producto/pedido, direcciones) se empuja como ruta top-level *sobre*
+/// el shell (ver rutas arriba, ninguna vive dentro de un `StatefulShellBranch`).
+/// Por eso el `PopScope` de doble-atrás solo necesita vivir acá: cuando hay
+/// algo empujado encima, el back del sistema lo pop-ea a eso primero y nunca
+/// llega a este widget; solo llega cuando el shell es la ruta visible.
+class _ShellScaffold extends StatefulWidget {
   const _ShellScaffold({required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
 
   @override
+  State<_ShellScaffold> createState() => _ShellScaffoldState();
+}
+
+class _ShellScaffoldState extends State<_ShellScaffold> {
+  static const _confirmWindow = Duration(seconds: 2);
+
+  DateTime? _lastBackPressAt;
+
+  void _handleBackPress() {
+    final now = DateTime.now();
+    final last = _lastBackPressAt;
+    if (last != null && now.difference(last) < _confirmWindow) {
+      SystemNavigator.pop();
+      return;
+    }
+    _lastBackPressAt = now;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            'Presiona de nuevo para salir',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: CeltasColors.cream,
+                ),
+          ),
+          backgroundColor: CeltasColors.surface,
+          behavior: SnackBarBehavior.floating,
+          duration: _confirmWindow,
+        ),
+      );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: navigationShell,
-      bottomNavigationBar: CeltasBottomNav(
-        currentIndex: navigationShell.currentIndex,
-        onDestinationSelected: (index) => navigationShell.goBranch(
-          index,
-          // Al tocar el tab ya activo no se re-pushea la rama (evita duplicar
-          // el stack de ese tab).
-          initialLocation: index == navigationShell.currentIndex,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _handleBackPress();
+      },
+      child: Scaffold(
+        body: widget.navigationShell,
+        bottomNavigationBar: CeltasBottomNav(
+          currentIndex: widget.navigationShell.currentIndex,
+          onDestinationSelected: (index) => widget.navigationShell.goBranch(
+            index,
+            // Al tocar el tab ya activo no se re-pushea la rama (evita
+            // duplicar el stack de ese tab).
+            initialLocation: index == widget.navigationShell.currentIndex,
+          ),
         ),
       ),
     );
