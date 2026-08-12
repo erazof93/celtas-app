@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
@@ -187,10 +189,11 @@ void main() {
       expect(find.text('Ingresá un código de cupón'), findsOneWidget);
     });
 
-    testWidgets('aplicar cupón válido → muestra descuento y total',
-        (tester) async {
+    testWidgets(
+        'aplicar cupón válido → muestra descuento y total, enviando el '
+        'subtotal actual del carrito', (tester) async {
       final repository = MockCouponRepository();
-      when(() => repository.validateCoupon('VIKINGO10'))
+      when(() => repository.validateCoupon('VIKINGO10', subtotal: 31))
           .thenAnswer((_) async => percentageCoupon);
 
       await pumpCart(
@@ -212,12 +215,16 @@ void main() {
       expect(find.text('Cupón VIKINGO10'), findsOneWidget);
       expect(find.text('-S/ 3.10'), findsOneWidget);
       expect(find.text('S/ 27.90'), findsOneWidget);
-      verify(() => repository.validateCoupon('VIKINGO10')).called(1);
+      // El subtotal (31, un double) se manda tal cual, no como string — el
+      // DTO del backend rechaza con 400 si no es numérico.
+      verify(
+        () => repository.validateCoupon('VIKINGO10', subtotal: 31),
+      ).called(1);
     });
 
     testWidgets('cupón inválido → mensaje real del backend', (tester) async {
       final repository = MockCouponRepository();
-      when(() => repository.validateCoupon('NOPE')).thenThrow(
+      when(() => repository.validateCoupon('NOPE', subtotal: 15.5)).thenThrow(
         const ApiException('El cupón no existe', statusCode: 400),
       );
 
@@ -240,10 +247,95 @@ void main() {
       expect(find.text('S/ 15.50'), findsNWidgets(3));
     });
 
+    testWidgets(
+        'cupón que no alcanza el pedido mínimo → mensaje real del backend, '
+        'no se aplica descuento', (tester) async {
+      final repository = MockCouponRepository();
+      when(() => repository.validateCoupon('MINIMO50', subtotal: 15.5))
+          .thenThrow(
+        const ApiException(
+          'Este cupón requiere un pedido mínimo de S/50.00',
+          statusCode: 400,
+        ),
+      );
+
+      await pumpCart(
+        tester,
+        couponRepository: repository,
+        items: [burger],
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('cart-coupon-input')),
+        'MINIMO50',
+      );
+      await tester.tap(find.byKey(const ValueKey('cart-coupon-apply')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Este cupón requiere un pedido mínimo de S/50.00'),
+        findsOneWidget,
+      );
+      expect(find.text('Cupón MINIMO50 aplicado'), findsNothing);
+      // El total sigue sin descuento: línea + subtotal + total (3 widgets).
+      expect(find.text('S/ 15.50'), findsNWidgets(3));
+    });
+
+    testWidgets(
+        'el carrito cambia MIENTRAS se espera la respuesta del backend '
+        '(cold start): si el subtotal ya no alcanza el mínimo al resolver, '
+        'no aplica el cupón y avisa', (tester) async {
+      const withMin = ValidatedCoupon(
+        valid: true,
+        id: 'c-7',
+        code: 'GRANDE50',
+        discountType: CouponDiscountType.fixedAmount,
+        discountValue: 15,
+        description: 'S/15.00 de descuento',
+        minPurchaseAmount: 50,
+      );
+      final completer = Completer<ValidatedCoupon>();
+      final repository = MockCouponRepository();
+      when(() => repository.validateCoupon('GRANDE50', subtotal: 62))
+          .thenAnswer((_) => completer.future);
+
+      final container = await pumpCart(
+        tester,
+        couponRepository: repository,
+        items: [burger],
+        quantities: {'i-1': 4}, // subtotal 62, alcanza el mínimo al pedir
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('cart-coupon-input')),
+        'GRANDE50',
+      );
+      await tester.tap(find.byKey(const ValueKey('cart-coupon-apply')));
+      await tester.pump(); // dispara el request, todavía sin resolver
+
+      // El stepper de cantidad NO se bloquea durante la espera de red — el
+      // usuario decrementa mientras el backend (cold start) sigue pensando.
+      await tester.tap(find.byKey(const ValueKey('cart-minus-i-1')));
+      await tester.pump();
+      expect(container.read(cartProvider).subtotal, 46.5); // ya no alcanza
+
+      // Recién ahora "responde" el backend con el cupón que sí era válido
+      // en el momento en que se pidió.
+      completer.complete(withMin);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cupón GRANDE50 aplicado'), findsNothing);
+      expect(container.read(cartProvider).coupon, isNull);
+      expect(
+        find.text('Este cupón requiere un pedido mínimo de S/50.00'),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('quitar cupón restaura el total sin descuento',
         (tester) async {
       final repository = MockCouponRepository();
-      when(() => repository.validateCoupon('VIKINGO10'))
+      when(() => repository.validateCoupon('VIKINGO10', subtotal: 15.5))
           .thenAnswer((_) async => percentageCoupon);
 
       final container = await pumpCart(
@@ -264,6 +356,44 @@ void main() {
 
       expect(find.text('Cupón VIKINGO10 aplicado'), findsNothing);
       expect(find.text('S/ 15.50'), findsNWidgets(3));
+    });
+
+    testWidgets(
+        'decrementar hasta bajar del mínimo del cupón lo quita solo y '
+        'avisa con un SnackBar', (tester) async {
+      const withMin = ValidatedCoupon(
+        valid: true,
+        id: 'c-4',
+        code: 'GRANDE50',
+        discountType: CouponDiscountType.fixedAmount,
+        discountValue: 15,
+        description: 'S/15.00 de descuento',
+        minPurchaseAmount: 50,
+      );
+      final container = await pumpCart(
+        tester,
+        couponRepository: MockCouponRepository(),
+        items: [burger],
+        quantities: {'i-1': 4}, // subtotal 62, alcanza el mínimo de 50
+      );
+      container.read(cartProvider.notifier).applyCoupon(withMin);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cupón GRANDE50 aplicado'), findsOneWidget);
+
+      // 62 → 46.5 tras decrementar: ya no alcanza el mínimo.
+      await tester.tap(find.byKey(const ValueKey('cart-minus-i-1')));
+      await tester.pump(); // el SnackBar anima con el primer frame
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cupón GRANDE50 aplicado'), findsNothing);
+      expect(
+        find.text(
+          'El cupón GRANDE50 se quitó: el pedido ya no alcanza el mínimo '
+          'de S/ 50.00',
+        ),
+        findsOneWidget,
+      );
     });
   });
 

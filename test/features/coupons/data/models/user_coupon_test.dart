@@ -72,4 +72,38 @@ void main() {
 
     expect(coupon.effectiveStatus, CouponStatus.expired);
   });
+
+  group('hasMinPurchase', () {
+    test('minPurchaseAmount null → false', () {
+      final coupon = buildCoupon(expiresAt: DateTime(2026, 12));
+      expect(coupon.hasMinPurchase, isFalse);
+    });
+
+    test('minPurchaseAmount 0 → false (mismo criterio que "sin mínimo", '
+        'igual que en el panel admin)', () {
+      final coupon = UserCoupon(
+        id: 'c-1',
+        code: 'VIKINGO10',
+        discountType: CouponDiscountType.percentage,
+        discountValue: 10,
+        status: CouponStatus.active,
+        expiresAt: DateTime(2026, 12),
+        minPurchaseAmount: 0,
+      );
+      expect(coupon.hasMinPurchase, isFalse);
+    });
+
+    test('minPurchaseAmount > 0 → true', () {
+      final coupon = UserCoupon(
+        id: 'c-1',
+        code: 'VIKINGO10',
+        discountType: CouponDiscountType.percentage,
+        discountValue: 10,
+        status: CouponStatus.active,
+        expiresAt: DateTime(2026, 12),
+        minPurchaseAmount: 50,
+      );
+      expect(coupon.hasMinPurchase, isTrue);
+    });
+  });
 }

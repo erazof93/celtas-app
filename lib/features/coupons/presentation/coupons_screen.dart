@@ -210,7 +210,7 @@ class _CouponCard extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                _dateLabel(coupon, status),
+                _conditionsLabel(coupon, status),
                 style: textTheme.bodySmall?.copyWith(
                   fontSize: 12.5,
                   color: status == CouponStatus.expired
@@ -234,6 +234,18 @@ class _CouponCard extends StatelessWidget {
         CouponStatus.active =>
           'Válido hasta ${formatLongDate(coupon.expiresAt)}',
       };
+
+  /// Mismo patrón del mockup original (`design-reference`, tarjeta "Pedido
+  /// mínimo $15.000 · Válido hasta 20 ago 2026"): el mínimo de compra va en
+  /// la misma línea secundaria que la fecha, unido con " · ". Formato de
+  /// moneda "S/ X.XX" (2 decimales), consistente con el resto de la app —
+  /// no el separador de miles del mockup.
+  String _conditionsLabel(UserCoupon coupon, CouponStatus status) {
+    final dateLabel = _dateLabel(coupon, status);
+    if (!coupon.hasMinPurchase) return dateLabel;
+    final minAmount = coupon.minPurchaseAmount!.toStringAsFixed(2);
+    return 'Pedido mínimo: S/ $minAmount · $dateLabel';
+  }
 }
 
 class _StatusTag extends StatelessWidget {

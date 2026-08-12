@@ -15,7 +15,10 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$UserCoupon {
 
- String get id; String get code; CouponDiscountType get discountType; double get discountValue; CouponStatus get status; DateTime get expiresAt; DateTime? get usedAt;
+ String get id; String get code; CouponDiscountType get discountType; double get discountValue; CouponStatus get status; DateTime get expiresAt; DateTime? get usedAt;// Monto mínimo de compra del cupón (`Coupon.minPurchaseAmount` en el
+// backend: decimal nullable). `0` se trata igual que `null` ("sin
+// mínimo") — mismo criterio ya aplicado en el panel admin.
+ double? get minPurchaseAmount;
 /// Create a copy of UserCoupon
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +31,16 @@ $UserCouponCopyWith<UserCoupon> get copyWith => _$UserCouponCopyWithImpl<UserCou
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is UserCoupon&&(identical(other.id, id) || other.id == id)&&(identical(other.code, code) || other.code == code)&&(identical(other.discountType, discountType) || other.discountType == discountType)&&(identical(other.discountValue, discountValue) || other.discountValue == discountValue)&&(identical(other.status, status) || other.status == status)&&(identical(other.expiresAt, expiresAt) || other.expiresAt == expiresAt)&&(identical(other.usedAt, usedAt) || other.usedAt == usedAt));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UserCoupon&&(identical(other.id, id) || other.id == id)&&(identical(other.code, code) || other.code == code)&&(identical(other.discountType, discountType) || other.discountType == discountType)&&(identical(other.discountValue, discountValue) || other.discountValue == discountValue)&&(identical(other.status, status) || other.status == status)&&(identical(other.expiresAt, expiresAt) || other.expiresAt == expiresAt)&&(identical(other.usedAt, usedAt) || other.usedAt == usedAt)&&(identical(other.minPurchaseAmount, minPurchaseAmount) || other.minPurchaseAmount == minPurchaseAmount));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,code,discountType,discountValue,status,expiresAt,usedAt);
+int get hashCode => Object.hash(runtimeType,id,code,discountType,discountValue,status,expiresAt,usedAt,minPurchaseAmount);
 
 @override
 String toString() {
-  return 'UserCoupon(id: $id, code: $code, discountType: $discountType, discountValue: $discountValue, status: $status, expiresAt: $expiresAt, usedAt: $usedAt)';
+  return 'UserCoupon(id: $id, code: $code, discountType: $discountType, discountValue: $discountValue, status: $status, expiresAt: $expiresAt, usedAt: $usedAt, minPurchaseAmount: $minPurchaseAmount)';
 }
 
 
@@ -48,7 +51,7 @@ abstract mixin class $UserCouponCopyWith<$Res>  {
   factory $UserCouponCopyWith(UserCoupon value, $Res Function(UserCoupon) _then) = _$UserCouponCopyWithImpl;
 @useResult
 $Res call({
- String id, String code, CouponDiscountType discountType, double discountValue, CouponStatus status, DateTime expiresAt, DateTime? usedAt
+ String id, String code, CouponDiscountType discountType, double discountValue, CouponStatus status, DateTime expiresAt, DateTime? usedAt, double? minPurchaseAmount
 });
 
 
@@ -65,7 +68,7 @@ class _$UserCouponCopyWithImpl<$Res>
 
 /// Create a copy of UserCoupon
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? code = null,Object? discountType = null,Object? discountValue = null,Object? status = null,Object? expiresAt = null,Object? usedAt = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? code = null,Object? discountType = null,Object? discountValue = null,Object? status = null,Object? expiresAt = null,Object? usedAt = freezed,Object? minPurchaseAmount = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,code: null == code ? _self.code : code // ignore: cast_nullable_to_non_nullable
@@ -74,7 +77,8 @@ as CouponDiscountType,discountValue: null == discountValue ? _self.discountValue
 as double,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as CouponStatus,expiresAt: null == expiresAt ? _self.expiresAt : expiresAt // ignore: cast_nullable_to_non_nullable
 as DateTime,usedAt: freezed == usedAt ? _self.usedAt : usedAt // ignore: cast_nullable_to_non_nullable
-as DateTime?,
+as DateTime?,minPurchaseAmount: freezed == minPurchaseAmount ? _self.minPurchaseAmount : minPurchaseAmount // ignore: cast_nullable_to_non_nullable
+as double?,
   ));
 }
 
@@ -159,10 +163,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String code,  CouponDiscountType discountType,  double discountValue,  CouponStatus status,  DateTime expiresAt,  DateTime? usedAt)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String code,  CouponDiscountType discountType,  double discountValue,  CouponStatus status,  DateTime expiresAt,  DateTime? usedAt,  double? minPurchaseAmount)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _UserCoupon() when $default != null:
-return $default(_that.id,_that.code,_that.discountType,_that.discountValue,_that.status,_that.expiresAt,_that.usedAt);case _:
+return $default(_that.id,_that.code,_that.discountType,_that.discountValue,_that.status,_that.expiresAt,_that.usedAt,_that.minPurchaseAmount);case _:
   return orElse();
 
 }
@@ -180,10 +184,10 @@ return $default(_that.id,_that.code,_that.discountType,_that.discountValue,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String code,  CouponDiscountType discountType,  double discountValue,  CouponStatus status,  DateTime expiresAt,  DateTime? usedAt)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String code,  CouponDiscountType discountType,  double discountValue,  CouponStatus status,  DateTime expiresAt,  DateTime? usedAt,  double? minPurchaseAmount)  $default,) {final _that = this;
 switch (_that) {
 case _UserCoupon():
-return $default(_that.id,_that.code,_that.discountType,_that.discountValue,_that.status,_that.expiresAt,_that.usedAt);case _:
+return $default(_that.id,_that.code,_that.discountType,_that.discountValue,_that.status,_that.expiresAt,_that.usedAt,_that.minPurchaseAmount);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -200,10 +204,10 @@ return $default(_that.id,_that.code,_that.discountType,_that.discountValue,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String code,  CouponDiscountType discountType,  double discountValue,  CouponStatus status,  DateTime expiresAt,  DateTime? usedAt)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String code,  CouponDiscountType discountType,  double discountValue,  CouponStatus status,  DateTime expiresAt,  DateTime? usedAt,  double? minPurchaseAmount)?  $default,) {final _that = this;
 switch (_that) {
 case _UserCoupon() when $default != null:
-return $default(_that.id,_that.code,_that.discountType,_that.discountValue,_that.status,_that.expiresAt,_that.usedAt);case _:
+return $default(_that.id,_that.code,_that.discountType,_that.discountValue,_that.status,_that.expiresAt,_that.usedAt,_that.minPurchaseAmount);case _:
   return null;
 
 }
@@ -215,7 +219,7 @@ return $default(_that.id,_that.code,_that.discountType,_that.discountValue,_that
 @JsonSerializable()
 
 class _UserCoupon extends UserCoupon {
-  const _UserCoupon({required this.id, required this.code, required this.discountType, required this.discountValue, required this.status, required this.expiresAt, this.usedAt}): super._();
+  const _UserCoupon({required this.id, required this.code, required this.discountType, required this.discountValue, required this.status, required this.expiresAt, this.usedAt, this.minPurchaseAmount}): super._();
   factory _UserCoupon.fromJson(Map<String, dynamic> json) => _$UserCouponFromJson(json);
 
 @override final  String id;
@@ -225,6 +229,10 @@ class _UserCoupon extends UserCoupon {
 @override final  CouponStatus status;
 @override final  DateTime expiresAt;
 @override final  DateTime? usedAt;
+// Monto mínimo de compra del cupón (`Coupon.minPurchaseAmount` en el
+// backend: decimal nullable). `0` se trata igual que `null` ("sin
+// mínimo") — mismo criterio ya aplicado en el panel admin.
+@override final  double? minPurchaseAmount;
 
 /// Create a copy of UserCoupon
 /// with the given fields replaced by the non-null parameter values.
@@ -239,16 +247,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UserCoupon&&(identical(other.id, id) || other.id == id)&&(identical(other.code, code) || other.code == code)&&(identical(other.discountType, discountType) || other.discountType == discountType)&&(identical(other.discountValue, discountValue) || other.discountValue == discountValue)&&(identical(other.status, status) || other.status == status)&&(identical(other.expiresAt, expiresAt) || other.expiresAt == expiresAt)&&(identical(other.usedAt, usedAt) || other.usedAt == usedAt));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UserCoupon&&(identical(other.id, id) || other.id == id)&&(identical(other.code, code) || other.code == code)&&(identical(other.discountType, discountType) || other.discountType == discountType)&&(identical(other.discountValue, discountValue) || other.discountValue == discountValue)&&(identical(other.status, status) || other.status == status)&&(identical(other.expiresAt, expiresAt) || other.expiresAt == expiresAt)&&(identical(other.usedAt, usedAt) || other.usedAt == usedAt)&&(identical(other.minPurchaseAmount, minPurchaseAmount) || other.minPurchaseAmount == minPurchaseAmount));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,code,discountType,discountValue,status,expiresAt,usedAt);
+int get hashCode => Object.hash(runtimeType,id,code,discountType,discountValue,status,expiresAt,usedAt,minPurchaseAmount);
 
 @override
 String toString() {
-  return 'UserCoupon(id: $id, code: $code, discountType: $discountType, discountValue: $discountValue, status: $status, expiresAt: $expiresAt, usedAt: $usedAt)';
+  return 'UserCoupon(id: $id, code: $code, discountType: $discountType, discountValue: $discountValue, status: $status, expiresAt: $expiresAt, usedAt: $usedAt, minPurchaseAmount: $minPurchaseAmount)';
 }
 
 
@@ -259,7 +267,7 @@ abstract mixin class _$UserCouponCopyWith<$Res> implements $UserCouponCopyWith<$
   factory _$UserCouponCopyWith(_UserCoupon value, $Res Function(_UserCoupon) _then) = __$UserCouponCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String code, CouponDiscountType discountType, double discountValue, CouponStatus status, DateTime expiresAt, DateTime? usedAt
+ String id, String code, CouponDiscountType discountType, double discountValue, CouponStatus status, DateTime expiresAt, DateTime? usedAt, double? minPurchaseAmount
 });
 
 
@@ -276,7 +284,7 @@ class __$UserCouponCopyWithImpl<$Res>
 
 /// Create a copy of UserCoupon
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? code = null,Object? discountType = null,Object? discountValue = null,Object? status = null,Object? expiresAt = null,Object? usedAt = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? code = null,Object? discountType = null,Object? discountValue = null,Object? status = null,Object? expiresAt = null,Object? usedAt = freezed,Object? minPurchaseAmount = freezed,}) {
   return _then(_UserCoupon(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,code: null == code ? _self.code : code // ignore: cast_nullable_to_non_nullable
@@ -285,7 +293,8 @@ as CouponDiscountType,discountValue: null == discountValue ? _self.discountValue
 as double,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as CouponStatus,expiresAt: null == expiresAt ? _self.expiresAt : expiresAt // ignore: cast_nullable_to_non_nullable
 as DateTime,usedAt: freezed == usedAt ? _self.usedAt : usedAt // ignore: cast_nullable_to_non_nullable
-as DateTime?,
+as DateTime?,minPurchaseAmount: freezed == minPurchaseAmount ? _self.minPurchaseAmount : minPurchaseAmount // ignore: cast_nullable_to_non_nullable
+as double?,
   ));
 }
 

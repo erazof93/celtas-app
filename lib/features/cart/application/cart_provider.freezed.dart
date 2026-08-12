@@ -14,7 +14,12 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$CartState {
 
- List<CartItem> get items; ValidatedCoupon? get coupon;
+ List<CartItem> get items; ValidatedCoupon? get coupon;// Aviso de una sola vez cuando `CartNotifier` quita el cupón solo
+// (subtotal cayó por debajo del mínimo tras decrementar/quitar un
+// ítem). La UI lo muestra (SnackBar) y llama a `dismissCouponNotice()`.
+// No aplica cuando el cupón se limpia por carrito vacío: ahí no hay
+// ítems visibles para asociar el aviso.
+ String? get couponRemovedNotice;
 /// Create a copy of CartState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -25,16 +30,16 @@ $CartStateCopyWith<CartState> get copyWith => _$CartStateCopyWithImpl<CartState>
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is CartState&&const DeepCollectionEquality().equals(other.items, items)&&(identical(other.coupon, coupon) || other.coupon == coupon));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is CartState&&const DeepCollectionEquality().equals(other.items, items)&&(identical(other.coupon, coupon) || other.coupon == coupon)&&(identical(other.couponRemovedNotice, couponRemovedNotice) || other.couponRemovedNotice == couponRemovedNotice));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(items),coupon);
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(items),coupon,couponRemovedNotice);
 
 @override
 String toString() {
-  return 'CartState(items: $items, coupon: $coupon)';
+  return 'CartState(items: $items, coupon: $coupon, couponRemovedNotice: $couponRemovedNotice)';
 }
 
 
@@ -45,7 +50,7 @@ abstract mixin class $CartStateCopyWith<$Res>  {
   factory $CartStateCopyWith(CartState value, $Res Function(CartState) _then) = _$CartStateCopyWithImpl;
 @useResult
 $Res call({
- List<CartItem> items, ValidatedCoupon? coupon
+ List<CartItem> items, ValidatedCoupon? coupon, String? couponRemovedNotice
 });
 
 
@@ -62,11 +67,12 @@ class _$CartStateCopyWithImpl<$Res>
 
 /// Create a copy of CartState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? items = null,Object? coupon = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? items = null,Object? coupon = freezed,Object? couponRemovedNotice = freezed,}) {
   return _then(_self.copyWith(
 items: null == items ? _self.items : items // ignore: cast_nullable_to_non_nullable
 as List<CartItem>,coupon: freezed == coupon ? _self.coupon : coupon // ignore: cast_nullable_to_non_nullable
-as ValidatedCoupon?,
+as ValidatedCoupon?,couponRemovedNotice: freezed == couponRemovedNotice ? _self.couponRemovedNotice : couponRemovedNotice // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 /// Create a copy of CartState
@@ -163,10 +169,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<CartItem> items,  ValidatedCoupon? coupon)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<CartItem> items,  ValidatedCoupon? coupon,  String? couponRemovedNotice)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _CartState() when $default != null:
-return $default(_that.items,_that.coupon);case _:
+return $default(_that.items,_that.coupon,_that.couponRemovedNotice);case _:
   return orElse();
 
 }
@@ -184,10 +190,10 @@ return $default(_that.items,_that.coupon);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<CartItem> items,  ValidatedCoupon? coupon)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<CartItem> items,  ValidatedCoupon? coupon,  String? couponRemovedNotice)  $default,) {final _that = this;
 switch (_that) {
 case _CartState():
-return $default(_that.items,_that.coupon);case _:
+return $default(_that.items,_that.coupon,_that.couponRemovedNotice);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -204,10 +210,10 @@ return $default(_that.items,_that.coupon);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<CartItem> items,  ValidatedCoupon? coupon)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<CartItem> items,  ValidatedCoupon? coupon,  String? couponRemovedNotice)?  $default,) {final _that = this;
 switch (_that) {
 case _CartState() when $default != null:
-return $default(_that.items,_that.coupon);case _:
+return $default(_that.items,_that.coupon,_that.couponRemovedNotice);case _:
   return null;
 
 }
@@ -219,7 +225,7 @@ return $default(_that.items,_that.coupon);case _:
 
 
 class _CartState extends CartState {
-  const _CartState({final  List<CartItem> items = const <CartItem>[], this.coupon}): _items = items,super._();
+  const _CartState({final  List<CartItem> items = const <CartItem>[], this.coupon, this.couponRemovedNotice}): _items = items,super._();
   
 
  final  List<CartItem> _items;
@@ -230,6 +236,12 @@ class _CartState extends CartState {
 }
 
 @override final  ValidatedCoupon? coupon;
+// Aviso de una sola vez cuando `CartNotifier` quita el cupón solo
+// (subtotal cayó por debajo del mínimo tras decrementar/quitar un
+// ítem). La UI lo muestra (SnackBar) y llama a `dismissCouponNotice()`.
+// No aplica cuando el cupón se limpia por carrito vacío: ahí no hay
+// ítems visibles para asociar el aviso.
+@override final  String? couponRemovedNotice;
 
 /// Create a copy of CartState
 /// with the given fields replaced by the non-null parameter values.
@@ -241,16 +253,16 @@ _$CartStateCopyWith<_CartState> get copyWith => __$CartStateCopyWithImpl<_CartSt
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _CartState&&const DeepCollectionEquality().equals(other._items, _items)&&(identical(other.coupon, coupon) || other.coupon == coupon));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _CartState&&const DeepCollectionEquality().equals(other._items, _items)&&(identical(other.coupon, coupon) || other.coupon == coupon)&&(identical(other.couponRemovedNotice, couponRemovedNotice) || other.couponRemovedNotice == couponRemovedNotice));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_items),coupon);
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_items),coupon,couponRemovedNotice);
 
 @override
 String toString() {
-  return 'CartState(items: $items, coupon: $coupon)';
+  return 'CartState(items: $items, coupon: $coupon, couponRemovedNotice: $couponRemovedNotice)';
 }
 
 
@@ -261,7 +273,7 @@ abstract mixin class _$CartStateCopyWith<$Res> implements $CartStateCopyWith<$Re
   factory _$CartStateCopyWith(_CartState value, $Res Function(_CartState) _then) = __$CartStateCopyWithImpl;
 @override @useResult
 $Res call({
- List<CartItem> items, ValidatedCoupon? coupon
+ List<CartItem> items, ValidatedCoupon? coupon, String? couponRemovedNotice
 });
 
 
@@ -278,11 +290,12 @@ class __$CartStateCopyWithImpl<$Res>
 
 /// Create a copy of CartState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? items = null,Object? coupon = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? items = null,Object? coupon = freezed,Object? couponRemovedNotice = freezed,}) {
   return _then(_CartState(
 items: null == items ? _self._items : items // ignore: cast_nullable_to_non_nullable
 as List<CartItem>,coupon: freezed == coupon ? _self.coupon : coupon // ignore: cast_nullable_to_non_nullable
-as ValidatedCoupon?,
+as ValidatedCoupon?,couponRemovedNotice: freezed == couponRemovedNotice ? _self.couponRemovedNotice : couponRemovedNotice // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 

@@ -22,6 +22,10 @@ abstract class UserCoupon with _$UserCoupon {
     required CouponStatus status,
     required DateTime expiresAt,
     DateTime? usedAt,
+    // Monto mínimo de compra del cupón (`Coupon.minPurchaseAmount` en el
+    // backend: decimal nullable). `0` se trata igual que `null` ("sin
+    // mínimo") — mismo criterio ya aplicado en el panel admin.
+    double? minPurchaseAmount,
   }) = _UserCoupon;
 
   const UserCoupon._();
@@ -41,4 +45,8 @@ abstract class UserCoupon with _$UserCoupon {
     }
     return status;
   }
+
+  /// `0` se trata igual que `null`: en la práctica significa "sin mínimo".
+  bool get hasMinPurchase =>
+      minPurchaseAmount != null && minPurchaseAmount! > 0;
 }

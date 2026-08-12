@@ -17,6 +17,12 @@ abstract class CartState with _$CartState {
   const factory CartState({
     @Default(<CartItem>[]) List<CartItem> items,
     ValidatedCoupon? coupon,
+    // Aviso de una sola vez cuando `CartNotifier` quita el cupón solo
+    // (subtotal cayó por debajo del mínimo tras decrementar/quitar un
+    // ítem). La UI lo muestra (SnackBar) y llama a `dismissCouponNotice()`.
+    // No aplica cuando el cupón se limpia por carrito vacío: ahí no hay
+    // ítems visibles para asociar el aviso.
+    String? couponRemovedNotice,
   }) = _CartState;
 
   const CartState._();
@@ -114,7 +120,7 @@ class CartNotifier extends Notifier<CartState> {
             item,
       ].where((item) => item.quantity > 0).toList(),
     );
-    _clearCouponIfEmpty();
+    _clearCouponIfInvalid();
   }
 
   /// Elimina el ítem del carrito.
@@ -124,7 +130,7 @@ class CartNotifier extends Notifier<CartState> {
           .where((item) => item.menuItemId != menuItemId)
           .toList(),
     );
-    _clearCouponIfEmpty();
+    _clearCouponIfInvalid();
   }
 
   /// Vacía el carrito (tras confirmar el pedido en el módulo 5).
@@ -132,17 +138,52 @@ class CartNotifier extends Notifier<CartState> {
 
   /// Guarda el cupón ya validado contra el backend (vista previa del
   /// descuento). El canje real ocurre al crear el pedido.
-  void applyCoupon(ValidatedCoupon coupon) {
+  ///
+  /// Re-chequea el mínimo contra el subtotal ACTUAL (no el que existía
+  /// cuando arrancó la validación): el carrito puede haber cambiado durante
+  /// el `await` de `POST /coupons/validate` (el backend puede tardar 30-50s
+  /// en despertar), y los steppers de cantidad no se bloquean mientras se
+  /// espera esa respuesta. Sin este chequeo se mostraría un descuento de
+  /// vista previa que ya no es válido. Devuelve `false` sin aplicar el
+  /// cupón si eso pasó, para que la UI lo informe.
+  bool applyCoupon(ValidatedCoupon coupon) {
+    if (coupon.hasMinPurchase && state.subtotal < coupon.minPurchaseAmount!) {
+      return false;
+    }
     state = state.copyWith(coupon: coupon);
+    return true;
   }
 
   /// Quita el cupón aplicado (el usuario decide no usarlo).
   void removeCoupon() => state = state.copyWith(coupon: null);
 
-  /// Si el carrito quedó vacío, el cupón aplicado pierde sentido: se limpia.
-  void _clearCouponIfEmpty() {
-    if (state.items.isEmpty && state.coupon != null) {
+  /// Descarta el aviso de "cupón quitado" ya mostrado.
+  void dismissCouponNotice() {
+    if (state.couponRemovedNotice != null) {
+      state = state.copyWith(couponRemovedNotice: null);
+    }
+  }
+
+  /// Si el carrito quedó vacío, el cupón aplicado pierde sentido: se limpia
+  /// (sin aviso, no hay ítems visibles para asociarlo). Si el carrito sigue
+  /// con ítems pero el subtotal bajó del mínimo del cupón (`decrement`), se
+  /// limpia también, esta vez con un aviso explícito — sin esto el usuario
+  /// vería un descuento de vista previa que el backend igual rechazaría al
+  /// confirmar el pedido.
+  void _clearCouponIfInvalid() {
+    final coupon = state.coupon;
+    if (coupon == null) return;
+    if (state.items.isEmpty) {
       state = state.copyWith(coupon: null);
+      return;
+    }
+    if (coupon.hasMinPurchase && state.subtotal < coupon.minPurchaseAmount!) {
+      state = state.copyWith(
+        coupon: null,
+        couponRemovedNotice: 'El cupón ${coupon.code} se quitó: el pedido ya '
+            'no alcanza el mínimo de S/ '
+            '${coupon.minPurchaseAmount!.toStringAsFixed(2)}',
+      );
     }
   }
 }

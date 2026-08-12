@@ -107,6 +107,61 @@ void main() {
   });
 
   testWidgets(
+      'cupón sin minPurchaseAmount (null) → no muestra nada de pedido '
+      'mínimo en la tarjeta', (tester) async {
+    final repository = MockCouponRepository();
+    when(() => repository.getMyCoupons()).thenAnswer((_) async => [active]);
+
+    await pumpScreen(tester, repository: repository);
+
+    expect(find.textContaining('Pedido mínimo'), findsNothing);
+  });
+
+  testWidgets(
+      'cupón con minPurchaseAmount 0 → se trata igual que sin mínimo, no '
+      'muestra nada raro en la tarjeta', (tester) async {
+    final zeroMin = UserCoupon(
+      id: 'c-5',
+      code: 'SINMINIMO',
+      discountType: CouponDiscountType.percentage,
+      discountValue: 10,
+      status: CouponStatus.active,
+      expiresAt: DateTime(2026, 8, 31),
+      minPurchaseAmount: 0,
+    );
+    final repository = MockCouponRepository();
+    when(() => repository.getMyCoupons()).thenAnswer((_) async => [zeroMin]);
+
+    await pumpScreen(tester, repository: repository);
+
+    expect(find.textContaining('Pedido mínimo'), findsNothing);
+    expect(find.text('Válido hasta 31 ago 2026'), findsOneWidget);
+  });
+
+  testWidgets(
+      'cupón con minPurchaseAmount > 0 → muestra "Pedido mínimo: S/X.XX" '
+      'junto con la fecha, mismo patrón del mockup original', (tester) async {
+    final withMin = UserCoupon(
+      id: 'c-6',
+      code: 'GRANDE50',
+      discountType: CouponDiscountType.fixedAmount,
+      discountValue: 15,
+      status: CouponStatus.active,
+      expiresAt: DateTime(2026, 8, 20),
+      minPurchaseAmount: 50,
+    );
+    final repository = MockCouponRepository();
+    when(() => repository.getMyCoupons()).thenAnswer((_) async => [withMin]);
+
+    await pumpScreen(tester, repository: repository);
+
+    expect(
+      find.text('Pedido mínimo: S/ 50.00 · Válido hasta 20 ago 2026'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
       'cupón de monto fijo → descuento en soles, no porcentaje',
       (tester) async {
     final repository = MockCouponRepository();

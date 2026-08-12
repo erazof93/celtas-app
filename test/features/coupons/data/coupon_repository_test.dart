@@ -147,6 +147,87 @@ void main() {
       );
     });
 
+    test(
+        'con subtotal: lo manda como número en el body, no como string '
+        '(el DTO del backend rechaza con 400 si no es numérico)', () async {
+      when(() => dio.post<Map<String, dynamic>>(
+            '/coupons/validate',
+            data: any(named: 'data'),
+          )).thenAnswer(
+        (_) async => Response<Map<String, dynamic>>(
+          requestOptions: RequestOptions(path: '/coupons/validate'),
+          data: couponJson,
+        ),
+      );
+
+      await repository.validateCoupon('A1B2C3D4', subtotal: 49.8);
+
+      final captured = verify(
+        () => dio.post<Map<String, dynamic>>(
+          '/coupons/validate',
+          data: captureAny(named: 'data'),
+        ),
+      ).captured.single as Map<String, dynamic>;
+      expect(captured['code'], 'A1B2C3D4');
+      expect(captured['subtotal'], isA<num>());
+      expect(captured['subtotal'], 49.8);
+    });
+
+    test('sin subtotal: no manda la llave "subtotal" en el body', () async {
+      when(() => dio.post<Map<String, dynamic>>(
+            '/coupons/validate',
+            data: any(named: 'data'),
+          )).thenAnswer(
+        (_) async => Response<Map<String, dynamic>>(
+          requestOptions: RequestOptions(path: '/coupons/validate'),
+          data: couponJson,
+        ),
+      );
+
+      await repository.validateCoupon('A1B2C3D4');
+
+      verify(
+        () => dio.post<Map<String, dynamic>>(
+          '/coupons/validate',
+          data: {'code': 'A1B2C3D4'},
+        ),
+      ).called(1);
+    });
+
+    test(
+        'cupón por debajo del pedido mínimo (400) → ApiException con el '
+        'mensaje real del backend', () async {
+      when(() => dio.post<Map<String, dynamic>>(
+            '/coupons/validate',
+            data: any(named: 'data'),
+          )).thenThrow(
+        DioException(
+          requestOptions: RequestOptions(path: '/coupons/validate'),
+          response: Response(
+            requestOptions: RequestOptions(path: '/coupons/validate'),
+            statusCode: 400,
+            data: {
+              'success': false,
+              'message': 'Este cupón requiere un pedido mínimo de S/50.00',
+              'statusCode': 400,
+            },
+          ),
+          type: DioExceptionType.badResponse,
+        ),
+      );
+
+      await expectLater(
+        repository.validateCoupon('A1B2C3D4', subtotal: 15.5),
+        throwsA(
+          isA<ApiException>().having(
+            (e) => e.message,
+            'message',
+            'Este cupón requiere un pedido mínimo de S/50.00',
+          ),
+        ),
+      );
+    });
+
     test('error de red → ApiException de conexión', () async {
       when(() => dio.post<Map<String, dynamic>>(
             '/coupons/validate',
@@ -181,6 +262,7 @@ void main() {
         'status': 'active',
         'expiresAt': '2026-12-31T00:00:00.000Z',
         'usedAt': null,
+        'minPurchaseAmount': null,
       },
       {
         'id': 'c-2',
@@ -190,6 +272,7 @@ void main() {
         'status': 'used',
         'expiresAt': '2026-08-20T00:00:00.000Z',
         'usedAt': '2026-08-05T00:00:00.000Z',
+        'minPurchaseAmount': 50,
       },
     ];
 
@@ -206,8 +289,10 @@ void main() {
       expect(coupons, hasLength(2));
       expect(coupons.first.code, 'VIKINGO10');
       expect(coupons.first.status.name, 'active');
+      expect(coupons.first.minPurchaseAmount, isNull);
       expect(coupons.last.code, 'FUEGO3000');
       expect(coupons.last.usedAt, DateTime.utc(2026, 8, 5));
+      expect(coupons.last.minPurchaseAmount, 50.0);
       verify(() => dio.get<List<dynamic>>('/coupons/me')).called(1);
     });
 

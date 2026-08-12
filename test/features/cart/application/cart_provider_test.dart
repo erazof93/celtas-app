@@ -160,17 +160,43 @@ void main() {
   });
 
   group('cupón', () {
-    test('applyCoupon guarda el cupón y total = subtotal − descuento',
-        () {
+    test(
+        'applyCoupon guarda el cupón y total = subtotal − descuento, '
+        'devuelve true', () {
       final container = createContainer();
       container.read(cartProvider.notifier).addItem(burger, quantity: 2);
-      container.read(cartProvider.notifier).applyCoupon(percentageCoupon);
+      final applied =
+          container.read(cartProvider.notifier).applyCoupon(percentageCoupon);
 
       final state = container.read(cartProvider);
+      expect(applied, isTrue);
       expect(state.coupon?.code, 'VIKINGO10');
       // 10% de 31 = 3.1 → total 27.9
       expect(state.discount, closeTo(3.1, 0.001));
       expect(state.total, closeTo(27.9, 0.001));
+    });
+
+    test(
+        'applyCoupon rechaza (devuelve false, no guarda el cupón) si el '
+        'subtotal actual ya no alcanza el mínimo — cubre la carrera de '
+        'aplicar mientras el carrito cambió durante el await de red', () {
+      const withMin = ValidatedCoupon(
+        valid: true,
+        id: 'c-8',
+        code: 'GRANDE50',
+        discountType: CouponDiscountType.fixedAmount,
+        discountValue: 15,
+        description: 'S/15.00 de descuento',
+        minPurchaseAmount: 50,
+      );
+      final container = createContainer();
+      container.read(cartProvider.notifier).addItem(burger); // subtotal 15.5
+
+      final applied =
+          container.read(cartProvider.notifier).applyCoupon(withMin);
+
+      expect(applied, isFalse);
+      expect(container.read(cartProvider).coupon, isNull);
     });
 
     test('cupón de monto fijo resta el valor al subtotal', () {
@@ -235,6 +261,123 @@ void main() {
       expect(state.coupon?.code, 'VIKINGO10');
       // 10% de (15.5+7.2) = 2.27
       expect(state.discount, closeTo(2.27, 0.001));
+    });
+
+    group('minPurchaseAmount', () {
+      const withMin = ValidatedCoupon(
+        valid: true,
+        id: 'c-4',
+        code: 'GRANDE50',
+        discountType: CouponDiscountType.fixedAmount,
+        discountValue: 15,
+        description: 'S/15.00 de descuento',
+        minPurchaseAmount: 50,
+      );
+
+      test(
+          'decrementar hasta que el subtotal baje del mínimo quita el cupón '
+          'y deja un aviso', () {
+        final container = createContainer();
+        container.read(cartProvider.notifier).addItem(burger, quantity: 4);
+        // Subtotal 15.5×4 = 62, alcanza el mínimo de 50.
+        container.read(cartProvider.notifier).applyCoupon(withMin);
+        expect(container.read(cartProvider).coupon, isNotNull);
+
+        // 62 - 15.5 = 46.5 < 50 → ya no alcanza.
+        container.read(cartProvider.notifier).decrement('i-1');
+
+        final state = container.read(cartProvider);
+        expect(state.items, isNotEmpty); // el carrito sigue con ítems
+        expect(state.coupon, isNull);
+        expect(
+          state.couponRemovedNotice,
+          'El cupón GRANDE50 se quitó: el pedido ya no alcanza el mínimo '
+          'de S/ 50.00',
+        );
+      });
+
+      test(
+          'decrementar sin bajar del mínimo mantiene el cupón aplicado, sin '
+          'aviso', () {
+        final container = createContainer();
+        container.read(cartProvider.notifier).addItem(burger, quantity: 6);
+        // Subtotal 93, muy por encima del mínimo de 50.
+        container.read(cartProvider.notifier).applyCoupon(withMin);
+
+        // 93 - 15.5 = 77.5, sigue >= 50.
+        container.read(cartProvider.notifier).decrement('i-1');
+
+        final state = container.read(cartProvider);
+        expect(state.coupon?.code, 'GRANDE50');
+        expect(state.couponRemovedNotice, isNull);
+      });
+
+      test('dismissCouponNotice limpia el aviso ya mostrado', () {
+        final container = createContainer();
+        container.read(cartProvider.notifier).addItem(burger, quantity: 4);
+        container.read(cartProvider.notifier).applyCoupon(withMin);
+        container.read(cartProvider.notifier).decrement('i-1');
+        expect(
+          container.read(cartProvider).couponRemovedNotice,
+          isNotNull,
+        );
+
+        container.read(cartProvider.notifier).dismissCouponNotice();
+
+        expect(container.read(cartProvider).couponRemovedNotice, isNull);
+      });
+
+      test(
+          'cupón con minPurchaseAmount 0 nunca se invalida por subtotal '
+          '(0 = sin mínimo, mismo criterio que el resto de la app)', () {
+        const zeroMin = ValidatedCoupon(
+          valid: true,
+          id: 'c-5',
+          code: 'SINMINIMO',
+          discountType: CouponDiscountType.percentage,
+          discountValue: 10,
+          description: '10% de descuento',
+          minPurchaseAmount: 0,
+        );
+        final container = createContainer();
+        container.read(cartProvider.notifier).addItem(burger);
+        container.read(cartProvider.notifier).applyCoupon(zeroMin);
+        container.read(cartProvider.notifier).increment('i-1');
+        container.read(cartProvider.notifier).decrement('i-1');
+
+        expect(container.read(cartProvider).coupon?.code, 'SINMINIMO');
+        expect(container.read(cartProvider).couponRemovedNotice, isNull);
+      });
+
+      test(
+          'vaciar el carrito de un único ítem limpia el cupón sin generar '
+          'aviso (no hay ítems visibles para asociarlo)', () {
+        // El valor de minPurchaseAmount es irrelevante para este caso:
+        // `_clearCouponIfInvalid` chequea `items.isEmpty` primero e
+        // incondicionalmente, antes de mirar el mínimo — por eso alcanza
+        // con cualquier cupón con mínimo para probar que vaciar el carrito
+        // nunca deja un aviso.
+        const lowMin = ValidatedCoupon(
+          valid: true,
+          id: 'c-6',
+          code: 'MIN10',
+          discountType: CouponDiscountType.percentage,
+          discountValue: 10,
+          description: '10% de descuento',
+          minPurchaseAmount: 10,
+        );
+        final container = createContainer();
+        container.read(cartProvider.notifier).addItem(burger); // 15.5
+        container.read(cartProvider.notifier).applyCoupon(lowMin);
+
+        // Único ítem → decrement lo elimina y vacía el carrito directamente.
+        container.read(cartProvider.notifier).decrement('i-1');
+
+        final state = container.read(cartProvider);
+        expect(state.items, isEmpty);
+        expect(state.coupon, isNull);
+        expect(state.couponRemovedNotice, isNull);
+      });
     });
   });
 }

@@ -20,7 +20,8 @@ enum CouponDiscountType {
 /// `ValidatedCoupon`):
 ///
 /// ```ts
-/// { valid, id, code, discountType, discountValue, description, expiresAt }
+/// { valid, id, code, discountType, discountValue, minPurchaseAmount,
+///   description, expiresAt }
 /// ```
 ///
 /// El endpoint NO marca el cupón como usado — el canje ocurre recién al crear
@@ -35,8 +36,18 @@ abstract class ValidatedCoupon with _$ValidatedCoupon {
     required double discountValue,
     required String description,
     DateTime? expiresAt,
+    // `0` se trata igual que `null` ("sin mínimo") — mismo criterio que
+    // `UserCoupon.hasMinPurchase` y el panel admin. Guardado acá (no solo en
+    // `UserCoupon`) para que el carrito pueda re-validar el mínimo si el
+    // subtotal baja después de aplicar el cupón (`CartNotifier`).
+    double? minPurchaseAmount,
   }) = _ValidatedCoupon;
+
+  const ValidatedCoupon._();
 
   factory ValidatedCoupon.fromJson(Map<String, dynamic> json) =>
       _$ValidatedCouponFromJson(json);
+
+  bool get hasMinPurchase =>
+      minPurchaseAmount != null && minPurchaseAmount! > 0;
 }

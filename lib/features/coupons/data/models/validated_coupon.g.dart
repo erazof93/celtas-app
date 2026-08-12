@@ -20,6 +20,7 @@ _ValidatedCoupon _$ValidatedCouponFromJson(Map<String, dynamic> json) =>
       expiresAt: json['expiresAt'] == null
           ? null
           : DateTime.parse(json['expiresAt'] as String),
+      minPurchaseAmount: (json['minPurchaseAmount'] as num?)?.toDouble(),
     );
 
 Map<String, dynamic> _$ValidatedCouponToJson(_ValidatedCoupon instance) =>
@@ -31,6 +32,7 @@ Map<String, dynamic> _$ValidatedCouponToJson(_ValidatedCoupon instance) =>
       'discountValue': instance.discountValue,
       'description': instance.description,
       'expiresAt': instance.expiresAt?.toIso8601String(),
+      'minPurchaseAmount': instance.minPurchaseAmount,
     };
 
 const _$CouponDiscountTypeEnumMap = {

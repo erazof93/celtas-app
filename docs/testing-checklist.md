@@ -64,6 +64,21 @@ solo cuando pasa lo aplicable de este checklist.
 - [x] El historial refleja un pedido recién creado al volver del checkout (invalidar +
       re-fetchear, no insertar a mano)
 - [x] Cupones muestran estado (activo/usado/expirado) correctamente
+- [x] Monto mínimo de compra (`minPurchaseAmount`): el subtotal del carrito se envía a
+      `POST /coupons/validate` para que el backend rechace cupones que no lo alcanzan con su
+      mensaje real; `0` se trata igual que `null` ("sin mínimo", mismo criterio que
+      `celtas-admin`)
+- [x] Si el subtotal cae por debajo del `minPurchaseAmount` del cupón ya aplicado al decrementar
+      cantidades o quitar un ítem, el cupón se retira solo del preview (con aviso explícito por
+      `SnackBar` si el carrito sigue con ítems; sin aviso si queda vacío) — el usuario ya NO ve un
+      descuento de vista previa que el backend rechazaría al confirmar (`CartNotifier._clearCouponIfInvalid`)
+- [x] Ese mismo re-chequeo cubre la ventana de carrera entre "aplicar cupón" (network async) y
+      una edición de cantidades concurrente durante la espera: `CartNotifier.applyCoupon` ahora
+      re-valida el mínimo contra el subtotal ACTUAL (no el que existía cuando arrancó la
+      validación) antes de aceptar el cupón — si ya no alcanza, no lo aplica y devuelve `false`
+      para que la UI muestre el mismo mensaje que daría el backend, en vez de un descuento de
+      vista previa inválido (hallazgo original del `tester`, cerrado con test de regresión con
+      `Completer` simulando la carrera)
 
 ## Notificaciones
 

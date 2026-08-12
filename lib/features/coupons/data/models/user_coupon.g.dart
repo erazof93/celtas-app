@@ -16,6 +16,7 @@ _UserCoupon _$UserCouponFromJson(Map<String, dynamic> json) => _UserCoupon(
   usedAt: json['usedAt'] == null
       ? null
       : DateTime.parse(json['usedAt'] as String),
+  minPurchaseAmount: (json['minPurchaseAmount'] as num?)?.toDouble(),
 );
 
 Map<String, dynamic> _$UserCouponToJson(_UserCoupon instance) =>
@@ -27,6 +28,7 @@ Map<String, dynamic> _$UserCouponToJson(_UserCoupon instance) =>
       'status': _$CouponStatusEnumMap[instance.status]!,
       'expiresAt': instance.expiresAt.toIso8601String(),
       'usedAt': instance.usedAt?.toIso8601String(),
+      'minPurchaseAmount': instance.minPurchaseAmount,
     };
 
 const _$CouponDiscountTypeEnumMap = {

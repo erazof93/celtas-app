@@ -47,11 +47,23 @@ class _CartScreenState extends ConsumerState<CartScreen> {
       _couponError = null;
     });
     try {
-      final coupon =
-          await ref.read(couponRepositoryProvider).validateCoupon(code);
-      ref.read(cartProvider.notifier).applyCoupon(coupon);
+      final subtotal = ref.read(cartProvider).subtotal;
+      final coupon = await ref
+          .read(couponRepositoryProvider)
+          .validateCoupon(code, subtotal: subtotal);
+      // El carrito puede haber cambiado mientras se esperaba la respuesta
+      // (los steppers de cantidad siguen habilitados durante la espera) —
+      // `applyCoupon` re-chequea el mínimo contra el subtotal actual antes
+      // de aplicarlo.
+      final applied = ref.read(cartProvider.notifier).applyCoupon(coupon);
       if (mounted) {
-        setState(() => _validating = false);
+        setState(() {
+          _validating = false;
+          _couponError = applied
+              ? null
+              : 'Este cupón requiere un pedido mínimo de S/'
+                  '${coupon.minPurchaseAmount!.toStringAsFixed(2)}';
+        });
       }
     } on ApiException catch (e) {
       if (mounted) {
@@ -73,6 +85,27 @@ class _CartScreenState extends ConsumerState<CartScreen> {
   @override
   Widget build(BuildContext context) {
     final cart = ref.watch(cartProvider);
+
+    ref.listen<CartState>(cartProvider, (previous, next) {
+      final notice = next.couponRemovedNotice;
+      if (notice == null) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              notice,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: CeltasColors.cream,
+                  ),
+            ),
+            backgroundColor: CeltasColors.surface,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      ref.read(cartProvider.notifier).dismissCouponNotice();
+    });
 
     return Scaffold(
       body: SafeArea(
