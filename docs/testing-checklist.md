@@ -163,6 +163,37 @@ solo cuando pasa lo aplicable de este checklist.
       la práctica por cómo `url_launcher_android` invoca `startActivity`), doble-tap en `menuItem`
       (riesgo sistémico preexistente, no exclusivo de banners), `selectedCategoryIdProvider`
       persistente (comportamiento esperado, verificado).
+- [x] **Fix del ícono de ubicación del header** (`_HomeHeader`, `home_screen.dart:250-263`, path
+      SVG a mano — el parser genérico de `svg_path.dart` no cambió). El punto interior del pin es
+      `<circle cx="12" cy="10" r="2.5">` en el mockup real (confirmado leyendo
+      `design-reference/Celtas App Mockups.dc.html:133`, no de memoria). El path buggy (`M12 10a2.5
+      2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z`) arrancaba en el CENTRO del círculo; el path fijo (`M9.5 10a2.5
+      2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0z`) arranca en (9.5,10), un punto real de la circunferencia.
+      Verificado más allá del test existente (que solo compara `getBounds()`): tracé la curva
+      completa con `PathMetric.getTangentForOffset` en 11 puntos equiespaciados y confirmé que es
+      un círculo genuino centrado en (12,10) r=2.5 (no una forma degenerada que coincidiera por
+      casualidad en el bounding box) — evidencia cruda: `Offset(9.5, 10.0)`, `Offset(10.0, 11.5)`,
+      `Offset(11.2, 12.4)`, `Offset(12.8, 12.4)`, `Offset(14.0, 11.5)`, `Offset(14.5, 10.0)`,
+      `Offset(14.0, 8.5)`, `Offset(12.8, 7.6)`, `Offset(11.2, 7.6)`, `Offset(10.0, 8.5)`,
+      `Offset(9.5, 10.0)` — `bounds: Rect.fromLTRB(9.5, 7.5, 14.5, 12.5)`, coincide con el círculo
+      real del mockup. Sin bloqueadores.
+- [x] **Barra flotante de carrito en el Home** (`_CartSummaryBar`, `home_screen.dart:136-227`):
+      confirmado por lectura de código que vive dentro del `Stack` del `body` de `HomeScreen`
+      (`Positioned(left: 0, right: 0, bottom: 0, child: SafeArea(top: false, child:
+      _CartSummaryBar(...)))`), no en el shell — nunca reemplaza el bottom nav (que vive en
+      `_ShellScaffold`, fuera del árbol de `HomeScreen`). Usa `CeltasColors.card`/`border`/
+      `CeltasRadii.card`/`CeltasRadii.pill` consistentes con el resto de la app, sin
+      `Color(0xFF...)` sueltos. Cubierta con test explícito en `app_router_test.dart` (oculta sin
+      ítems, aparece con 1 ítem con el texto exacto `"1 item · S/ 15.50"`, navega a `/cart` al
+      tocarla). `SafeArea(top: false)` anidado dentro del `SafeArea` ya presente en
+      `HomeScreen.body` no duplica el padding inferior — comportamiento estándar de `SafeArea`
+      (consume el `MediaQuery.padding` una sola vez y lo resetea a 0 para descendientes),
+      confirmado por lectura del widget, no es un bug.
+      ⚠️ Riesgo no cubierto: no hay test que verifique la transición inversa (1 ítem → 0 ítems,
+      ej. tras vaciar el carrito desde `/cart` y volver) — solo se prueba la aparición 0→1. El
+      `if (hasCartItems)` en el build hace que desaparecer sea trivialmente correcto por
+      construcción (mismo `cartProvider.select` que la muestra), así que el riesgo es bajo, pero
+      no está confirmado con un test explícito.
 
 ## Carrito / Checkout
 
@@ -232,11 +263,149 @@ solo cuando pasa lo aplicable de este checklist.
       cubría: boundary exacto del mínimo, y reapertura del sheet tras cerrarlo sin elegir nada
       (no deja el picker en un estado roto). 227/227 tests, `flutter analyze` limpio. Sin
       bloqueadores.
+- [x] **Ajustes visuales post-cierre en el carrito** (`cart_screen.dart`): ícono de papelera
+      (vaciar carrito, `ValueKey('cart-clear')`) agrandado de `size: 18` a `size: 24` +
+      `Padding(4)` (tap target ~32dp) — sigue siendo `GestureDetector` + `Icon`, no `IconButton`
+      (confirmado de nuevo con `grep -rn "IconButton(" lib`: 0 matches reales). "VER MIS
+      CUPONES" pasó de `Text` plano a un chip real (`Container` con `CeltasColors.buttonSurface`
+      + `border: Border.all(color: CeltasColors.orange)` + `CeltasRadii.pill`) — mismo
+      `ValueKey('cart-coupon-picker')`. `CeltasColors.buttonSurface` no es un token nuevo:
+      confirmado con `grep -rn "buttonSurface" lib/` que ya lo usa el botón "Aplicar" del cupón en
+      la misma pantalla (`cart_screen.dart:601`) — consistente, no inventado para este chip.
+      Ambos cambios cubiertos por los tests ya existentes (mismos `ValueKey`, sin necesidad de
+      tests nuevos). `flutter analyze` limpio, 258/258 tests. Sin bloqueadores.
 
 ## Notificaciones
 
 - [x] Token de FCM se registra tras login (`PATCH /users/me/fcm-token`)
 - [x] Falla de registro de token no rompe el flujo de login
+- [x] **Historial local de notificaciones** (`/notifications`, `NotificationHistoryItem` +
+      `NotificationHistoryRepository` + `NotificationHistoryNotifier` +
+      `NotificationsScreen`, persistido con `shared_preferences` — justificado, no es dato
+      sensible como el `refreshToken`). `flutter analyze` limpio, `flutter test` 258/258
+      (verificado de forma independiente, salida cruda abajo). Ruta `/notifications` sí está en
+      `_protectedPaths` (`app_router.dart:36`), campana del Home navega ahí
+      (`home_screen.dart:294-307`), tap sobre un ítem reusa `NotificationTarget.fromPayload`
+      sin duplicar la clasificación (`notifications_screen.dart:94-103`). Modelo
+      `fromJson(toJson())` roundtrip correcto (incluido `DateTime` y el `data` crudo). Sin
+      `IconButton`/`Color(0xFF...)` sueltos; estados de carga/error/vacío explícitos y
+      cubiertos por test para vacío y datos, pero NO para error (ver hallazgo abajo).
+
+      ❌ **Falló — condición de carrera real en `NotificationHistoryNotifier.add()`, el fix
+      documentado (`await future` antes de mutar) NO cierra el caso pedido**
+      (`notification_providers.dart:33-38`). El `await future` solo protege `add()` vs `build()`
+      todavía en curso (el caso que sí prueba `notification_history_provider_test.dart:59-73`).
+      Pero **dos llamadas a `add()` concurrentes SÍ pierden un ítem**: `future` es una property
+      *getter* (`_element.futureNotifier.value`, ver
+      `~/.pub-cache/hosted/pub.dev/riverpod-2.6.1/lib/src/async_notifier/base.dart:86-89`) que
+      ambas llamadas leen ANTES de que la primera alcance a mutar `state` — si `add(A)` y
+      `add(B)` se disparan sin `await` entre medio (ej. dos pushes casi simultáneos, foreground +
+      background, o dos notificaciones seguidas mientras la primera todavía está
+      guardando en `shared_preferences`), ambas capturan el mismo `current` (la lista base, sin
+      ninguno de los dos ítems nuevos). `add(A)` corre primero y deja `state = [A, ...base]`, pero
+      `add(B)` fue programado como microtask ANTES de que A mutara el estado, así que cuando B
+      retoma ejecución usa su propio `current` ya capturado (la lista base, sin A) y sobrescribe
+      con `state = [B, ...base]` — **A se pierde**. Reproducido con un test ad hoc (no incluido en
+      el suite, descartado tras la prueba, mismo criterio que el hallazgo de solape de banners de
+      la auditoría anterior): dos `add()` sin `await` entre medio → `state` termina con 1 solo
+      ítem, no 2. Salida cruda:
+      ```
+      STATE: [NotificationHistoryItem(title: Notificación 1, body: Cuerpo 1, receivedAt:
+      2026-01-01 00:01:00.000Z, data: {orderId: order-1})]
+      Expected: <2>
+        Actual: <1>
+      ```
+      (perdió `itemAt(0)`, quedó solo `itemAt(1)`). Riesgo real en producción: `onMessage`,
+      `onMessageOpenedApp` y el mensaje inicial llaman `_saveToHistory` de forma independiente y
+      sin coordinación — dos notificaciones (ej. cambio de estado de pedido + cupón nuevo)
+      llegando con pocos milisegundos de diferencia disparan `add()` dos veces sin que la primera
+      haya terminado de resolver `future`/`save()`. Sugerencia para la sesión principal: serializar
+      las mutaciones (ej. encadenar cada `add()` sobre una `Future` interna tipo mutex, o leer
+      `state.value`/`state.valueOrNull` directo en vez de `await future` ya que dentro de un
+      método síncrono-hasta-el-primer-await el `state` actual ya refleja cualquier mutación previa
+      aplicada síncronamente).
+
+      ⚠️ **Riesgos / casos borde no cubiertos**:
+      - `_saveToHistory` (`notification_service.dart:120-136`) descarta silenciosamente cualquier
+        notificación cuyo `NotificationTarget.fromPayload` sea `NoneNotificationTarget` (`if
+        (target is NoneNotificationTarget) return;`) — pero `_showLocalNotification` (línea
+        159-178) SÍ la muestra en la bandeja del sistema/banner en foreground sin ese filtro (solo
+        exige `message.notification != null`). Esto crea una asimetría: si el backend alguna vez
+        manda una notificación genérica sin `orderId`/`couponCode` en `data` (ej. un anuncio o
+        promo sin deep link), el usuario la ve aparecer en el teléfono pero después, al abrir la
+        campana, no está en el historial — puede razonablemente esperar verla ahí. Con el
+        contrato actual del backend (confirmado en el comentario del archivo: solo
+        `{orderId,status}` o `{couponCode}`, sin un tercer tipo) esto no ocurre en la práctica hoy,
+        así que no es bloqueante, pero es una trampa si el backend agrega notificaciones genéricas
+        a futuro sin que alguien recuerde tocar este filtro.
+      - `NotificationHistoryNotifier.add()` actualiza `state` con la lista COMPLETA sin recortar a
+        `_maxItems` (50) — el recorte solo pasa dentro de `NotificationHistoryRepository.save()`
+        (`.take(_maxItems)`) para lo que se persiste en disco. En una sesión larga con muchas
+        notificaciones, la lista en memoria (lo que la pantalla `/notifications` renderiza) puede
+        crecer sin límite dentro de esa sesión, aunque al reiniciar la app solo se recarguen 50.
+        Inconsistencia menor, no crashea (no hay paginación ni límite de renderizado en la
+        pantalla tampoco), pero vale la pena capar `add()` igual que `save()`.
+      - Sin test para el estado de error de `NotificationsScreen`
+        (`_NotificationsError`/`No se pudo cargar tu historial de notificaciones`) — el código lo
+        maneja (falla de `shared_preferences`/JSON corrupto en `load()`), pero no hay cobertura
+        de regresión, a diferencia del resto de pantallas con estados error/vacío/carga
+        explícitamente testeados.
+      - No existe `notification_service_test.dart` — `NotificationService` (incluido el nuevo
+        `_saveToHistory`) sigue sin tests unitarios/de integración (gap preexistente al módulo 9,
+        no introducido por esta mejora, pero la mejora le agregó lógica nueva sin agregar
+        cobertura).
+
+      **Veredicto de este ítem: PENDIENTE** — la condición de carrera de `add()` vs `add()` es un
+      bug real con evidencia reproducible, no solo un caso de laboratorio (dos pushes casi
+      simultáneos son plausibles en producción). No se corrige acá — reportado para la sesión
+      principal.
+
+      **Corregido en la sesión principal** (`notification_providers.dart`): `add()` ahora encadena
+      cada mutación sobre una `Future` interna (`_mutationQueue`), en vez de solo esperar `future`
+      antes de mutar — con esto, un segundo `add()` disparado antes de que el primero termine
+      queda en cola y arranca recién cuando el anterior ya mutó `state`, cerrando también el caso
+      "`add()` vs `add()` en curso" (no solo "`add()` vs `build()` en curso", que ya cerraba el fix
+      anterior). El encadenado sigue avanzando aunque una mutación falle (`.catchError`), para que
+      una notificación que no se pudo guardar no trabe las siguientes. Test de regresión agregado
+      (`notification_history_provider_test.dart`, "dos add() concurrentes..."): dos `add()` sin
+      `await` entre medio → ambos ítems sobreviven en `state` y en lo persistido, reproduciendo
+      exactamente el escenario que encontró `@tester` (antes del fix este mismo test fallaba con
+      `Expected: <2>, Actual: <1>`, igual que el hallazgo original).
+
+      De los riesgos no bloqueantes reportados arriba, también se cerraron:
+      - **Recorte de `add()` a `NotificationHistoryRepository.maxItems`** (renombrado de `_maxItems`
+        a público, para no duplicar el número mágico 50 entre el repositorio y el notifier): la
+        lista en memoria ya no puede crecer sin límite dentro de una sesión larga. Test de
+        regresión agregado (`add() recorta la lista en memoria...`).
+      - **Estado de error de `NotificationsScreen` sin cobertura**: test agregado
+        (`notifications_screen_test.dart`, "error al cargar el historial → mensaje y REINTENTAR").
+      - **Transición 1→0 ítems de `_CartSummaryBar` sin cobertura** (reportado en la misma
+        auditoría, sección Home/Menú de este documento): test agregado en `app_router_test.dart`
+        ("barra de resumen del carrito en Home: transición 1→0 ítems la oculta de nuevo").
+
+      Quedan documentados, sin corregir (mismo criterio de "no bloqueante" que el resto del
+      proyecto — no hay evidencia de que ocurran con el contrato actual del backend):
+      - La asimetría de `NoneNotificationTarget` (se muestra en el sistema pero no queda en el
+        historial) — solo importaría si el backend agrega un tercer tipo de notificación sin
+        `orderId`/`couponCode`, lo cual no existe hoy.
+      - Falta de `notification_service_test.dart` — gap preexistente al módulo 9, no introducido
+        por esta mejora.
+
+      **Segunda pasada de `@tester`, independiente**: confirmó con salida cruda propia (no la
+      mía) `flutter analyze` limpio y `flutter test` 262/262, incluido el archivo aislado de
+      notificaciones (`+3: dos add() concurrentes... pasa`, `+4: add() recorta la lista en
+      memoria... pasa`). Trazó a mano la semántica síncrona de Dart en `add()`/`_addLocked()` para
+      confirmar que el encadenado sobre `_mutationQueue` cierra la carrera de verdad (dos llamadas
+      sin `await` entre medio leen/escriben el campo en el mismo tick, sin ventana de carrera
+      posible; `.then()` no arranca el callback hasta que el anterior de la cola resuelve
+      *enteramente*, incluido el `await save(...)` interno; `.catchError` mantiene la cadena viva
+      sin perder el error para el caller original) — no encontró forma de que dos `add()` se sigan
+      pisando. Verificó también que los tests de estado de error y transición 1→0 cubren
+      genuinamente el código real (textos exactos de `_NotificationsError`, flujo real de agregar
+      + `clear()` sobre el mismo árbol). Única limitación reportada: no pudo completar el
+      experimento adicional de revertir el fix en una copia y confirmar que el test falla sin él
+      (falla de tooling de shell a mitad de sesión, no relacionada con el código) — mitigada por
+      la revisión de código detallada. **Veredicto final: LISTO PARA MARCAR COMPLETO.**
 
 ---
 

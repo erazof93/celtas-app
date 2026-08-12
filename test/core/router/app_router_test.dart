@@ -4,6 +4,7 @@ import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
 import 'package:celtas_mobile/features/auth/data/auth_repository.dart';
 import 'package:celtas_mobile/features/auth/data/models/auth_tokens.dart';
 import 'package:celtas_mobile/features/auth/data/models/user.dart';
+import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
 import 'package:celtas_mobile/features/home/application/home_providers.dart';
 import 'package:celtas_mobile/features/home/data/models/banner.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_category.dart';
@@ -16,6 +17,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MockAuthRepository extends Mock implements AuthRepository {}
 
@@ -40,6 +42,14 @@ void main() {
     dotenv.loadFromString(
       envString: 'API_BASE_URL=https://backend-celtas.onrender.com',
     );
+  });
+
+  setUp(() {
+    // El historial de notificaciones (`notificationHistoryProvider`) lee
+    // `shared_preferences` real al construirse — sin este mock, el canal de
+    // plataforma no responde en el entorno de test y el provider queda
+    // colgado en `loading` para siempre (`pumpAndSettle` nunca asienta).
+    SharedPreferences.setMockInitialValues({});
   });
 
   /// Overrides comunes: auth fake + Home sin requests reales (banners y menú
@@ -356,6 +366,99 @@ void main() {
     expect(find.byType(CeltasBottomNav), findsNothing);
   });
 
+  testWidgets(
+      'campana del Home → pantalla de notificaciones (historial vacío)', (
+    tester,
+  ) async {
+    final repository = MockAuthRepository();
+    await login(tester, repository);
+
+    await tester.tap(find.byKey(const ValueKey('home-notifications-bell')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Notificaciones'), findsOneWidget);
+    expect(find.text('No tienes notificaciones todavía'), findsOneWidget);
+    expect(find.byType(CeltasBottomNav), findsNothing);
+  });
+
+  testWidgets(
+      'barra de resumen del carrito en Home: oculta sin ítems, aparece con '
+      'ítems y "VER CARRITO" navega a /cart', (tester) async {
+    final repository = MockAuthRepository();
+    await login(
+      tester,
+      repository,
+      menu: const [
+        PublicMenuCategory(
+          id: 'c-1',
+          name: 'Hamburguesas',
+          items: [
+            PublicMenuItem(id: 'i-1', name: 'Berserker Burger', price: 15.5),
+          ],
+        ),
+      ],
+    );
+
+    // Sin ítems en el carrito: la barra no se muestra.
+    expect(
+      find.byKey(const ValueKey('home-cart-summary-bar')),
+      findsNothing,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('add-i-1')));
+    await tester.pump();
+
+    // Con 1 ítem: aparece con el resumen correcto.
+    expect(
+      find.byKey(const ValueKey('home-cart-summary-bar')),
+      findsOneWidget,
+    );
+    expect(find.text('1 item · S/ 15.50'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('home-cart-summary-bar')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tu carrito'), findsOneWidget);
+    expect(find.byType(CeltasBottomNav), findsNothing);
+  });
+
+  testWidgets(
+      'barra de resumen del carrito en Home: transición 1→0 ítems la oculta '
+      'de nuevo', (tester) async {
+    final repository = MockAuthRepository();
+    await login(
+      tester,
+      repository,
+      menu: const [
+        PublicMenuCategory(
+          id: 'c-1',
+          name: 'Hamburguesas',
+          items: [
+            PublicMenuItem(id: 'i-1', name: 'Berserker Burger', price: 15.5),
+          ],
+        ),
+      ],
+    );
+
+    await tester.tap(find.byKey(const ValueKey('add-i-1')));
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('home-cart-summary-bar')),
+      findsOneWidget,
+    );
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(CeltasApp)),
+    );
+    container.read(cartProvider.notifier).clear();
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('home-cart-summary-bar')),
+      findsNothing,
+    );
+  });
+
   testWidgets('rutas /product/:id y /cart sin sesión → redirigen a /login', (
     tester,
   ) async {
@@ -377,6 +480,11 @@ void main() {
     expect(find.byType(CeltasBottomNav), findsNothing);
 
     container.read(routerProvider).go('/cart');
+    await tester.pumpAndSettle();
+    expect(find.text('Bienvenido de nuevo'), findsOneWidget);
+    expect(find.byType(CeltasBottomNav), findsNothing);
+
+    container.read(routerProvider).go('/notifications');
     await tester.pumpAndSettle();
     expect(find.text('Bienvenido de nuevo'), findsOneWidget);
     expect(find.byType(CeltasBottomNav), findsNothing);

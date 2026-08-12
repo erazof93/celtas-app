@@ -52,70 +52,175 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final bannersAsync = ref.watch(activeBannersProvider);
     final menuAsync = ref.watch(publicMenuProvider);
+    final (cartCount, cartTotal) = ref.watch(
+      cartProvider.select((state) => (state.totalCount, state.total)),
+    );
+    final hasCartItems = cartCount > 0;
 
     return Scaffold(
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            const _HomeHeader(),
-            Expanded(
-              child: RefreshIndicator(
-                color: CeltasColors.orange,
-                backgroundColor: CeltasColors.surface,
-                onRefresh: () async {
-                  ref.invalidate(activeBannersProvider);
-                  ref.invalidate(publicMenuProvider);
-                  try {
-                    await Future.wait([
-                      ref.read(activeBannersProvider.future),
-                      ref.read(publicMenuProvider.future),
-                    ]);
-                  } catch (_) {
-                    // Los estados de error de cada provider ya se muestran en
-                    // la UI (banners/menú) — el refresh no debe lanzar una
-                    // excepción async sin manejar.
-                  }
-                },
-                child: ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(
-                    CeltasSpacing.page,
-                    0,
-                    CeltasSpacing.page,
-                    24,
+            Column(
+              children: [
+                const _HomeHeader(),
+                Expanded(
+                  child: RefreshIndicator(
+                    color: CeltasColors.orange,
+                    backgroundColor: CeltasColors.surface,
+                    onRefresh: () async {
+                      ref.invalidate(activeBannersProvider);
+                      ref.invalidate(publicMenuProvider);
+                      try {
+                        await Future.wait([
+                          ref.read(activeBannersProvider.future),
+                          ref.read(publicMenuProvider.future),
+                        ]);
+                      } catch (_) {
+                        // Los estados de error de cada provider ya se
+                        // muestran en la UI (banners/menú) — el refresh no
+                        // debe lanzar una excepción async sin manejar.
+                      }
+                    },
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: EdgeInsets.fromLTRB(
+                        CeltasSpacing.page,
+                        0,
+                        CeltasSpacing.page,
+                        // Espacio extra para que la barra flotante del
+                        // carrito no tape el último ítem del menú.
+                        hasCartItems ? 88 : 24,
+                      ),
+                      children: [
+                        // Carrusel de banners: se oculta si no hay banners
+                        // activos.
+                        bannersAsync.when(
+                          loading: () => const _BannersLoading(),
+                          error: (error, _) => _BannersError(
+                            onRetry: () {
+                              ref.invalidate(activeBannersProvider);
+                            },
+                          ),
+                          data: (banners) => banners.isEmpty
+                              ? const SizedBox.shrink()
+                              : _BannerCarousel(banners: banners),
+                        ),
+                        const SizedBox(height: 18),
+                        // Menú por categorías.
+                        menuAsync.when(
+                          loading: () => const _MenuLoading(),
+                          error: (error, _) => _MenuError(
+                            message: error.toString(),
+                            onRetry: () {
+                              ref.invalidate(publicMenuProvider);
+                            },
+                          ),
+                          data: (categories) => categories.isEmpty
+                              ? const _EmptyMenu()
+                              : _MenuList(categories: categories),
+                        ),
+                      ],
+                    ),
                   ),
-                  children: [
-                    // Carrusel de banners: se oculta si no hay banners activos.
-                    bannersAsync.when(
-                      loading: () => const _BannersLoading(),
-                      error: (error, _) => _BannersError(
-                        onRetry: () {
-                          ref.invalidate(activeBannersProvider);
-                        },
-                      ),
-                      data: (banners) => banners.isEmpty
-                          ? const SizedBox.shrink()
-                          : _BannerCarousel(banners: banners),
-                    ),
-                    const SizedBox(height: 18),
-                    // Menú por categorías.
-                    menuAsync.when(
-                      loading: () => const _MenuLoading(),
-                      error: (error, _) => _MenuError(
-                        message: error.toString(),
-                        onRetry: () {
-                          ref.invalidate(publicMenuProvider);
-                        },
-                      ),
-                      data: (categories) => categories.isEmpty
-                          ? const _EmptyMenu()
-                          : _MenuList(categories: categories),
-                    ),
-                  ],
+                ),
+              ],
+            ),
+            // Barra flotante de "continuar": solo con ítems en el carrito,
+            // encima del bottom nav del shell (vive dentro del área del
+            // propio tab, así que nunca lo reemplaza). Sin precedente en
+            // design-reference/ (los 12 mockups no la contemplan) — diseño
+            // nuevo consistente con el resto de la app: mismas tarjetas
+            // (`CeltasColors.card`/`CeltasRadii.card`) y CTA en píldora
+            // naranja que ya usa el resto de la app para acciones primarias.
+            if (hasCartItems)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: SafeArea(
+                  top: false,
+                  child: _CartSummaryBar(count: cartCount, total: cartTotal),
                 ),
               ),
-            ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Barra flotante "N items · S/ total" + "VER CARRITO", visible solo con el
+/// carrito no vacío.
+class _CartSummaryBar extends StatelessWidget {
+  const _CartSummaryBar({required this.count, required this.total});
+
+  final int count;
+  final double total;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      child: GestureDetector(
+        key: const ValueKey('home-cart-summary-bar'),
+        onTap: () {
+          // Mismo criterio que el resto del Home: ocultar el SnackBar
+          // "Agregado" antes de navegar, para que no persista tapando los
+          // CTAs del carrito.
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          context.push('/cart');
+        },
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(18, 14, 14, 14),
+          decoration: BoxDecoration(
+            color: CeltasColors.card,
+            border: Border.all(color: CeltasColors.borderStrong),
+            borderRadius: BorderRadius.circular(CeltasRadii.card),
+            boxShadow: [
+              BoxShadow(
+                color: CeltasColors.black.withValues(alpha: 0.55),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '$count ${count == 1 ? 'item' : 'items'} · '
+                  'S/ ${total.toStringAsFixed(2)}',
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.bodyMedium?.copyWith(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: CeltasColors.cream,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: CeltasColors.orange,
+                  borderRadius: BorderRadius.circular(CeltasRadii.pill),
+                ),
+                child: Text(
+                  'VER CARRITO',
+                  style: textTheme.labelSmall?.copyWith(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: CeltasColors.black,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -143,9 +248,16 @@ class _HomeHeader extends ConsumerWidget {
       child: Row(
         children: [
           const SvgStrokeIcon(
+            // El punto interior del pin es un `<circle cx="12" cy="10" r="2.5">`
+            // en el SVG original del mockup. Convertido a mano a comandos de
+            // arco, arrancaba en (12,10) — el CENTRO del círculo, no un punto
+            // de su circunferencia — lo que desplazaba el círculo resultante
+            // ~2.5px hacia arriba (centro real en (12,7.5), invadiendo la
+            // punta del pin) y se veía como un alargamiento del ícono. Arranca
+            // en (9.5,10), el punto izquierdo de la circunferencia real.
             path:
                 'M12 22s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12z'
-                'M12 10a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
+                'M9.5 10a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0z',
             size: 18,
             color: CeltasColors.orange,
           ),
@@ -177,12 +289,21 @@ class _HomeHeader extends ConsumerWidget {
           // el header del Home, junto a la campana.
           _CartIconButton(count: cartCount),
           const SizedBox(width: 16),
-          const SvgStrokeIcon(
-            path:
-                'M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9'
-                'M13.7 21a2 2 0 0 1-3.4 0',
-            size: 20,
-            color: CeltasColors.cream,
+          // Campana: navega al historial local de notificaciones (módulo 9 +
+          // mejora post-cierre, `NotificationsScreen`).
+          GestureDetector(
+            key: const ValueKey('home-notifications-bell'),
+            onTap: () {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              context.push('/notifications');
+            },
+            child: const SvgStrokeIcon(
+              path:
+                  'M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9'
+                  'M13.7 21a2 2 0 0 1-3.4 0',
+              size: 20,
+              color: CeltasColors.cream,
+            ),
           ),
         ],
       ),

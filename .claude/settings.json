@@ -1,15 +1,17 @@
 {
   "permissions": {
     "allow": [
-      "Bash(flutter *)",
-      "Bash(dart *)",
+      "Read(*)",
+      "Grep(*)",
+      "Glob(*)",
+      "Bash(find *)",
+      "Bash(pnpm *)",
+      "Bash(pnpm dlx *)",
       "Bash(git status*)",
       "Bash(git diff*)",
       "Bash(git log*)",
       "Bash(git add*)",
-      "Bash(git commit*)"
-    ],
-    "ask": [
+      "Bash(git commit*)",
       "Bash(git push*)"
     ]
   }

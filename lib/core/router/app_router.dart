@@ -10,6 +10,7 @@ import 'package:celtas_mobile/features/checkout/presentation/checkout_screen.dar
 import 'package:celtas_mobile/features/coupons/presentation/coupons_screen.dart';
 import 'package:celtas_mobile/features/home/presentation/home_screen.dart';
 import 'package:celtas_mobile/features/menu/presentation/product_detail_screen.dart';
+import 'package:celtas_mobile/features/notifications/presentation/notifications_screen.dart';
 import 'package:celtas_mobile/features/orders/presentation/order_detail_screen.dart';
 import 'package:celtas_mobile/features/orders/presentation/orders_screen.dart';
 import 'package:celtas_mobile/features/profile/presentation/profile_screen.dart';
@@ -32,6 +33,7 @@ const _protectedPaths = [
   '/cart',
   '/checkout',
   '/addresses',
+  '/notifications',
 ];
 
 bool _isProtectedPath(String location) =>
@@ -112,6 +114,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/addresses',
         builder: (context, state) => const AddressesScreen(),
+      ),
+      // Historial de notificaciones: empujada desde la campana del Home (sin
+      // bottom nav, mismo criterio que carrito/direcciones). Sin mockup
+      // correspondiente en design-reference/ — pantalla nueva.
+      GoRoute(
+        path: '/notifications',
+        builder: (context, state) => const NotificationsScreen(),
       ),
       // Detalle de pedido: empujado desde el listado del tab Pedidos (módulo
       // 7, mockup 11, sin bottom nav — igual que detalle de producto).

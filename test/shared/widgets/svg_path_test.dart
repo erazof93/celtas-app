@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:celtas_mobile/shared/widgets/svg_path.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -60,6 +62,28 @@ void main() {
 
     test('lanza ArgumentError con un comando desconocido', () {
       expect(() => parseSvgPath('M0 0 X10 10'), throwsArgumentError);
+    });
+
+    test(
+        'regresión: el path del punto interior del pin de ubicación del Home '
+        'queda centrado en (12,10) r=2.5, no desplazado', () {
+      // El mockup real define ese punto como `<circle cx="12" cy="10"
+      // r="2.5">` (SVG separado, no `path`). Convertido a mano a comandos de
+      // arco, el path original arrancaba en (12,10) — el CENTRO del círculo,
+      // no un punto de su circunferencia — lo que desplazaba el círculo
+      // resultante ~2.5px hacia arriba (centro real en (12,7.5)) y se veía
+      // como un alargamiento del ícono en `home_screen.dart`. El fix arranca
+      // en (9.5,10), el punto izquierdo de la circunferencia real.
+      final buggy =
+          parseSvgPath('M12 10a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z');
+      expect(
+        buggy.getBounds(),
+        isNot(const Rect.fromLTRB(9.5, 7.5, 14.5, 12.5)),
+      );
+
+      final fixed =
+          parseSvgPath('M9.5 10a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0z');
+      expect(fixed.getBounds(), const Rect.fromLTRB(9.5, 7.5, 14.5, 12.5));
     });
   });
 }

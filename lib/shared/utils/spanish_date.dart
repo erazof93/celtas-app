@@ -21,3 +21,11 @@ String formatShortDate(DateTime date) => '${date.day} ${_months[date.month - 1]}
 /// futuro o el pasado (vencimiento/uso de cupones).
 String formatLongDate(DateTime date) =>
     '${date.day} ${_months[date.month - 1]} ${date.year}';
+
+/// `"6 ago · 14:32"` — fecha corta + hora, para listados donde el momento
+/// exacto importa (historial de notificaciones).
+String formatShortDateTime(DateTime date) {
+  final hour = date.hour.toString().padLeft(2, '0');
+  final minute = date.minute.toString().padLeft(2, '0');
+  return '${formatShortDate(date)} · $hour:$minute';
+}

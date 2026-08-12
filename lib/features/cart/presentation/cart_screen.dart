@@ -176,10 +176,18 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                     GestureDetector(
                       key: const ValueKey('cart-clear'),
                       onTap: _confirmClearCart,
-                      child: const Icon(
-                        Icons.delete_outline,
-                        size: 18,
-                        color: CeltasColors.redLight,
+                      // Tap target más grande que el ícono visible (24 en vez
+                      // de los 18 originales): mismo tamaño ya usado por el
+                      // resto de íconos tocables del header (ej. campana del
+                      // Home, 20px) — 18 quedaba chico y difícil de acertar
+                      // para una acción destructiva.
+                      child: const Padding(
+                        padding: EdgeInsets.all(4),
+                        child: Icon(
+                          Icons.delete_outline,
+                          size: 24,
+                          color: CeltasColors.redLight,
+                        ),
                       ),
                     ),
                 ],
@@ -525,16 +533,33 @@ class _CouponSection extends StatelessWidget {
                     color: CeltasColors.textLabel,
                   ),
             ),
+            // Chip real (fondo + borde), no texto plano: el mockup no trae
+            // este control (no existe en `design-reference/`, el selector de
+            // cupón propio es una mejora post-cierre) y como texto suelto no
+            // comunicaba que era tocable — mismo criterio de "afordancia de
+            // tocable" ya aplicado en otros controles secundarios del
+            // carrito (ej. el botón "Aplicar").
             GestureDetector(
               key: const ValueKey('cart-coupon-picker'),
               onTap: onOpenPicker,
-              child: Text(
-                'VER MIS CUPONES',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: CeltasColors.orange,
-                    ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: CeltasColors.buttonSurface,
+                  border: Border.all(color: CeltasColors.orange),
+                  borderRadius: BorderRadius.circular(CeltasRadii.pill),
+                ),
+                child: Text(
+                  'VER MIS CUPONES',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: CeltasColors.orange,
+                      ),
+                ),
               ),
             ),
           ],

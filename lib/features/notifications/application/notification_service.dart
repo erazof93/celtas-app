@@ -6,6 +6,7 @@ import 'package:celtas_mobile/features/auth/application/auth_state.dart';
 import 'package:celtas_mobile/features/coupons/application/coupon_providers.dart';
 import 'package:celtas_mobile/features/notifications/application/notification_providers.dart';
 import 'package:celtas_mobile/features/notifications/application/notification_target.dart';
+import 'package:celtas_mobile/features/notifications/data/models/notification_history_item.dart';
 import 'package:celtas_mobile/features/orders/application/order_history_providers.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -21,8 +22,9 @@ const _androidChannel = AndroidNotificationChannel(
 
 /// Notificaciones push (FCM) + notificación local en foreground + su
 /// integración con el resto de la app: registra el `fcmToken`, invalida el
-/// provider correspondiente al recibir una notificación de pedido/cupón, y
-/// navega a la pantalla relevante al tocarla.
+/// provider correspondiente al recibir una notificación de pedido/cupón,
+/// navega a la pantalla relevante al tocarla, y guarda cada una en el
+/// historial local (`notificationHistoryProvider`, pantalla `/notifications`).
 ///
 /// Singleton igual que `ApiClient.instance` — necesita vivir fuera del árbol
 /// de widgets porque `getInitialMessage()` (la app arrancó porque el usuario
@@ -86,6 +88,7 @@ class NotificationService {
     FirebaseMessaging.onMessage.listen((message) {
       _invalidateFor(message.data);
       _showLocalNotification(message);
+      _saveToHistory(message);
     });
 
     // Background: la app ya corría, el usuario tocó la notificación y volvió
@@ -93,6 +96,7 @@ class NotificationService {
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
       _invalidateFor(message.data);
       _navigateFor(message.data);
+      _saveToHistory(message);
     });
 
     // Terminated: la app arrancó porque el usuario tocó la notificación. El
@@ -102,7 +106,33 @@ class NotificationService {
         await FirebaseMessaging.instance.getInitialMessage();
     if (initialMessage != null) {
       _navigateWhenAuthenticated(initialMessage.data);
+      _saveToHistory(initialMessage);
     }
+  }
+
+  /// Guarda la notificación en el historial local (`/notifications`), desde
+  /// los mismos 3 puntos donde ya se intercepta foreground/background/
+  /// terminated arriba. Si el payload no trae `notification` (no debería
+  /// pasar — el backend siempre manda título/cuerpo, ver
+  /// `orders.service.ts`/`coupons.service.ts` — pero no se asume), se arma un
+  /// texto genérico a partir de `NotificationTarget` en vez de perder el
+  /// registro o crashear con un `!` sobre un valor nulo.
+  void _saveToHistory(RemoteMessage message) {
+    final target = NotificationTarget.fromPayload(message.data);
+    if (target is NoneNotificationTarget) return;
+    final fallbackTitle = switch (target) {
+      OrderNotificationTarget() => 'Actualización de tu pedido',
+      CouponNotificationTarget() => 'Tenés un cupón nuevo',
+      NoneNotificationTarget() => 'Celtas',
+    };
+    _container.read(notificationHistoryProvider.notifier).add(
+          NotificationHistoryItem(
+            title: message.notification?.title ?? fallbackTitle,
+            body: message.notification?.body ?? '',
+            receivedAt: DateTime.now(),
+            data: message.data,
+          ),
+        );
   }
 
   Future<void> _registerToken() async {

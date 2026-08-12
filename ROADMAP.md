@@ -265,6 +265,65 @@ celtas-mobile/
       de "Pollo Broaster"; `external_url` → abrió `com.google.android.youtube/.UrlActivity`
       (confirmado por logcat); `none` → sin chevron, tap sin efecto. Sin `FATAL EXCEPTION` en
       logcat durante toda la sesión.
+- [x] **Mejora post-cierre: fix del ícono de ubicación + campana de notificaciones + barra
+      flotante de carrito** (`home_screen.dart`, más módulo nuevo `features/notifications/`).
+      Tres mejoras de UX, investigadas y verificadas antes de tocar código:
+      - **Ícono de ubicación distorsionado** ("alargamiento visual" reportado): investigación
+        primero confirmó que el pin NO es `Icon(Icons.xxx)` de Material ni SVG vía
+        `flutter_svg`/`CustomPainter` con aspect ratio mal configurado (la hipótesis inicial) —
+        es `SvgStrokeIcon` (`shared/widgets/svg_stroke_icon.dart`), un `CustomPaint` cuadrado con
+        escala uniforme X/Y, así que el contenedor no podía ser la causa. La causa real: el punto
+        interior del pin es un `<circle cx="12" cy="10" r="2.5">` en el SVG del mockup real
+        (`design-reference/Celtas App Mockups.dc.html:133`), convertido a mano a un path de arco
+        que arrancaba en (12,10) — el CENTRO del círculo, no un punto de su circunferencia — lo
+        que desplazaba el círculo resultante a estar centrado en (12,7.5), invadiendo la punta del
+        pin. Confirmado con `Path.getBounds()` antes/después del fix (`OLD: Rect.fromLTRB(9.5, 5.0,
+        14.5, 10.0)` → centro real (12,7.5); `NEW: Rect.fromLTRB(9.5, 7.5, 14.5, 12.5)` → centro
+        real (12,10), como el mockup). Test de regresión en `svg_path_test.dart`.
+      - **Campana de notificaciones**: nueva pantalla `/notifications` (sin mockup en
+        `design-reference/`, diseño nuevo consistente con el resto de la app) con historial local
+        de notificaciones recibidas. Nuevo módulo `features/notifications/data/models/
+        notification_history_item.dart` (freezed + json_serializable) +
+        `notification_history_repository.dart` (persistido con `shared_preferences` — justificado:
+        no es dato sensible como el `refreshToken`, que sigue en `flutter_secure_storage` sin
+        cambios) + `NotificationHistoryNotifier` (`AsyncNotifier`, en `notification_providers.dart`).
+        `NotificationService` (módulo 9) guarda cada notificación desde los mismos 3 puntos donde
+        ya intercepta foreground/background/terminated (`_saveToHistory`, nuevo). La campana del
+        Home navega a `/notifications`; cada ítem, al tocarlo, navega igual que la notificación
+        real vía `NotificationTarget.fromPayload` (sin duplicar esa clasificación). Estado vacío
+        explícito ("No tienes notificaciones todavía").
+      - **Barra flotante de carrito en Home** (`_CartSummaryBar`): visible solo con
+        `cartProvider.totalCount > 0`, vive en un `Stack` dentro del `Scaffold.body` del propio
+        Home (por eso queda encima del bottom nav del shell sin reemplazarlo). Muestra "N item(s)
+        · S/ total" + botón "VER CARRITO" que navega a `/cart`. Sin precedente en
+        `design-reference/` — diseño nuevo, consistente con la paleta/radios del resto de la app.
+      - **Bug real encontrado por `@tester`, corregido**: `NotificationHistoryNotifier.add()`
+        tenía una condición de carrera real — el fix inicial (esperar `future` antes de mutar)
+        solo cerraba "`add()` vs `build()` todavía en curso", no "`add()` vs `add()` en curso": dos
+        notificaciones casi simultáneas (ej. cambio de estado de pedido + cupón nuevo con pocos ms
+        de diferencia) podían pisarse y perder una. Corregido serializando las mutaciones sobre una
+        `Future` interna (`_mutationQueue`), que sigue avanzando aunque una mutación falle. Test de
+        regresión que reproduce la carrera exacta (fallaba con `Expected: <2>, Actual: <1>` antes
+        del fix). De paso se cerraron dos riesgos menores que `@tester` marcó como no bloqueantes:
+        `add()` ahora recorta la lista en memoria al mismo tope que lo persistido
+        (`NotificationHistoryRepository.maxItems`, antes privado), y se agregó cobertura para el
+        estado de error de `NotificationsScreen` y la transición 1→0 ítems de la barra del
+        carrito. Riesgos documentados sin corregir (no bloqueantes, sin evidencia de que ocurran
+        con el contrato actual del backend): `NotificationService._saveToHistory` descarta en
+        silencio cualquier notificación sin `orderId`/`couponCode` reconocible (asimetría con
+        `_showLocalNotification`, que sí la muestra en el sistema), y falta
+        `notification_service_test.dart` (gap preexistente al módulo 9).
+      262/262 tests, `flutter analyze` limpio. **Prueba real en dispositivo** (Xiaomi, Android 15,
+      capturas vía `adb`): pin de ubicación visualmente correcto (círculo normal, sin
+      distorsión); campana → pantalla "Notificaciones" con estado vacío correcto y back funcional;
+      agregar un producto → aparece la barra "1 item · S/ 15.50" + "VER CARRITO" encima del bottom
+      nav, sin reemplazarlo; tocar "VER CARRITO" navega a "Tu carrito" con el ítem real. Sin
+      `FATAL EXCEPTION` en logcat durante la sesión. Auditado por `@tester` en dos pasadas: la
+      primera encontró la condición de carrera de `add()`; la segunda, tras corregirla,
+      verificó de forma independiente (`flutter analyze`/`flutter test` propios + trazado manual
+      de la semántica síncrona del encadenado sobre `_mutationQueue`) que el fix cierra la carrera
+      de verdad, y confirmó veredicto final **LISTO** — detalle completo en
+      `docs/testing-checklist.md`, sección Notificaciones.
 
 ### 4. Producto + Carrito — ✅ COMPLETO
 - [x] Pantalla de detalle de producto (selector de cantidad, agregar al carrito)
@@ -337,6 +396,22 @@ celtas-mobile/
       checkout). Se agregaron 2 tests de regresión no cubiertos por el commit original (límite
       exacto del mínimo y reapertura del sheet tras cerrarlo sin elegir nada). 227/227 tests,
       `flutter analyze` limpio. Veredicto: LISTO
+- [x] **Mejora post-cierre: ajustes visuales en el carrito** (`cart_screen.dart`). Ícono de
+      papelera (vaciar carrito, `ValueKey('cart-clear')`) agrandado de `size: 18` a `size: 24` +
+      `Padding(4)` (tap target ~32dp) — era chico y difícil de acertar para una acción
+      destructiva; sigue siendo `GestureDetector` + `Icon`, no `IconButton` (confirmado de nuevo
+      con `grep -rn "IconButton(" lib`: 0 matches reales, mismo criterio ya verificado en la
+      mejora de "vaciar carrito"). "VER MIS CUPONES" pasó de `Text` plano a un chip real
+      (`Container` con `CeltasColors.buttonSurface` + `border: Border.all(color:
+      CeltasColors.orange)` + `CeltasRadii.pill`) — mismo `ValueKey('cart-coupon-picker')`, sin
+      cambiar el comportamiento. `CeltasColors.buttonSurface` no es un token nuevo: ya lo usa el
+      botón "Aplicar" del cupón en la misma pantalla, confirmado con `grep`. Ambos cambios
+      cubiertos por los tests ya existentes (mismos `ValueKey`, sin necesidad de tests nuevos).
+      262/262 tests, `flutter analyze` limpio. **Prueba real en dispositivo** (Xiaomi, Android 15):
+      papelera visiblemente más grande en la captura, chip "VER MIS CUPONES" con borde naranja
+      claramente tocable. Auditado por `@tester`: sin bugs, veredicto LISTO (parte de la misma
+      auditoría que la mejora de Home de arriba — ver `docs/testing-checklist.md`, sección
+      Carrito/Checkout, para el detalle completo).
 
 ### 5. Checkout — ✅ COMPLETO (5/5)
 - [x] Selector de dirección guardada (o agregar nueva): `GET /users/me/addresses` con
