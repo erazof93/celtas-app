@@ -232,6 +232,35 @@ celtas-mobile/
       `flutter analyze` limpio, test de integración en dispositivo real contra el backend real
       2/2 — flujo Home→detalle→carrito→cupón inválido. Fix de bug de clase: SnackBar que tapaba
       CTAs al navegar. Auditado por `@tester`: veredicto LISTO)
+- [x] **Mejora post-cierre: monto mínimo de compra en cupones** (`Coupon.minPurchaseAmount`,
+      deployado en el backend después de cerrar este módulo). `CouponRepository.validateCoupon`
+      manda el subtotal actual del carrito como número real en el body de
+      `POST /coupons/validate` (no string — el DTO del backend lo rechaza con 400 si no es
+      numérico); cuando el backend rechaza por no alcanzar el mínimo, el mensaje real
+      ("Este cupón requiere un pedido mínimo de S/X.XX") se propaga tal cual al campo del
+      cupón, sin mensaje genérico. **Bug real encontrado por `@tester`** en la auditoría de esta
+      mejora: el cupón ya aplicado no se re-validaba si el usuario bajaba cantidades después,
+      dejando un descuento de vista previa que el backend igual habría rechazado al confirmar —
+      corregido en `CartNotifier._clearCouponIfInvalid` (llamado desde `decrement`/`removeItem`):
+      si el subtotal cae por debajo del mínimo con el carrito todavía con ítems, quita el cupón
+      y avisa con un `SnackBar` (estilo `CeltasColors.surface`/`floating`, igual que el resto de
+      la app); si el carrito queda vacío, lo quita sin aviso (no hay ítems visibles para
+      asociarlo). Al corregir esto apareció una segunda variante del mismo problema: una
+      condición de carrera entre aplicar el cupón (`await` a `POST /coupons/validate`, que puede
+      tardar 30-50s si Render está frío) y una edición de cantidades mientras esa respuesta
+      todavía no llega — los steppers no se bloquean durante la espera. Cerrada haciendo que
+      `CartNotifier.applyCoupon` re-chequee el mínimo contra el subtotal ACTUAL (no el que
+      existía cuando arrancó la validación) antes de aceptar el cupón, devolviendo `false` si ya
+      no alcanza. Cubierto con un test de regresión que fuerza la carrera con un `Completer`
+      controlado a mano. Verificado en dispositivo real (Xiaomi) con un cupón real generado
+      desde el panel admin (mínimo de compra real S/80): rechazo con subtotal insuficiente sin
+      crashear, aceptación al alcanzar el mínimo, remoción automática con aviso al bajar
+      cantidades después de aplicado, cupones sin mínimo (o con `minPurchaseAmount: 0`, mismo
+      criterio que "sin mínimo" ya usado en `celtas-admin`) sin cambios de comportamiento.
+      215/215 tests, `flutter analyze` limpio. Auditado por `@tester` en dos pasadas (la primera
+      encontró el riesgo del cupón sin re-validar; la segunda, tras corregirlo, encontró la
+      condición de carrera y la inconsistencia de estilo del `SnackBar` — ambas corregidas antes
+      del veredicto final LISTO)
 
 ### 5. Checkout — ✅ COMPLETO (5/5)
 - [x] Selector de dirección guardada (o agregar nueva): `GET /users/me/addresses` con
@@ -328,6 +357,20 @@ celtas-mobile/
       limpio. Verificado en dispositivo real (Xiaomi): cupones reales del usuario, los 3
       estados comparados lado a lado se distinguen claramente, distinción de tipo de descuento
       visible, pull-to-refresh sin errores. Auditado por `@tester`: veredicto LISTO)
+- [x] **Mejora post-cierre: monto mínimo de compra en la tarjeta**. La decisión original de este
+      módulo (arriba) fue eliminar la línea "Pedido mínimo $X" del mockup porque el campo no
+      existía en la entidad `Coupon` real — ya no aplica: el backend deployó
+      `minPurchaseAmount` (decimal nullable) después de cerrar este módulo. La tarjeta ahora
+      muestra "Pedido mínimo: S/X.XX" (formato de moneda ya establecido en el resto de la app,
+      no el separador de miles del mockup) en la misma línea secundaria que la fecha, unida con
+      " · " — el mismo patrón visual que ya traía el mockup original para ese caso
+      (`design-reference`: "Pedido mínimo $15.000 · Válido hasta 20 ago 2026"). `0` se trata
+      igual que `null` ("sin mínimo", mismo criterio que `celtas-admin`) vía
+      `UserCoupon.hasMinPurchase`; los cupones sin mínimo siguen mostrando solo la fecha, sin
+      nada de más. Verificado en dispositivo real con un cupón real (mínimo S/80) generado desde
+      el panel admin. 215/215 tests, `flutter analyze` limpio. Auditado por `@tester`: veredicto
+      LISTO (parte de la misma mejora que también toca el módulo 4, ver esa nota para el detalle
+      completo de la re-validación en el carrito)
 
 ### 9. Notificaciones push — ✅ COMPLETO
 - [x] Configurar Firebase en la app (archivos de configuración del proyecto ya existente)
