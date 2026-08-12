@@ -79,6 +79,34 @@ solo cuando pasa lo aplicable de este checklist.
       para que la UI muestre el mismo mensaje que daría el backend, en vez de un descuento de
       vista previa inválido (hallazgo original del `tester`, cerrado con test de regresión con
       `Completer` simulando la carrera)
+- [x] **Vaciar carrito** (`cart_screen.dart`, commits `272a04e` + `a737e50`): ícono en el header
+      solo con ítems + diálogo de confirmación (CANCELAR/VACIAR, mismo patrón ya usado en
+      `profile_screen._confirmLogout` y `addresses_screen._confirmDelete`) + `clear()` resetea
+      ítems y cupón en un solo paso (`state = const CartState()`). `flutter analyze` limpio,
+      219/219 tests pasan, incluida la cobertura (carrito vacío sin ícono, apertura del diálogo,
+      CANCELAR no toca el carrito, VACIAR limpia ítems y cupón). Re-auditado: el fix en
+      `a737e50` cambió `IconButton` → `GestureDetector` + `Icon(delete_outline, size: 18,
+      color: CeltasColors.redLight)`, alineado byte a byte con `addresses_screen.dart:441-449`
+      (único otro ícono de borrado con confirmación del proyecto). Confirmado con `grep -rn
+      "IconButton(" lib`: no queda ningún `IconButton` de Material en `lib/` (los únicos
+      matches son widgets propios `_CircleIconButton` / `_CartIconButton`, sin relación). El
+      comentario del código ahora referencia correctamente `addresses_screen.dart` como
+      precedente, ya no la referencia inexacta a "Home/Mis Cupones". Sin bloqueadores.
+- [x] **Selector de cupón propio desde el carrito** (`coupon_picker_sheet.dart`, commit
+      `b911bb7`): filtra por `UserCoupon.effectiveStatus == active` (no `status` crudo) —
+      confirmado contra `CouponsService.findMyCoupons` (`../celtas-backend/src/modules/coupons/
+      coupons.service.ts`), que devuelve la entidad TypeORM cruda sin la corrección del cron
+      diario. Elegibilidad usa el mismo criterio que el resto de la app
+      (`!hasMinPurchase || subtotal >= minPurchaseAmount`, `0`/`null` tratados igual como "sin
+      mínimo"); boundary `subtotal == minPurchaseAmount` verificado con test nuevo (elegible, no
+      bloqueado). El sheet solo hace `Navigator.pop(coupon.code)` — la validación real sigue
+      pasando por `POST /coupons/validate` vía `_applyCoupon()`, sin duplicar esa llamada
+      (`verify(...).called(1)` en el test de "elegir un cupón elegible"). Sin `Color(0xFF...)`
+      sueltos, usa `CeltasColors`/`CeltasRadii.input`/`CeltasRadii.card` consistentes con el
+      resto de tarjetas de cupón y checkout. Se agregaron 2 tests de regresión que el commit no
+      cubría: boundary exacto del mínimo, y reapertura del sheet tras cerrarlo sin elegir nada
+      (no deja el picker en un estado roto). 227/227 tests, `flutter analyze` limpio. Sin
+      bloqueadores.
 
 ## Notificaciones
 

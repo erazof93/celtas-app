@@ -261,6 +261,38 @@ celtas-mobile/
       encontró el riesgo del cupón sin re-validar; la segunda, tras corregirlo, encontró la
       condición de carrera y la inconsistencia de estilo del `SnackBar` — ambas corregidas antes
       del veredicto final LISTO)
+- [x] **Mejora post-cierre: vaciar carrito.** Ícono de borrado en el header de la pantalla de
+      carrito ("Tu carrito"), visible solo con ítems, que pide confirmación (`AlertDialog`
+      CANCELAR/VACIAR) antes de llamar a `CartNotifier.clear()`, que resetea a
+      `const CartState()` limpiando ítems y cupón aplicado en un solo paso. **Hallazgo real de
+      `@tester`** en la primera auditoría: el ícono usaba `IconButton` de Material (el único de
+      todo `lib/`, introducía el ripple/tap target por defecto que rompe la estética plana sin
+      ripple del resto de la app) con color `CeltasColors.textMuted` para una acción destructiva
+      — inconsistente con el precedente ya establecido en `addresses_screen.dart` para el mismo
+      ícono (`Icons.delete_outline`) y semántica (borrar con confirmación previa), que usa
+      `GestureDetector` + `color: CeltasColors.redLight`, `size: 18`. También señaló que el
+      comentario del código describía mal el patrón que decía seguir. Corregido replicando
+      exactamente el widget de `addresses_screen.dart` y ajustando el comentario para referenciar
+      ese precedente real. 219/219 tests, `flutter analyze` limpio. Auditado por `@tester` en dos
+      pasadas (la primera encontró la desviación de patrón de UI; la segunda, tras corregirla,
+      confirmó veredicto final LISTO)
+- [x] **Mejora post-cierre: selector de cupón propio desde el carrito** (commit `b911bb7`).
+      Link "VER MIS CUPONES" junto al campo manual (solo visible sin cupón ya aplicado) que abre
+      `CouponPickerSheet` (`GET /coupons/me`, mismo provider que "Mis cupones"): lista solo
+      `effectiveStatus == active` (el campo derivado que corrige el desfase del cron diario, no
+      el `status` crudo), atenúa (opacidad 0.55) y bloquea el tap de los activos que no alcanzan
+      `minPurchaseAmount` contra el subtotal actual, con el monto exacto que falta; al elegir uno
+      elegible solo devuelve el `code` vía `Navigator.pop` — la validación real sigue pasando por
+      el mismo flujo de `POST /coupons/validate` ya existente para el input manual, sin
+      duplicarla en el sheet. Auditado por `@tester`: sin bugs — `effectiveStatus` correcto
+      (confirmado contra `findMyCoupons` en `coupons.service.ts`, que devuelve la entidad cruda
+      sin la corrección del cron), criterio de mínimo consistente con `hasMinPurchase`
+      (`0`/`null` igual a "sin mínimo"), boundary `subtotal >= minPurchaseAmount` (igual, no
+      menor) verificado con test nuevo, sin `Color(0xFF...)` sueltos (usa `CeltasColors`/
+      `CeltasRadii.input`/`CeltasRadii.card`, consistente con el resto de tarjetas de cupón y
+      checkout). Se agregaron 2 tests de regresión no cubiertos por el commit original (límite
+      exacto del mínimo y reapertura del sheet tras cerrarlo sin elegir nada). 227/227 tests,
+      `flutter analyze` limpio. Veredicto: LISTO
 
 ### 5. Checkout — ✅ COMPLETO (5/5)
 - [x] Selector de dirección guardada (o agregar nueva): `GET /users/me/addresses` con

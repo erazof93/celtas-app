@@ -539,6 +539,80 @@ void main() {
       );
       expect(find.text('REINTENTAR'), findsOneWidget);
     });
+
+    testWidgets(
+        'subtotal EXACTAMENTE igual al mínimo → elegible (no "menor que")',
+        (tester) async {
+      // burger.price == 15.5 y el carrito tiene 1 unidad → subtotal 15.5.
+      final exactMinCoupon = UserCoupon(
+        id: 'uc-4',
+        code: 'JUSTO15',
+        discountType: CouponDiscountType.percentage,
+        discountValue: 5,
+        status: CouponStatus.active,
+        expiresAt: DateTime.now().add(const Duration(days: 10)),
+        minPurchaseAmount: 15.5,
+      );
+      final repository = MockCouponRepository();
+      when(() => repository.getMyCoupons())
+          .thenAnswer((_) async => [exactMinCoupon]);
+      when(() => repository.validateCoupon('JUSTO15', subtotal: 15.5))
+          .thenAnswer(
+        (_) async => const ValidatedCoupon(
+          valid: true,
+          id: 'c-4',
+          code: 'JUSTO15',
+          discountType: CouponDiscountType.percentage,
+          discountValue: 5,
+          description: '5% de descuento',
+        ),
+      );
+
+      await pumpCart(tester, couponRepository: repository, items: [burger]);
+      await tester.tap(find.byKey(const ValueKey('cart-coupon-picker')));
+      await tester.pumpAndSettle();
+
+      // No debe mostrarse el aviso de "te faltan" — el cupón es tocable.
+      expect(find.textContaining('Te faltan'), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('coupon-picker-uc-4')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Mis cupones'), findsNothing); // sheet cerrado
+      expect(find.text('Cupón JUSTO15 aplicado'), findsOneWidget);
+      verify(() => repository.validateCoupon('JUSTO15', subtotal: 15.5))
+          .called(1);
+    });
+
+    testWidgets(
+        'cerrar el sheet sin elegir nada y reabrirlo → sigue funcionando '
+        '(no deja el picker en un estado roto)', (tester) async {
+      final repository = MockCouponRepository();
+      when(() => repository.getMyCoupons())
+          .thenAnswer((_) async => [activeCoupon]);
+
+      await pumpCart(tester, couponRepository: repository, items: [burger]);
+
+      // Primera apertura: se cierra con el gesto de swipe-down / back, sin
+      // tocar ningún cupón.
+      await tester.tap(find.byKey(const ValueKey('cart-coupon-picker')));
+      await tester.pumpAndSettle();
+      expect(find.text('Mis cupones'), findsOneWidget);
+
+      final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+      navigator.pop();
+      await tester.pumpAndSettle();
+      expect(find.text('Mis cupones'), findsNothing);
+      // No se aplicó ningún cupón ni quedó ningún residuo de error.
+      expect(find.text('Cupón VIKINGO10 aplicado'), findsNothing);
+      expect(find.byKey(const ValueKey('cart-coupon-picker')), findsOneWidget);
+
+      // Reapertura: el picker vuelve a listar el mismo cupón con normalidad.
+      await tester.tap(find.byKey(const ValueKey('cart-coupon-picker')));
+      await tester.pumpAndSettle();
+      expect(find.text('Mis cupones'), findsOneWidget);
+      expect(find.byKey(const ValueKey('coupon-picker-uc-1')), findsOneWidget);
+    });
   });
 
   group('vaciar carrito', () {
