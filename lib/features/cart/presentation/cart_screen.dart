@@ -143,8 +143,9 @@ class _CartScreenState extends ConsumerState<CartScreen> {
           children: [
             // Título (mockup: Cinzel 22px, padding 14/24/4). El mockup no
             // trae un ícono de "vaciar carrito" — se agregó siguiendo el
-            // mismo patrón ya usado en Home/Mis Cupones (ícono a la derecha
-            // del título), solo visible con ítems en el carrito.
+            // mismo patrón de ícono de borrado ya usado en
+            // addresses_screen.dart (GestureDetector + delete_outline en
+            // redLight), solo visible con ítems en el carrito.
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 14, 24, 4),
               child: Row(
@@ -161,14 +162,14 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                     ),
                   ),
                   if (cart.items.isNotEmpty)
-                    IconButton(
+                    GestureDetector(
                       key: const ValueKey('cart-clear'),
-                      onPressed: _confirmClearCart,
-                      icon: const Icon(
+                      onTap: _confirmClearCart,
+                      child: const Icon(
                         Icons.delete_outline,
-                        color: CeltasColors.textMuted,
+                        size: 18,
+                        color: CeltasColors.redLight,
                       ),
-                      tooltip: 'Vaciar carrito',
                     ),
                 ],
               ),
