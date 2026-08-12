@@ -3,6 +3,7 @@ import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
 import 'package:celtas_mobile/features/cart/data/models/cart_item.dart';
+import 'package:celtas_mobile/features/cart/presentation/widgets/coupon_picker_sheet.dart';
 import 'package:celtas_mobile/features/coupons/application/coupon_providers.dart';
 import 'package:celtas_mobile/features/coupons/data/models/validated_coupon.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
@@ -111,6 +112,16 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     }
   }
 
+  Future<void> _openCouponPicker() async {
+    final subtotal = ref.read(cartProvider).subtotal;
+    final code = await CouponPickerSheet.show(context, subtotal: subtotal);
+    if (code == null || !mounted) return;
+    // Reusa el mismo flujo de validación de `POST /coupons/validate` que ya
+    // existe para el campo de texto manual, en vez de duplicar esa lógica.
+    _couponController.text = code;
+    await _applyCoupon();
+  }
+
   @override
   Widget build(BuildContext context) {
     final cart = ref.watch(cartProvider);
@@ -194,6 +205,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                           onRemoveCoupon: () => ref
                               .read(cartProvider.notifier)
                               .removeCoupon(),
+                          onOpenPicker: _openCouponPicker,
                         ),
                       ],
                     ),
@@ -447,6 +459,7 @@ class _CouponSection extends StatelessWidget {
     required this.appliedCoupon,
     required this.onApply,
     required this.onRemoveCoupon,
+    required this.onOpenPicker,
   });
 
   final TextEditingController controller;
@@ -455,6 +468,7 @@ class _CouponSection extends StatelessWidget {
   final ValidatedCoupon? appliedCoupon;
   final VoidCallback onApply;
   final VoidCallback onRemoveCoupon;
+  final VoidCallback onOpenPicker;
 
   @override
   Widget build(BuildContext context) {
@@ -499,14 +513,31 @@ class _CouponSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'CUPÓN DE DESCUENTO',
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.5,
-                color: CeltasColors.textLabel,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'CUPÓN DE DESCUENTO',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                    color: CeltasColors.textLabel,
+                  ),
+            ),
+            GestureDetector(
+              key: const ValueKey('cart-coupon-picker'),
+              onTap: onOpenPicker,
+              child: Text(
+                'VER MIS CUPONES',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: CeltasColors.orange,
+                    ),
               ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         Row(

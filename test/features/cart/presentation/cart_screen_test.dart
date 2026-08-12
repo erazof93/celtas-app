@@ -6,6 +6,8 @@ import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
 import 'package:celtas_mobile/features/cart/presentation/cart_screen.dart';
 import 'package:celtas_mobile/features/coupons/application/coupon_providers.dart';
 import 'package:celtas_mobile/features/coupons/data/coupon_repository.dart';
+import 'package:celtas_mobile/features/coupons/data/models/coupon_status.dart';
+import 'package:celtas_mobile/features/coupons/data/models/user_coupon.dart';
 import 'package:celtas_mobile/features/coupons/data/models/validated_coupon.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
 import 'package:flutter/material.dart';
@@ -37,6 +39,32 @@ void main() {
     discountType: CouponDiscountType.percentage,
     discountValue: 10,
     description: '10% de descuento',
+  );
+
+  final activeCoupon = UserCoupon(
+    id: 'uc-1',
+    code: 'VIKINGO10',
+    discountType: CouponDiscountType.percentage,
+    discountValue: 10,
+    status: CouponStatus.active,
+    expiresAt: DateTime.now().add(const Duration(days: 10)),
+  );
+  final activeCouponWithHighMin = UserCoupon(
+    id: 'uc-2',
+    code: 'GRANDE50',
+    discountType: CouponDiscountType.fixedAmount,
+    discountValue: 15,
+    status: CouponStatus.active,
+    expiresAt: DateTime.now().add(const Duration(days: 10)),
+    minPurchaseAmount: 50,
+  );
+  final usedCoupon = UserCoupon(
+    id: 'uc-3',
+    code: 'YAUSADO',
+    discountType: CouponDiscountType.percentage,
+    discountValue: 20,
+    status: CouponStatus.used,
+    expiresAt: DateTime.now().add(const Duration(days: 10)),
   );
 
   setUpAll(() {
@@ -394,6 +422,122 @@ void main() {
         ),
         findsOneWidget,
       );
+    });
+  });
+
+  group('ver mis cupones (bottom sheet)', () {
+    testWidgets('cupón ya aplicado → no muestra el link del selector',
+        (tester) async {
+      final repository = MockCouponRepository();
+      when(() => repository.validateCoupon('VIKINGO10', subtotal: 15.5))
+          .thenAnswer((_) async => percentageCoupon);
+
+      await pumpCart(tester, couponRepository: repository, items: [burger]);
+      await tester.enterText(
+        find.byKey(const ValueKey('cart-coupon-input')),
+        'VIKINGO10',
+      );
+      await tester.tap(find.byKey(const ValueKey('cart-coupon-apply')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cupón VIKINGO10 aplicado'), findsOneWidget);
+      expect(find.byKey(const ValueKey('cart-coupon-picker')), findsNothing);
+    });
+
+    testWidgets(
+        'abre el sheet y lista solo cupones activos (usados/expirados '
+        'quedan afuera)', (tester) async {
+      final repository = MockCouponRepository();
+      when(() => repository.getMyCoupons())
+          .thenAnswer((_) async => [activeCoupon, usedCoupon]);
+
+      await pumpCart(tester, couponRepository: repository, items: [burger]);
+      await tester.tap(find.byKey(const ValueKey('cart-coupon-picker')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Mis cupones'), findsOneWidget);
+      expect(find.byKey(const ValueKey('coupon-picker-uc-1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('coupon-picker-uc-3')), findsNothing);
+    });
+
+    testWidgets(
+        'cupón activo que no alcanza el mínimo → se muestra pero no es '
+        'tocable, con el monto exacto que falta', (tester) async {
+      final repository = MockCouponRepository();
+      when(() => repository.getMyCoupons())
+          .thenAnswer((_) async => [activeCouponWithHighMin]);
+
+      await pumpCart(tester, couponRepository: repository, items: [burger]);
+      await tester.tap(find.byKey(const ValueKey('cart-coupon-picker')));
+      await tester.pumpAndSettle();
+
+      // Subtotal 15.50, mínimo 50 → faltan 34.50.
+      expect(
+        find.text('Te faltan S/34.50 para usar este cupón'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('coupon-picker-uc-2')));
+      await tester.pumpAndSettle();
+
+      // El sheet no se cerró (no era tocable) y el cupón no se aplicó.
+      expect(find.text('Mis cupones'), findsOneWidget);
+      expect(find.text('Cupón GRANDE50 aplicado'), findsNothing);
+    });
+
+    testWidgets(
+        'elegir un cupón elegible cierra el sheet y lo aplica reusando el '
+        'flujo real de validación', (tester) async {
+      final repository = MockCouponRepository();
+      when(() => repository.getMyCoupons())
+          .thenAnswer((_) async => [activeCoupon]);
+      when(() => repository.validateCoupon('VIKINGO10', subtotal: 15.5))
+          .thenAnswer((_) async => percentageCoupon);
+
+      await pumpCart(tester, couponRepository: repository, items: [burger]);
+      await tester.tap(find.byKey(const ValueKey('cart-coupon-picker')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('coupon-picker-uc-1')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Mis cupones'), findsNothing); // sheet cerrado
+      expect(find.text('Cupón VIKINGO10 aplicado'), findsOneWidget);
+      verify(() => repository.validateCoupon('VIKINGO10', subtotal: 15.5))
+          .called(1);
+    });
+
+    testWidgets('sin cupones activos → estado vacío', (tester) async {
+      final repository = MockCouponRepository();
+      when(() => repository.getMyCoupons())
+          .thenAnswer((_) async => [usedCoupon]);
+
+      await pumpCart(tester, couponRepository: repository, items: [burger]);
+      await tester.tap(find.byKey(const ValueKey('cart-coupon-picker')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('No tenés cupones activos para aplicar'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('error del backend → mensaje real y REINTENTAR',
+        (tester) async {
+      final repository = MockCouponRepository();
+      when(() => repository.getMyCoupons()).thenThrow(
+        const ApiException('No se pudo conectar con el servidor.'),
+      );
+
+      await pumpCart(tester, couponRepository: repository, items: [burger]);
+      await tester.tap(find.byKey(const ValueKey('cart-coupon-picker')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('No se pudo conectar con el servidor.'),
+        findsOneWidget,
+      );
+      expect(find.text('REINTENTAR'), findsOneWidget);
     });
   });
 
