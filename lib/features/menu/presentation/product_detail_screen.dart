@@ -65,7 +65,6 @@ class _ProductDetailBody extends ConsumerStatefulWidget {
 
 class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
   int _quantity = 1;
-  bool _liked = false;
 
   void _addToCart() {
     ref.read(cartProvider.notifier).addItem(widget.item, quantity: _quantity);
@@ -75,13 +74,20 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
         SnackBar(
           content: Text(
             'Agregado: ${widget.item.name} ×$_quantity',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: CeltasColors.cream,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: CeltasColors.cream),
           ),
           backgroundColor: CeltasColors.surface,
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
+          // El SnackBar persiste en el ScaffoldMessenger raíz: si el usuario
+          // vuelve al Home antes de que expire, puede quedar tapado por la
+          // barra flotante "VER CARRITO" que aparece ahí con el carrito no
+          // vacío (`_CartSummaryBar`, mismo margen de 88 ya usado en
+          // `home_screen.dart` para que esa barra no tape el último ítem del
+          // menú).
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 88),
           action: SnackBarAction(
             label: 'VER CARRITO',
             textColor: CeltasColors.gold,
@@ -102,150 +108,145 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
     final totalPrice = item.price * _quantity;
 
     return Scaffold(
-      body: Column(
-        children: [
-          // Hero 400px con gradiente y botones superpuestos.
-          SizedBox(
-            height: 400,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                _HeroImage(item: item),
-                // Gradiente vertical del CSS real del mockup.
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        CeltasColors.black.withValues(alpha: 0.5),
-                        Colors.transparent,
-                        CeltasColors.black.withValues(alpha: 0.95),
-                      ],
-                      stops: const [0, 0.3, 1],
-                    ),
-                  ),
-                ),
-                // Botones superiores: volver + favorito.
-                Positioned(
-                  top: 44,
-                  left: 20,
-                  right: 20,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _CircleIconButton(
-                        key: const ValueKey('detail-back'),
-                        onTap: () => context.pop(),
-                        child: const SvgStrokeIcon(
-                          path: 'M15 18l-6-6 6-6',
-                          size: 18,
-                          color: CeltasColors.cream,
-                          strokeWidth: 2.2,
-                        ),
-                      ),
-                      _CircleIconButton(
-                        key: const ValueKey('detail-favorite'),
-                        onTap: () => setState(() => _liked = !_liked),
-                        child: SvgStrokeIcon(
-                          path:
-                              'M12 21s-7-4.5-9.5-9C1 8 2.5 4.5 6 4'
-                              'c2-.3 3.7.7 4.5 2.2C11.3 4.7 13 3.7 15 4'
-                              'c3.5.5 5 4 3.5 8-2.5 4.5-9.5 9-9.5 9z',
-                          size: 18,
-                          color: _liked
-                              ? CeltasColors.redLight
-                              : CeltasColors.redLight,
-                          strokeWidth: 2.2,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Contenido scrollable.
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      // `top: false`: el hero de 400px es full-bleed a propósito (los
+      // botones superpuestos ya se posicionan a mano con `top: 44` para
+      // salvar el status bar). Solo el borde inferior necesita el inset del
+      // sistema — mismo criterio que `CeltasBottomNav`
+      // (`shared/widgets/celtas_bottom_nav.dart`): sin esto, la barra
+      // "AGREGAR AL CARRITO" queda tapada por la barra de navegación del
+      // sistema Android en dispositivos sin gesture nav.
+      body: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            // Hero 400px con gradiente y botones superpuestos.
+            SizedBox(
+              height: 400,
+              child: Stack(
+                fit: StackFit.expand,
                 children: [
-                  Text(
-                    item.name,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                          color: CeltasColors.cream,
-                        ),
-                  ),
-                  const SizedBox(height: 6),
-                  if (item.description != null &&
-                      item.description!.isNotEmpty) ...[
-                    Text(
-                      item.description!,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontSize: 14,
-                            height: 1.5,
-                            color: CeltasColors.textMuted,
-                          ),
+                  _HeroImage(item: item),
+                  // Gradiente vertical del CSS real del mockup.
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          CeltasColors.black.withValues(alpha: 0.5),
+                          Colors.transparent,
+                          CeltasColors.black.withValues(alpha: 0.95),
+                        ],
+                        stops: const [0, 0.3, 1],
+                      ),
                     ),
-                    const SizedBox(height: 14),
-                  ],
-                  Text(
-                    'S/ ${item.price.toStringAsFixed(2)}',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: CeltasColors.gold,
-                        ),
                   ),
-                  const SizedBox(height: 20),
-                  // Selector de cantidad (mockup: label CANTIDAD + stepper).
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'CANTIDAD',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.5,
-                              color: CeltasColors.textLabel,
-                            ),
+                  // Botón superior: volver. El corazón de favoritos del mockup
+                  // se quitó — no hay funcionalidad de favoritos en el alcance
+                  // actual del proyecto; se evalúa como función nueva más
+                  // adelante si hace falta.
+                  Positioned(
+                    top: 44,
+                    left: 20,
+                    child: _CircleIconButton(
+                      key: const ValueKey('detail-back'),
+                      onTap: () => context.pop(),
+                      child: const SvgStrokeIcon(
+                        path: 'M15 18l-6-6 6-6',
+                        size: 18,
+                        color: CeltasColors.cream,
+                        strokeWidth: 2.2,
                       ),
-                      _QuantityStepper(
-                        quantity: _quantity,
-                        onDecrement: () => setState(
-                          () => _quantity = _quantity > 1 ? _quantity - 1 : 1,
-                        ),
-                        onIncrement: () => setState(
-                          () => _quantity = _quantity < 99 ? _quantity + 1 : 99,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ],
               ),
             ),
-          ),
-          // Barra inferior fija con el botón de agregar.
-          Container(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
-            decoration: const BoxDecoration(
-              color: CeltasColors.black,
-              border: Border(top: BorderSide(color: CeltasColors.divider)),
+            // Contenido scrollable.
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.name,
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                            color: CeltasColors.cream,
+                          ),
+                    ),
+                    const SizedBox(height: 6),
+                    if (item.description != null &&
+                        item.description!.isNotEmpty) ...[
+                      Text(
+                        item.description!,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontSize: 14,
+                          height: 1.5,
+                          color: CeltasColors.textMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
+                    Text(
+                      'S/ ${item.price.toStringAsFixed(2)}',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: CeltasColors.gold,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    // Selector de cantidad (mockup: label CANTIDAD + stepper).
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'CANTIDAD',
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.5,
+                                color: CeltasColors.textLabel,
+                              ),
+                        ),
+                        _QuantityStepper(
+                          quantity: _quantity,
+                          onDecrement: () => setState(
+                            () => _quantity = _quantity > 1 ? _quantity - 1 : 1,
+                          ),
+                          onIncrement: () => setState(
+                            () =>
+                                _quantity = _quantity < 99 ? _quantity + 1 : 99,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ),
-            child: CeltasButton(
-              key: const ValueKey('detail-add'),
-              angled: true,
-              label:
-                  'AGREGAR AL CARRITO · S/ ${totalPrice.toStringAsFixed(2)}',
-              onPressed: _addToCart,
+            // Barra inferior fija con el botón de agregar.
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
+              decoration: const BoxDecoration(
+                color: CeltasColors.black,
+                border: Border(top: BorderSide(color: CeltasColors.divider)),
+              ),
+              child: CeltasButton(
+                key: const ValueKey('detail-add'),
+                angled: true,
+                label:
+                    'AGREGAR AL CARRITO · S/ ${totalPrice.toStringAsFixed(2)}',
+                onPressed: _addToCart,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -366,10 +367,10 @@ class _QuantityStepper extends StatelessWidget {
             '$quantity',
             key: const ValueKey('detail-qty-value'),
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: CeltasColors.cream,
-                ),
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: CeltasColors.cream,
+            ),
           ),
           const SizedBox(width: 18),
           GestureDetector(
@@ -450,14 +451,11 @@ class _DetailError extends StatelessWidget {
                   message,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: CeltasColors.textMuted,
-                      ),
+                    color: CeltasColors.textMuted,
+                  ),
                 ),
                 const SizedBox(height: 16),
-                CeltasButton(
-                  label: 'REINTENTAR',
-                  onPressed: onRetry,
-                ),
+                CeltasButton(label: 'REINTENTAR', onPressed: onRetry),
               ],
             ),
           ),
@@ -491,10 +489,7 @@ class _DetailNotFound extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 const SizedBox(height: 16),
-                CeltasButton(
-                  label: 'VOLVER',
-                  onPressed: () => context.pop(),
-                ),
+                CeltasButton(label: 'VOLVER', onPressed: () => context.pop()),
               ],
             ),
           ),

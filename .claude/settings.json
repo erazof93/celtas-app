@@ -2,6 +2,7 @@
   "permissions": {
     "allow": [
       "Read(*)",
+      "Edit(*)",
       "Grep(*)",
       "Glob(*)",
       "Bash(find *)",

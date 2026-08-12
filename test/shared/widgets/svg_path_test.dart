@@ -19,12 +19,14 @@ void main() {
       expect(() => parseSvgPath(flamePath), returnsNormally);
     });
 
-    test('parsea el path del logo de Google (comandos relativos c/h/v/a/z)',
-        () {
-      // Antes del fix esto lanzaba ArgumentError: "c", "h", "v", "a" y "z"
-      // no estaban soportados.
-      expect(() => parseSvgPath(googleBluePath), returnsNormally);
-    });
+    test(
+      'parsea el path del logo de Google (comandos relativos c/h/v/a/z)',
+      () {
+        // Antes del fix esto lanzaba ArgumentError: "c", "h", "v", "a" y "z"
+        // no estaban soportados.
+        expect(() => parseSvgPath(googleBluePath), returnsNormally);
+      },
+    );
 
     test('parsea los 4 paths del logo de Google', () {
       const paths = [
@@ -64,8 +66,7 @@ void main() {
       expect(() => parseSvgPath('M0 0 X10 10'), throwsArgumentError);
     });
 
-    test(
-        'regresión: el path del punto interior del pin de ubicación del Home '
+    test('regresión: el path del punto interior del pin de ubicación del Home '
         'queda centrado en (12,10) r=2.5, no desplazado', () {
       // El mockup real define ese punto como `<circle cx="12" cy="10"
       // r="2.5">` (SVG separado, no `path`). Convertido a mano a comandos de
@@ -74,16 +75,62 @@ void main() {
       // resultante ~2.5px hacia arriba (centro real en (12,7.5)) y se veía
       // como un alargamiento del ícono en `home_screen.dart`. El fix arranca
       // en (9.5,10), el punto izquierdo de la circunferencia real.
-      final buggy =
-          parseSvgPath('M12 10a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z');
+      final buggy = parseSvgPath('M12 10a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z');
       expect(
         buggy.getBounds(),
         isNot(const Rect.fromLTRB(9.5, 7.5, 14.5, 12.5)),
       );
 
-      final fixed =
-          parseSvgPath('M9.5 10a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0z');
+      final fixed = parseSvgPath(
+        'M9.5 10a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0z',
+      );
       expect(fixed.getBounds(), const Rect.fromLTRB(9.5, 7.5, 14.5, 12.5));
+    });
+
+    test('regresión: el comando S/s relativo no duplica el offset del primer '
+        'punto de control (bug real que causaba el "alargamiento" del pin y '
+        'la campana del Home)', () {
+      // `smoothCubicTo` calcula `c1` en coordenadas YA ABSOLUTAS (reflejo del
+      // último control cúbico, o el punto actual si no hay uno previo). El
+      // bug: delegaba el `relative` original del comando a `cubicTo`, que le
+      // volvía a sumar `x,y` a `c1` — duplicando el offset y estirando la
+      // curva muy por fuera del viewBox 24×24 del ícono. Con el bug, esta
+      // curva sola llegaba a `Rect.fromLTRB(12, 10, 24, 44)` (el punto de
+      // control fantasma en (24,44) en vez de (12,22)); el resultado
+      // correcto son los mismos bounds que la versión absoluta equivalente.
+      final smooth = parseSvgPath('M12 22s7-6.5 7-12');
+      final explicit = parseSvgPath('M12 22C12 22 19 15.5 19 10');
+      expect(smooth.getBounds(), explicit.getBounds());
+      expect(smooth.getBounds(), const Rect.fromLTRB(12, 10, 19, 22));
+    });
+
+    test('regresión: pin y campana del Home quedan dentro del viewBox 24×24 '
+        '(antes del fix de S/s se salían por más del doble)', () {
+      final pin = parseSvgPath(
+        'M12 22s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12z',
+      );
+      final pinBounds = pin.getBounds();
+      expect(pinBounds.left, greaterThanOrEqualTo(0));
+      expect(pinBounds.top, greaterThanOrEqualTo(0));
+      expect(pinBounds.right, lessThanOrEqualTo(24));
+      expect(pinBounds.bottom, lessThanOrEqualTo(24));
+
+      final bell = parseSvgPath(
+        'M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9'
+        'M13.7 21a2 2 0 0 1-3.4 0',
+      );
+      final bellBounds = bell.getBounds();
+      expect(bellBounds.left, greaterThanOrEqualTo(0));
+      expect(bellBounds.top, greaterThanOrEqualTo(0));
+      expect(bellBounds.right, lessThanOrEqualTo(24));
+      expect(bellBounds.bottom, lessThanOrEqualTo(24));
+    });
+
+    test('regresión: el comando T/t relativo (smooth quad) tiene el mismo '
+        'bug potencial que S/s — no debe duplicar el offset', () {
+      final smooth = parseSvgPath('M10 10q10 10 20 0t20 0');
+      final explicit = parseSvgPath('M10 10Q20 20 30 10Q40 0 50 10');
+      expect(smooth.getBounds(), explicit.getBounds());
     });
   });
 }

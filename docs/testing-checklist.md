@@ -407,6 +407,94 @@ solo cuando pasa lo aplicable de este checklist.
       (falla de tooling de shell a mitad de sesión, no relacionada con el código) — mitigada por
       la revisión de código detallada. **Veredicto final: LISTO PARA MARCAR COMPLETO.**
 
+- [x] **Auditoría independiente — 6 mejoras/fixes sin commitear (Home, Producto/Carrito,
+      Notificaciones): fix de raíz de `svg_path.dart` (S/s, T/t), corazón de favoritos quitado
+      del detalle, `SafeArea` en `product_detail_screen.dart`, `maxItems` 50→30, badge de no
+      leídas + `markAllRead()`, margen del `SnackBar` "Agregado"**. `flutter analyze` limpio
+      (verificado de forma independiente, salida cruda: `No issues found!`). `flutter test`
+      272/272 antes de agregar cobertura propia, 276/276 después (verificado con salida cruda,
+      no solo confiando en el reporte de la sesión principal).
+
+      ✅ **Pasó**:
+      - **`svg_path.dart` — `smoothCubicTo`/`smoothQuadTo`**: revisado línea por línea. `c1`/`cx`
+        se calculan en coordenadas YA absolutas (reflejo del último punto de control, o el punto
+        actual si no hay uno previo); si el comando es relativo, `c2`/`nx`/`ny` (o `nx`/`ny` en el
+        caso de `T`/`t`) se convierten a mano a absolutos ANTES de delegar en
+        `cubicTo`/`quadTo`, y esa delegación siempre usa `relative: false` — confirma que ya no
+        se duplica el offset (el bug real: delegar el `relative` original de vuelta a
+        `cubicTo`/`quadTo`, que le volvía a sumar `x,y` a un `c1` que ya los tenía).
+      - **Barrido propio de todo `lib/` buscando comandos `s`/`t`** (no confié en el barrido de
+        la sesión principal): confirmado con `grep` que los únicos paths reales de la app que
+        usan `S`/`s` son el pin y la campana de `home_screen.dart`, la campana de
+        `profile_screen.dart`, el ícono de WhatsApp de `checkout_screen.dart`, y el ícono
+        "Perfil" del bottom nav (`celtas_bottom_nav.dart`) — exactamente los 4 sitios que reporta
+        la sesión principal, ninguno más, ninguno menos. Ningún path real de la app usa `T`/`t`
+        (solo se ejercita en tests sintéticos). Calculé `getBounds()` de los 5 paths reales
+        afectados con la función real del proyecto (no una reimplementación mía) — los 5 caen
+        dentro de un viewBox 24×24 razonable: pin `Rect.fromLTRB(5.0, 3.0, 19.0, 22.0)`, punto del
+        pin `Rect.fromLTRB(9.5, 7.5, 14.5, 12.5)`, campana (Home) `Rect.fromLTRB(3.0, 2.0, 21.0,
+        22.0)`, campana (Perfil) `Rect.fromLTRB(3.0, 2.0, 21.0, 17.0)`, WhatsApp
+        `Rect.fromLTRB(1.8, 1.9, 22.5, 22.3)`, Perfil (bottom nav) `Rect.fromLTRB(4.0, 4.0, 20.0,
+        21.0)`.
+      - **Corazón de favoritos**: confirmado que `product_detail_screen.dart` ya no tiene
+        `_liked` ni un segundo `_CircleIconButton` — solo queda el de volver.
+      - **`SafeArea`**: auditoría propia (no la de la sesión principal) de TODOS los `Scaffold(` de
+        `lib/` — confirmado que `product_detail_screen.dart` es el único screen que le faltaba
+        (`body: SafeArea(top: false, ...)`, mismo criterio que `celtas_bottom_nav.dart`); el resto
+        ya lo tenía, incluido `splash_screen.dart` (que envuelve el `SafeArea` dentro de un
+        `Stack`, no como hijo directo de `body`, pero cumple la misma función).
+      - **`maxItems` 30**: confirmado en `notification_history_repository.dart` y su test.
+      - **Campo `read` sobre JSON viejo sin esa key**: confirmado en el `.g.dart` generado
+        (`read: json['read'] as bool? ?? false`) — no explota, cae en `false`. Sin test previo
+        para este caso exacto; agregado por mí (ver abajo).
+      - **Cola de mutaciones `add()`/`markAllRead()`**: revisado a mano — ambos métodos encolan
+        sobre el mismo `_mutationQueue` de forma síncrona (antes de cualquier `await`), así que el
+        orden de ejecución es estrictamente FIFO según el orden de llamada, y cada mutación
+        (incluido su `await save(...)` interno) termina por completo antes de que arranque la
+        siguiente. No hay ventana de carrera real entre `add()` y `markAllRead()`: en el peor caso
+        el resultado depende del orden de llamada (esperado), pero ninguna notificación se pierde
+        ni queda en un estado inconsistente. Sin test previo que ejercitara este caso
+        específicamente (los existentes solo cubren `add()` vs `add()`); agregado por mí.
+      - Badge de la campana: mismo patrón visual que el badge del carrito (`CeltasColors.orange`/
+        `CeltasColors.black`, mismas constraints/padding) — sin colores sueltos.
+      - Margen del `SnackBar` "Agregado" (`EdgeInsets.fromLTRB(16, 0, 16, 88)`) confirmado en
+        ambos sitios (`home_screen.dart` y `product_detail_screen.dart`), mismo valor de 88 ya
+        usado para el padding inferior del `ListView`/`_CartSummaryBar`.
+
+      ⚠️ **Cobertura que faltaba, agregada por mí** (regla 4: lógica crítica sin test propio):
+      - `test/features/notifications/data/models/notification_history_item_test.dart`: nuevo
+        caso que llama `fromJson()` sobre un `Map` SIN la key `read` (no `null`, ausente del
+        todo — la forma real de un JSON persistido antes de este cambio) y confirma `item.read ==
+        false`.
+      - `test/features/notifications/application/notification_history_provider_test.dart`: dos
+        casos nuevos — (1) `add()` y `markAllRead()` disparados sin `await` entre medio, con
+        `markAllRead()` encolado antes que el `add()` de una notificación nueva, confirmando que
+        ninguna se pierde y que el resultado final respeta el orden FIFO de la cola (la nueva
+        queda sin leer porque llegó DESPUÉS del marcado); (2) `markAllRead()` llamado dos veces
+        seguidas cuando ya todo está leído no reescribe `state` (mismo `List` en memoria,
+        `identical()`), confirmando el `return` temprano de `_markAllReadLocked` para evitar un
+        `save()` de más en cada apertura de la pantalla sin novedades.
+      - `test/core/router/app_router_test.dart`: caso de punta a punta con navegación REAL de
+        `go_router` (no un fake aislado) — historial persistido de antes con 2 no leídas, login,
+        badge visible con "2", tap en la campana, `pop()` con el botón real de volver
+        (`notifications-back`), y confirmación de que el badge ya no aparece al volver al Home.
+        Este caso no estaba cubierto: los tests existentes probaban el badge y el
+        `markAllRead()`-al-entrar por separado, con providers fake, pero no la cadena completa a
+        través del router real.
+
+      ⚠️ **Riesgos no cubiertos, no bloqueantes**:
+      - Sigue sin existir `notification_service_test.dart` (gap preexistente, documentado en
+        auditorías anteriores, no introducido por esta ronda).
+      - La fidelidad de diseño del badge de la campana (color/tamaño) se verificó por
+        comparación de código contra `_CartIconButton` (ya auditado en una ronda anterior), no
+        contra `design-reference/` directamente — no hay mockup de este badge en
+        `design-reference/` porque `NotificationsScreen` es una pantalla nueva sin precedente ahí
+        (documentado también en auditorías anteriores).
+
+      **Veredicto: LISTO PARA MARCAR COMPLETO.** Ningún bug real encontrado en esta ronda — las 6
+      mejoras se verificaron contra el código real (no contra la descripción de la sesión
+      principal) y quedaron con cobertura de test adicional donde faltaba.
+
 ---
 
 ## Reporte de auditoría (formato esperado del @tester)

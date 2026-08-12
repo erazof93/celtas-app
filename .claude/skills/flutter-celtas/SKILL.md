@@ -105,6 +105,18 @@ merge selectivo está intencionalmente diseñado y testeado para ese caso puntua
 `celtas-admin` ya sigue este patrón consistentemente (invalidate + refetch) en sus hooks de
 React Query — es el mismo patrón que hay que replicar acá con los providers de Riverpod.
 
+## Parser SVG propio (`lib/shared/widgets/svg_path.dart`) — verificar siempre en dispositivo real
+
+Este archivo ya causó 2 bugs de clase reales: el crash del Splash por comandos SVG no
+soportados (módulo 1) y, en una sesión posterior, un desfase geométrico en los comandos suaves
+`S`/`s`/`T`/`t` que mezclaba coordenadas absolutas y relativas (afectó 5 íconos a la vez: pin y
+campana del Home, campana de perfil, WhatsApp del checkout, y el ícono "Perfil" del bottom nav).
+Que compile y que los tests unitarios del parser pasen **no fue suficiente** para atrapar ese
+segundo bug — hacía falta comparar bounds/renderizado real.
+
+Cualquier cambio a este archivo, o cualquier ícono SVG custom nuevo que se agregue con él, debe
+verificarse **visualmente en dispositivo real** antes de darse por bueno.
+
 ## Checkout — regla de negocio no negociable
 
 - La app **nunca** calcula ni envía el total del pedido — lo calcula el backend a partir de

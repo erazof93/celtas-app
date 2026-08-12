@@ -118,9 +118,23 @@ Path parseSvgPath(String d) {
     double ny, {
     required bool relative,
   }) {
+    // c1 ya sale de acá en coordenadas ABSOLUTAS (reflejo del último control
+    // cúbico, o el punto actual si no hay uno previo). Si se delega el
+    // `relative` original a `cubicTo`, este le vuelve a sumar `x,y` a c1 —
+    // que ya los tiene — duplicando el offset y produciendo una curva
+    // completamente distinta a la del SVG original (bug real: ver
+    // `svg_path_test.dart`, curva de control duplicada). c2/nx/ny sí siguen
+    // siendo relativos según venían del comando, así que se resuelven a
+    // mano acá y se llama a `cubicTo` siempre en modo absoluto.
     final c1x = lastCubicControlX != null ? 2 * x! - lastCubicControlX! : x!;
     final c1y = lastCubicControlY != null ? 2 * y! - lastCubicControlY! : y!;
-    cubicTo(c1x, c1y, c2x, c2y, nx, ny, relative: relative);
+    if (relative) {
+      c2x += x ?? 0;
+      c2y += y ?? 0;
+      nx += x ?? 0;
+      ny += y ?? 0;
+    }
+    cubicTo(c1x, c1y, c2x, c2y, nx, ny, relative: false);
   }
 
   void quadTo(
@@ -146,9 +160,16 @@ Path parseSvgPath(String d) {
   }
 
   void smoothQuadTo(double nx, double ny, {required bool relative}) {
+    // Mismo bug que en `smoothCubicTo`: `cx`/`cy` ya son absolutos acá,
+    // así que `quadTo` no puede recibir el `relative` original sin volver a
+    // sumarles `x,y`.
     final cx = lastQuadControlX != null ? 2 * x! - lastQuadControlX! : x!;
     final cy = lastQuadControlY != null ? 2 * y! - lastQuadControlY! : y!;
-    quadTo(cx, cy, nx, ny, relative: relative);
+    if (relative) {
+      nx += x ?? 0;
+      ny += y ?? 0;
+    }
+    quadTo(cx, cy, nx, ny, relative: false);
   }
 
   void arcTo(
@@ -308,8 +329,16 @@ Path parseSvgPath(String d) {
               ny == null) {
             break;
           }
-          arcTo(rx, ry, rot, laf != 0, sf != 0, nx, ny,
-              relative: command == 'a');
+          arcTo(
+            rx,
+            ry,
+            rot,
+            laf != 0,
+            sf != 0,
+            nx,
+            ny,
+            relative: command == 'a',
+          );
         }
         break;
       case 'Z':

@@ -13,6 +13,7 @@ _NotificationHistoryItem _$NotificationHistoryItemFromJson(
   body: json['body'] as String,
   receivedAt: DateTime.parse(json['receivedAt'] as String),
   data: json['data'] as Map<String, dynamic>,
+  read: json['read'] as bool? ?? false,
 );
 
 Map<String, dynamic> _$NotificationHistoryItemToJson(
@@ -22,4 +23,5 @@ Map<String, dynamic> _$NotificationHistoryItemToJson(
   'body': instance.body,
   'receivedAt': instance.receivedAt.toIso8601String(),
   'data': instance.data,
+  'read': instance.read,
 };

@@ -14,7 +14,9 @@ void main() {
     });
 
     test('{ couponCode } → CouponNotificationTarget', () {
-      final target = NotificationTarget.fromPayload({'couponCode': 'BIENVENIDO10'});
+      final target = NotificationTarget.fromPayload({
+        'couponCode': 'BIENVENIDO10',
+      });
 
       expect(target, isA<CouponNotificationTarget>());
     });

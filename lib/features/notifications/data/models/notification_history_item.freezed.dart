@@ -15,7 +15,10 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$NotificationHistoryItem {
 
- String get title; String get body; DateTime get receivedAt; Map<String, dynamic> get data;
+ String get title; String get body; DateTime get receivedAt; Map<String, dynamic> get data;// `false` por defecto: cubre tanto notificaciones nuevas como el
+// historial ya persistido antes de este campo (`fromJson` sobre JSON
+// viejo sin `read` cae acá en vez de fallar).
+ bool get read;
 /// Create a copy of NotificationHistoryItem
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +31,16 @@ $NotificationHistoryItemCopyWith<NotificationHistoryItem> get copyWith => _$Noti
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is NotificationHistoryItem&&(identical(other.title, title) || other.title == title)&&(identical(other.body, body) || other.body == body)&&(identical(other.receivedAt, receivedAt) || other.receivedAt == receivedAt)&&const DeepCollectionEquality().equals(other.data, data));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is NotificationHistoryItem&&(identical(other.title, title) || other.title == title)&&(identical(other.body, body) || other.body == body)&&(identical(other.receivedAt, receivedAt) || other.receivedAt == receivedAt)&&const DeepCollectionEquality().equals(other.data, data)&&(identical(other.read, read) || other.read == read));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,title,body,receivedAt,const DeepCollectionEquality().hash(data));
+int get hashCode => Object.hash(runtimeType,title,body,receivedAt,const DeepCollectionEquality().hash(data),read);
 
 @override
 String toString() {
-  return 'NotificationHistoryItem(title: $title, body: $body, receivedAt: $receivedAt, data: $data)';
+  return 'NotificationHistoryItem(title: $title, body: $body, receivedAt: $receivedAt, data: $data, read: $read)';
 }
 
 
@@ -48,7 +51,7 @@ abstract mixin class $NotificationHistoryItemCopyWith<$Res>  {
   factory $NotificationHistoryItemCopyWith(NotificationHistoryItem value, $Res Function(NotificationHistoryItem) _then) = _$NotificationHistoryItemCopyWithImpl;
 @useResult
 $Res call({
- String title, String body, DateTime receivedAt, Map<String, dynamic> data
+ String title, String body, DateTime receivedAt, Map<String, dynamic> data, bool read
 });
 
 
@@ -65,13 +68,14 @@ class _$NotificationHistoryItemCopyWithImpl<$Res>
 
 /// Create a copy of NotificationHistoryItem
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? title = null,Object? body = null,Object? receivedAt = null,Object? data = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? title = null,Object? body = null,Object? receivedAt = null,Object? data = null,Object? read = null,}) {
   return _then(_self.copyWith(
 title: null == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
 as String,body: null == body ? _self.body : body // ignore: cast_nullable_to_non_nullable
 as String,receivedAt: null == receivedAt ? _self.receivedAt : receivedAt // ignore: cast_nullable_to_non_nullable
 as DateTime,data: null == data ? _self.data : data // ignore: cast_nullable_to_non_nullable
-as Map<String, dynamic>,
+as Map<String, dynamic>,read: null == read ? _self.read : read // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 
@@ -156,10 +160,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String title,  String body,  DateTime receivedAt,  Map<String, dynamic> data)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String title,  String body,  DateTime receivedAt,  Map<String, dynamic> data,  bool read)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _NotificationHistoryItem() when $default != null:
-return $default(_that.title,_that.body,_that.receivedAt,_that.data);case _:
+return $default(_that.title,_that.body,_that.receivedAt,_that.data,_that.read);case _:
   return orElse();
 
 }
@@ -177,10 +181,10 @@ return $default(_that.title,_that.body,_that.receivedAt,_that.data);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String title,  String body,  DateTime receivedAt,  Map<String, dynamic> data)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String title,  String body,  DateTime receivedAt,  Map<String, dynamic> data,  bool read)  $default,) {final _that = this;
 switch (_that) {
 case _NotificationHistoryItem():
-return $default(_that.title,_that.body,_that.receivedAt,_that.data);case _:
+return $default(_that.title,_that.body,_that.receivedAt,_that.data,_that.read);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -197,10 +201,10 @@ return $default(_that.title,_that.body,_that.receivedAt,_that.data);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String title,  String body,  DateTime receivedAt,  Map<String, dynamic> data)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String title,  String body,  DateTime receivedAt,  Map<String, dynamic> data,  bool read)?  $default,) {final _that = this;
 switch (_that) {
 case _NotificationHistoryItem() when $default != null:
-return $default(_that.title,_that.body,_that.receivedAt,_that.data);case _:
+return $default(_that.title,_that.body,_that.receivedAt,_that.data,_that.read);case _:
   return null;
 
 }
@@ -212,7 +216,7 @@ return $default(_that.title,_that.body,_that.receivedAt,_that.data);case _:
 @JsonSerializable()
 
 class _NotificationHistoryItem implements NotificationHistoryItem {
-  const _NotificationHistoryItem({required this.title, required this.body, required this.receivedAt, required final  Map<String, dynamic> data}): _data = data;
+  const _NotificationHistoryItem({required this.title, required this.body, required this.receivedAt, required final  Map<String, dynamic> data, this.read = false}): _data = data;
   factory _NotificationHistoryItem.fromJson(Map<String, dynamic> json) => _$NotificationHistoryItemFromJson(json);
 
 @override final  String title;
@@ -225,6 +229,10 @@ class _NotificationHistoryItem implements NotificationHistoryItem {
   return EqualUnmodifiableMapView(_data);
 }
 
+// `false` por defecto: cubre tanto notificaciones nuevas como el
+// historial ya persistido antes de este campo (`fromJson` sobre JSON
+// viejo sin `read` cae acá en vez de fallar).
+@override@JsonKey() final  bool read;
 
 /// Create a copy of NotificationHistoryItem
 /// with the given fields replaced by the non-null parameter values.
@@ -239,16 +247,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _NotificationHistoryItem&&(identical(other.title, title) || other.title == title)&&(identical(other.body, body) || other.body == body)&&(identical(other.receivedAt, receivedAt) || other.receivedAt == receivedAt)&&const DeepCollectionEquality().equals(other._data, _data));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _NotificationHistoryItem&&(identical(other.title, title) || other.title == title)&&(identical(other.body, body) || other.body == body)&&(identical(other.receivedAt, receivedAt) || other.receivedAt == receivedAt)&&const DeepCollectionEquality().equals(other._data, _data)&&(identical(other.read, read) || other.read == read));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,title,body,receivedAt,const DeepCollectionEquality().hash(_data));
+int get hashCode => Object.hash(runtimeType,title,body,receivedAt,const DeepCollectionEquality().hash(_data),read);
 
 @override
 String toString() {
-  return 'NotificationHistoryItem(title: $title, body: $body, receivedAt: $receivedAt, data: $data)';
+  return 'NotificationHistoryItem(title: $title, body: $body, receivedAt: $receivedAt, data: $data, read: $read)';
 }
 
 
@@ -259,7 +267,7 @@ abstract mixin class _$NotificationHistoryItemCopyWith<$Res> implements $Notific
   factory _$NotificationHistoryItemCopyWith(_NotificationHistoryItem value, $Res Function(_NotificationHistoryItem) _then) = __$NotificationHistoryItemCopyWithImpl;
 @override @useResult
 $Res call({
- String title, String body, DateTime receivedAt, Map<String, dynamic> data
+ String title, String body, DateTime receivedAt, Map<String, dynamic> data, bool read
 });
 
 
@@ -276,13 +284,14 @@ class __$NotificationHistoryItemCopyWithImpl<$Res>
 
 /// Create a copy of NotificationHistoryItem
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? title = null,Object? body = null,Object? receivedAt = null,Object? data = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? title = null,Object? body = null,Object? receivedAt = null,Object? data = null,Object? read = null,}) {
   return _then(_NotificationHistoryItem(
 title: null == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
 as String,body: null == body ? _self.body : body // ignore: cast_nullable_to_non_nullable
 as String,receivedAt: null == receivedAt ? _self.receivedAt : receivedAt // ignore: cast_nullable_to_non_nullable
 as DateTime,data: null == data ? _self._data : data // ignore: cast_nullable_to_non_nullable
-as Map<String, dynamic>,
+as Map<String, dynamic>,read: null == read ? _self.read : read // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 

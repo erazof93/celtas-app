@@ -24,10 +24,9 @@ void main() {
 
   group('updateFcmToken', () {
     test('éxito: PATCH /users/me/fcm-token con { fcmToken }', () async {
-      when(() => dio.patch<void>(
-            '/users/me/fcm-token',
-            data: any(named: 'data'),
-          )).thenAnswer(
+      when(
+        () => dio.patch<void>('/users/me/fcm-token', data: any(named: 'data')),
+      ).thenAnswer(
         (_) async => Response<void>(
           requestOptions: RequestOptions(path: '/users/me/fcm-token'),
         ),
@@ -44,10 +43,9 @@ void main() {
     });
 
     test('error del backend → ApiException con el mensaje real', () async {
-      when(() => dio.patch<void>(
-            '/users/me/fcm-token',
-            data: any(named: 'data'),
-          )).thenThrow(
+      when(
+        () => dio.patch<void>('/users/me/fcm-token', data: any(named: 'data')),
+      ).thenThrow(
         DioException(
           requestOptions: RequestOptions(path: '/users/me/fcm-token'),
           response: Response(
@@ -76,10 +74,9 @@ void main() {
     });
 
     test('error de red → ApiException de conexión', () async {
-      when(() => dio.patch<void>(
-            '/users/me/fcm-token',
-            data: any(named: 'data'),
-          )).thenThrow(
+      when(
+        () => dio.patch<void>('/users/me/fcm-token', data: any(named: 'data')),
+      ).thenThrow(
         DioException(
           requestOptions: RequestOptions(path: '/users/me/fcm-token'),
           type: DioExceptionType.connectionError,

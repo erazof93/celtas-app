@@ -5,11 +5,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   NotificationHistoryItem itemAt(int i) => NotificationHistoryItem(
-        title: 'Notificación $i',
-        body: 'Cuerpo $i',
-        receivedAt: DateTime.utc(2026).add(Duration(minutes: i)),
-        data: {'orderId': 'order-$i'},
-      );
+    title: 'Notificación $i',
+    body: 'Cuerpo $i',
+    receivedAt: DateTime.utc(2026).add(Duration(minutes: i)),
+    data: {'orderId': 'order-$i'},
+  );
 
   test('load() sin datos previos devuelve lista vacía', () async {
     SharedPreferences.setMockInitialValues({});
@@ -29,16 +29,16 @@ void main() {
     expect(loaded, items);
   });
 
-  test('save() recorta a los 50 ítems más recientes (los primeros de la '
+  test('save() recorta a los 30 ítems más recientes (los primeros de la '
       'lista, que ya vienen más-reciente-primero)', () async {
     SharedPreferences.setMockInitialValues({});
     final repository = NotificationHistoryRepository();
-    final items = [for (var i = 0; i < 60; i++) itemAt(i)];
+    final items = [for (var i = 0; i < 40; i++) itemAt(i)];
 
     await repository.save(items);
     final loaded = await repository.load();
 
-    expect(loaded, hasLength(50));
-    expect(loaded, items.take(50));
+    expect(loaded, hasLength(30));
+    expect(loaded, items.take(30));
   });
 }

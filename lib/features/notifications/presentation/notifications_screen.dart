@@ -19,11 +19,25 @@ import 'package:go_router/go_router.dart';
 /// la notificación real, vía `NotificationTarget.fromPayload` sobre el
 /// payload guardado (misma clasificación que usa `NotificationService`, sin
 /// duplicar esa lógica).
-class NotificationsScreen extends ConsumerWidget {
+class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<NotificationsScreen> createState() =>
+      _NotificationsScreenState();
+}
+
+class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Entrar a la pantalla marca todo como leído (el badge de la campana
+    // vuelve a 0) — no hace falta marcar ítem por ítem.
+    ref.read(notificationHistoryProvider.notifier).markAllRead();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final historyAsync = ref.watch(notificationHistoryProvider);
     final textTheme = Theme.of(context).textTheme;
 
@@ -105,8 +119,8 @@ class _NotificationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final tappable = NotificationTarget.fromPayload(item.data)
-        is! NoneNotificationTarget;
+    final tappable =
+        NotificationTarget.fromPayload(item.data) is! NoneNotificationTarget;
 
     return GestureDetector(
       onTap: tappable ? () => _handleTap(context) : null,
@@ -173,9 +187,9 @@ class _NotificationsError extends StatelessWidget {
           Text(
             'No se pudo cargar tu historial de notificaciones',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: CeltasColors.textMuted,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: CeltasColors.textMuted),
           ),
           const SizedBox(height: 12),
           TextButton(
@@ -214,9 +228,9 @@ class _EmptyNotifications extends StatelessWidget {
             Text(
               'Acá vas a ver los cupones y cambios de estado de tus pedidos.',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: CeltasColors.textMuted,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: CeltasColors.textMuted),
             ),
           ],
         ),

@@ -5,6 +5,7 @@ import 'package:celtas_mobile/features/home/application/home_providers.dart';
 import 'package:celtas_mobile/features/home/data/models/banner.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_category.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
+import 'package:celtas_mobile/features/notifications/application/notification_providers.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
 import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
 import 'package:celtas_mobile/shared/widgets/svg_stroke_icon.dart';
@@ -237,6 +238,7 @@ class _HomeHeader extends ConsumerWidget {
     final cartCount = ref.watch(
       cartProvider.select((state) => state.totalCount),
     );
+    final unreadCount = ref.watch(unreadNotificationCountProvider);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -290,19 +292,54 @@ class _HomeHeader extends ConsumerWidget {
           _CartIconButton(count: cartCount),
           const SizedBox(width: 16),
           // Campana: navega al historial local de notificaciones (módulo 9 +
-          // mejora post-cierre, `NotificationsScreen`).
+          // mejora post-cierre, `NotificationsScreen`). Badge con el conteo
+          // de no leídas, mismo patrón que el badge de unidades del carrito.
           GestureDetector(
             key: const ValueKey('home-notifications-bell'),
             onTap: () {
               ScaffoldMessenger.of(context).hideCurrentSnackBar();
               context.push('/notifications');
             },
-            child: const SvgStrokeIcon(
-              path:
-                  'M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9'
-                  'M13.7 21a2 2 0 0 1-3.4 0',
-              size: 20,
-              color: CeltasColors.cream,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const SvgStrokeIcon(
+                  path:
+                      'M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9'
+                      'M13.7 21a2 2 0 0 1-3.4 0',
+                  size: 20,
+                  color: CeltasColors.cream,
+                ),
+                if (unreadCount > 0)
+                  Positioned(
+                    right: -6,
+                    top: -6,
+                    child: Container(
+                      key: const ValueKey('home-notifications-badge'),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 1,
+                      ),
+                      decoration: const BoxDecoration(
+                        color: CeltasColors.orange,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        '$unreadCount',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          color: CeltasColors.black,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ],
@@ -790,6 +827,12 @@ class _ProductCard extends ConsumerWidget {
                       backgroundColor: CeltasColors.surface,
                       behavior: SnackBarBehavior.floating,
                       duration: const Duration(seconds: 2),
+                      // Este agregado deja el carrito no vacío, así que
+                      // `_CartSummaryBar` va a estar visible en este mismo
+                      // Home — sin este margen el SnackBar queda tapado por
+                      // esa barra. Mismo valor de 88 ya usado más arriba
+                      // (padding del `ListView`) para la misma barra.
+                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 88),
                     ),
                   );
               },

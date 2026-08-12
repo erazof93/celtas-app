@@ -23,11 +23,7 @@ void main() {
         description: 'Doble carne 100% angus, cheddar añejo y bacon.',
         price: 15.5,
       ),
-      PublicMenuItem(
-        id: 'i-2',
-        name: 'Sin foto',
-        price: 9.9,
-      ),
+      PublicMenuItem(id: 'i-2', name: 'Sin foto', price: 9.9),
     ],
   );
 
@@ -67,8 +63,9 @@ void main() {
     return container;
   }
 
-  testWidgets('muestra nombre, descripción y precio del producto',
-      (tester) async {
+  testWidgets('muestra nombre, descripción y precio del producto', (
+    tester,
+  ) async {
     await pumpDetail(tester);
 
     expect(find.text('Berserker Burger'), findsOneWidget);
@@ -79,15 +76,17 @@ void main() {
     expect(find.text('S/ 15.50'), findsOneWidget);
   });
 
-  testWidgets('producto inexistente → mensaje de no encontrado',
-      (tester) async {
+  testWidgets('producto inexistente → mensaje de no encontrado', (
+    tester,
+  ) async {
     await pumpDetail(tester, productId: 'i-999');
 
     expect(find.text('Producto no encontrado'), findsOneWidget);
   });
 
-  testWidgets('selector de cantidad: botones + y − con mínimo 1',
-      (tester) async {
+  testWidgets('selector de cantidad: botones + y − con mínimo 1', (
+    tester,
+  ) async {
     await pumpDetail(tester);
 
     expect(find.text('1'), findsOneWidget);
@@ -115,8 +114,9 @@ void main() {
     expect(find.text('1'), findsOneWidget);
   });
 
-  testWidgets('botón muestra el precio multiplicado por la cantidad',
-      (tester) async {
+  testWidgets('botón muestra el precio multiplicado por la cantidad', (
+    tester,
+  ) async {
     await pumpDetail(tester);
 
     // Cantidad 1 → 15.50.
@@ -130,32 +130,35 @@ void main() {
     expect(find.text('AGREGAR AL CARRITO · S/ 46.50'), findsOneWidget);
   });
 
-  testWidgets('agregar al carrito con cantidad seleccionada actualiza el provider',
-      (tester) async {
-    final container = await pumpDetail(tester);
+  testWidgets(
+    'agregar al carrito con cantidad seleccionada actualiza el provider',
+    (tester) async {
+      final container = await pumpDetail(tester);
 
-    await tester.tap(find.byKey(const ValueKey('detail-qty-plus')));
-    await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('detail-qty-plus')));
-    await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('detail-qty-plus')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('detail-qty-plus')));
+      await tester.pump();
 
-    await tester.tap(find.byKey(const ValueKey('detail-add')));
-    await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('detail-add')));
+      await tester.pump();
 
-    final state = container.read(cartProvider);
-    expect(state.items, hasLength(1));
-    expect(state.items.single.menuItemId, 'i-1');
-    expect(state.items.single.quantity, 3);
-    expect(state.items.single.unitPrice, 15.5);
-    expect(state.totalCount, 3);
+      final state = container.read(cartProvider);
+      expect(state.items, hasLength(1));
+      expect(state.items.single.menuItemId, 'i-1');
+      expect(state.items.single.quantity, 3);
+      expect(state.items.single.unitPrice, 15.5);
+      expect(state.totalCount, 3);
 
-    // SnackBar de confirmación con opción de ver el carrito.
-    expect(find.text('Agregado: Berserker Burger ×3'), findsOneWidget);
-    expect(find.text('VER CARRITO'), findsOneWidget);
-  });
+      // SnackBar de confirmación con opción de ver el carrito.
+      expect(find.text('Agregado: Berserker Burger ×3'), findsOneWidget);
+      expect(find.text('VER CARRITO'), findsOneWidget);
+    },
+  );
 
-  testWidgets('agregar el mismo producto desde el detalle suma cantidades',
-      (tester) async {
+  testWidgets('agregar el mismo producto desde el detalle suma cantidades', (
+    tester,
+  ) async {
     final container = await pumpDetail(tester);
 
     await tester.tap(find.byKey(const ValueKey('detail-add')));
@@ -166,8 +169,46 @@ void main() {
     expect(container.read(cartProvider).items.single.quantity, 2);
   });
 
-  testWidgets('estado de carga del menú → spinner con aviso de backend lento',
-      (tester) async {
+  testWidgets(
+    'no muestra el ícono de favoritos (fuera de alcance del proyecto)',
+    (tester) async {
+      await pumpDetail(tester);
+
+      expect(find.byKey(const ValueKey('detail-favorite')), findsNothing);
+      // El botón de volver sigue presente, sin el corazón al lado.
+      expect(find.byKey(const ValueKey('detail-back')), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'body envuelto en SafeArea(top: false) para que el CTA inferior no '
+    'quede tapado por la barra de navegación del sistema',
+    (tester) async {
+      await pumpDetail(tester);
+
+      final safeArea = tester.widget<SafeArea>(find.byType(SafeArea));
+      expect(safeArea.top, isFalse);
+      expect(safeArea.bottom, isTrue);
+    },
+  );
+
+  testWidgets(
+    'el SnackBar de "Agregado" tiene margen suficiente para no quedar '
+    'tapado por la barra flotante del carrito del Home',
+    (tester) async {
+      await pumpDetail(tester);
+
+      await tester.tap(find.byKey(const ValueKey('detail-add')));
+      await tester.pump();
+
+      final snackBar = tester.widget<SnackBar>(find.byType(SnackBar));
+      expect(snackBar.margin, const EdgeInsets.fromLTRB(16, 0, 16, 88));
+    },
+  );
+
+  testWidgets('estado de carga del menú → spinner con aviso de backend lento', (
+    tester,
+  ) async {
     final container = ProviderContainer(
       overrides: [
         publicMenuProvider.overrideWith((ref) => Future.any(const [])),

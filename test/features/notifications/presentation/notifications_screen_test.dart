@@ -42,9 +42,8 @@ void main() {
         ),
         GoRoute(
           path: '/coupons',
-          builder: (context, state) => const Scaffold(
-            body: Text('Mis cupones'),
-          ),
+          builder: (context, state) =>
+              const Scaffold(body: Text('Mis cupones')),
         ),
       ],
     );
@@ -111,9 +110,7 @@ void main() {
   });
 
   testWidgets('tocar una notificación de pedido → navega al detalle del '
-      'pedido real (mismo target que la notificación en vivo)', (
-    tester,
-  ) async {
+      'pedido real (mismo target que la notificación en vivo)', (tester) async {
     await tester.pumpWidget(buildApp([orderNotification]));
     await tester.pumpAndSettle();
 
@@ -134,6 +131,47 @@ void main() {
 
     expect(find.text('Mis cupones'), findsOneWidget);
   });
+
+  testWidgets(
+    'entrar a la pantalla marca todo el historial como leído (el badge '
+    'de la campana vuelve a 0)',
+    (tester) async {
+      final router = GoRouter(
+        initialLocation: '/notifications',
+        routes: [
+          GoRoute(
+            path: '/notifications',
+            builder: (context, state) => const NotificationsScreen(),
+          ),
+        ],
+      );
+      final container = ProviderContainer(
+        overrides: [
+          notificationHistoryProvider.overrideWith(
+            () => _FakeNotificationHistoryNotifier([
+              orderNotification,
+              couponNotification,
+            ]),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(container.read(unreadNotificationCountProvider), 0);
+      expect(
+        container.read(notificationHistoryProvider).requireValue,
+        everyElement(predicate<NotificationHistoryItem>((item) => item.read)),
+      );
+    },
+  );
 }
 
 /// Fake sin persistencia real: la lista se fija en el `build()`, sin tocar

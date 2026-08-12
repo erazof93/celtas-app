@@ -9,6 +9,8 @@ import 'package:celtas_mobile/features/home/application/home_providers.dart';
 import 'package:celtas_mobile/features/home/data/models/banner.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_category.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
+import 'package:celtas_mobile/features/notifications/data/models/notification_history_item.dart';
+import 'package:celtas_mobile/features/notifications/data/notification_history_repository.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_bottom_nav.dart';
 import 'package:flutter/material.dart' hide Banner;
 import 'package:flutter/services.dart';
@@ -379,6 +381,55 @@ void main() {
     expect(find.text('Notificaciones'), findsOneWidget);
     expect(find.text('No tienes notificaciones todavía'), findsOneWidget);
     expect(find.byType(CeltasBottomNav), findsNothing);
+  });
+
+  testWidgets(
+      'badge de no leídas de la campana: aparece con historial no leído, '
+      'entrar a Notificaciones lo marca todo como leído, y al volver al '
+      'Home (navegación real de go_router, no un fake) el badge ya no '
+      'aparece', (tester) async {
+    // Historial persistido de antes (2 no leídas, 1 ya leída) — mismo
+    // mecanismo real que usaría `NotificationService` en una sesión previa.
+    await NotificationHistoryRepository().save([
+      NotificationHistoryItem(
+        title: 'Pedido confirmado',
+        body: 'Tu pedido #A1B2 fue confirmado',
+        receivedAt: DateTime.utc(2026, 8, 12, 14, 32),
+        data: const {'orderId': 'order-1', 'status': 'confirmado'},
+      ),
+      NotificationHistoryItem(
+        title: 'Tenés un cupón nuevo',
+        body: 'Usa VIKINGO10 en tu próximo pedido',
+        receivedAt: DateTime.utc(2026, 8, 11, 9, 5),
+        data: const {'couponCode': 'VIKINGO10'},
+      ),
+      NotificationHistoryItem(
+        title: 'Pedido entregado',
+        body: 'Tu pedido #Z9Y8 fue entregado',
+        receivedAt: DateTime.utc(2026, 8, 10, 20),
+        data: const {'orderId': 'order-0', 'status': 'entregado'},
+        read: true,
+      ),
+    ]);
+
+    final repository = MockAuthRepository();
+    await login(tester, repository);
+
+    expect(find.byKey(const ValueKey('home-notifications-badge')), findsOneWidget);
+    expect(find.text('2'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('home-notifications-bell')));
+    await tester.pumpAndSettle();
+    expect(find.text('Notificaciones'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('notifications-back')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Entregar en'), findsOneWidget); // de vuelta en Home
+    expect(
+      find.byKey(const ValueKey('home-notifications-badge')),
+      findsNothing,
+    );
   });
 
   testWidgets(

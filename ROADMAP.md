@@ -324,6 +324,23 @@ celtas-mobile/
       de la semántica síncrona del encadenado sobre `_mutationQueue`) que el fix cierra la carrera
       de verdad, y confirmó veredicto final **LISTO** — detalle completo en
       `docs/testing-checklist.md`, sección Notificaciones.
+- [x] **Mejora post-cierre: fix de RAÍZ del ícono de ubicación + campana (el fix anterior solo
+      había corregido el punto interior del pin, no la causa real).** El "alargamiento" seguía
+      visible tras el fix del punto del pin porque la causa real estaba en el parser compartido
+      `svg_path.dart`, no en un path individual: `smoothCubicTo`/`smoothQuadTo` (comandos SVG
+      `S`/`s` y `T`/`t`) calculaban el primer punto de control en coordenadas YA absolutas, pero
+      delegaban en `cubicTo`/`quadTo` con el `relative` original del comando — que le volvía a
+      sumar `x,y`, duplicando el offset. Bug de clase real (un solo parser compartido, un solo
+      fix): afectaba cualquier ícono con `s`/`t` relativo — el pin y la campana de
+      `home_screen.dart`, la campana de `profile_screen.dart`, el ícono de WhatsApp de
+      `checkout_screen.dart`, y el ícono "Perfil" del bottom nav (`celtas_bottom_nav.dart`).
+      Verificado con `Path.getBounds()` antes/después (bounds pasaban de salirse hasta el doble
+      del viewBox 24×24 a quedar dentro) y visualmente en dispositivo real (Xiaomi): pin y
+      campana se ven como íconos normales. Auditado por `@tester` de forma independiente
+      (revisión línea por línea de la lógica corregida + barrido propio de todo `lib/` para
+      confirmar que ningún otro ícono usa `s`/`t`) — sin bugs, veredicto LISTO. Detalle completo
+      en `docs/testing-checklist.md`, sección Notificaciones (auditoría conjunta con las mejoras
+      de Producto/Carrito y Notificaciones de esta misma ronda).
 
 ### 4. Producto + Carrito — ✅ COMPLETO
 - [x] Pantalla de detalle de producto (selector de cantidad, agregar al carrito)
@@ -412,6 +429,18 @@ celtas-mobile/
       claramente tocable. Auditado por `@tester`: sin bugs, veredicto LISTO (parte de la misma
       auditoría que la mejora de Home de arriba — ver `docs/testing-checklist.md`, sección
       Carrito/Checkout, para el detalle completo).
+- [x] **Mejora post-cierre: 3 ajustes en el detalle de producto** (`product_detail_screen.dart`).
+      (1) Se quitó el ícono de favoritos (corazón) — no hay funcionalidad de favoritos en el
+      alcance del proyecto; solo queda el botón de volver. (2) `SafeArea`: auditoría de TODOS los
+      `Scaffold(` del proyecto encontró que esta era la única pantalla sin envolver su `body` en
+      `SafeArea` — corregido con `SafeArea(top: false, child: ...)` (mismo criterio que
+      `celtas_bottom_nav.dart`: `top: false` porque el hero de 400px es full-bleed a propósito);
+      sin este fix, el botón "AGREGAR AL CARRITO" quedaba tapado por la barra de navegación del
+      sistema en dispositivos sin gesture nav. (3) El `SnackBar` "Agregado" (acá y en el "+"
+      rápido del Home) ahora lleva `margin: EdgeInsets.fromLTRB(16, 0, 16, 88)` para no quedar
+      tapado por `_CartSummaryBar` cuando el carrito ya tiene ítems. Auditado por `@tester`: sin
+      bugs, veredicto LISTO — detalle completo en `docs/testing-checklist.md`, sección
+      Notificaciones (auditoría conjunta de esta ronda).
 
 ### 5. Checkout — ✅ COMPLETO (5/5)
 - [x] Selector de dirección guardada (o agregar nueva): `GET /users/me/addresses` con
@@ -553,6 +582,24 @@ celtas-mobile/
       ruteo/invalidación (`_invalidateFor`/`_navigateFor`) no tiene cobertura automatizada, solo
       la prueba manual en dispositivo real; configuración de iOS todavía pendiente, fuera de
       alcance del módulo 10 que solo pide APK de Android)
+- [x] **Mejora post-cierre: badge de no leídas + marcar leídas al entrar, `maxItems` 50→30.**
+      Se agregó el campo `read` (bool, `@Default(false)`) a `NotificationHistoryItem` (freezed,
+      regenerado), un provider derivado `unreadNotificationCountProvider`, un método
+      `markAllRead()` en `NotificationHistoryNotifier` (misma cola de mutaciones que `add()`, para
+      no pisarse con un push concurrente), badge en la campana del Home (mismo patrón visual que
+      el badge del carrito) y `NotificationsScreen` llama `markAllRead()` en `initState`.
+      `NotificationHistoryRepository.maxItems` bajó de 50 a 30. Verificado end-to-end en
+      dispositivo real: badge mostraba "2", al entrar a Notificaciones y volver al Home el badge
+      ya no aparece. Auditado por `@tester` de forma independiente: confirmó que `fromJson()`
+      sobre JSON persistido ANTES de este cambio (sin la key `read`) no explota y cae en `false`
+      por defecto (agregó test propio para este caso, no cubierto); confirmó que `add()` y
+      `markAllRead()` comparten `_mutationQueue` de forma estrictamente FIFO (sin `await` entre la
+      reasignación de la cola y el encolado del callback), así que no hay ventana de carrera real
+      entre ambos — agregó 2 tests propios (carrera `add()`/`markAllRead()`, y que
+      `markAllRead()` no reescribe `state` si ya todo está leído) y un test de punta a punta con
+      navegación real de `go_router` (no un fake) confirmando el ciclo completo
+      badge→campana→`markAllRead()`→vuelta al Home sin badge. Sin bugs encontrados, veredicto
+      LISTO — detalle completo en `docs/testing-checklist.md`, sección Notificaciones.
 
 ### 10. Deploy y Calidad
 - [x] Pase de auditoría general: estados de carga/error en todas las pantallas, sin datos

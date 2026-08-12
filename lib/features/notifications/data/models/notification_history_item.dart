@@ -17,6 +17,10 @@ abstract class NotificationHistoryItem with _$NotificationHistoryItem {
     required String body,
     required DateTime receivedAt,
     required Map<String, dynamic> data,
+    // `false` por defecto: cubre tanto notificaciones nuevas como el
+    // historial ya persistido antes de este campo (`fromJson` sobre JSON
+    // viejo sin `read` cae acá en vez de fallar).
+    @Default(false) bool read,
   }) = _NotificationHistoryItem;
 
   factory NotificationHistoryItem.fromJson(Map<String, dynamic> json) =>

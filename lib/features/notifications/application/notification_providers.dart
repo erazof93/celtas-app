@@ -12,8 +12,8 @@ final notificationRepositoryProvider = Provider<NotificationRepository>(
 /// Historial local de notificaciones recibidas (`shared_preferences`).
 final notificationHistoryRepositoryProvider =
     Provider<NotificationHistoryRepository>(
-  (ref) => NotificationHistoryRepository(),
-);
+      (ref) => NotificationHistoryRepository(),
+    );
 
 /// Lista de notificaciones recibidas, más reciente primero. `NotificationService`
 /// (fuera del árbol de widgets) llama a `add()` desde los mismos 3 puntos donde
@@ -61,9 +61,38 @@ class NotificationHistoryNotifier
     state = AsyncData(updated);
     await ref.read(notificationHistoryRepositoryProvider).save(updated);
   }
+
+  /// Marca todo el historial como leído (contador de la campana → 0). Usa la
+  /// misma cola de mutaciones que `add()`: si llega un push mientras se abre
+  /// la pantalla de notificaciones, las dos mutaciones se serializan en vez
+  /// de pisarse.
+  Future<void> markAllRead() {
+    final scheduled = _mutationQueue.then((_) => _markAllReadLocked());
+    _mutationQueue = scheduled.catchError((_) {});
+    return scheduled;
+  }
+
+  Future<void> _markAllReadLocked() async {
+    final current = await future;
+    if (current.every((item) => item.read)) return;
+    final updated = [for (final item in current) item.copyWith(read: true)];
+    state = AsyncData(updated);
+    await ref.read(notificationHistoryRepositoryProvider).save(updated);
+  }
 }
 
-final notificationHistoryProvider = AsyncNotifierProvider<
-    NotificationHistoryNotifier, List<NotificationHistoryItem>>(
-  NotificationHistoryNotifier.new,
-);
+final notificationHistoryProvider =
+    AsyncNotifierProvider<
+      NotificationHistoryNotifier,
+      List<NotificationHistoryItem>
+    >(NotificationHistoryNotifier.new);
+
+/// Cantidad de notificaciones no leídas, para el badge de la campana del
+/// Home (mismo patrón que el badge de unidades del carrito). `0` mientras
+/// carga o si falla — el badge simplemente no se muestra, no hay un estado
+/// de error visible para esto.
+final unreadNotificationCountProvider = Provider<int>((ref) {
+  final history = ref.watch(notificationHistoryProvider).valueOrNull;
+  if (history == null) return 0;
+  return history.where((item) => !item.read).length;
+});

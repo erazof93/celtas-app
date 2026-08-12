@@ -7,6 +7,8 @@ import 'package:celtas_mobile/features/home/data/models/banner.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_category.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
 import 'package:celtas_mobile/features/home/presentation/home_screen.dart';
+import 'package:celtas_mobile/features/notifications/application/notification_providers.dart';
+import 'package:celtas_mobile/features/notifications/data/models/notification_history_item.dart';
 import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
 import 'package:flutter/material.dart' hide Banner;
 import 'package:flutter/services.dart' show PlatformException;
@@ -82,11 +84,16 @@ void main() {
     WidgetTester tester, {
     List<Banner> banners = const [],
     List<PublicMenuCategory> menu = const [],
+    List<NotificationHistoryItem>? notifications,
   }) async {
     final container = ProviderContainer(
       overrides: [
         activeBannersProvider.overrideWith((ref) async => banners),
         publicMenuProvider.overrideWith((ref) async => menu),
+        if (notifications != null)
+          notificationHistoryProvider.overrideWith(
+            () => _FakeNotificationHistoryNotifier(notifications),
+          ),
       ],
     );
     addTearDown(container.dispose);
@@ -161,6 +168,20 @@ void main() {
     expect(state.totalCount, 1);
   });
 
+  testWidgets(
+    'el SnackBar de "Agregado" desde el "+" rápido tiene margen para no '
+    'quedar tapado por la barra flotante del carrito',
+    (tester) async {
+      await pumpHome(tester, menu: [category]);
+
+      await tester.tap(find.byKey(const ValueKey('add-i-1')));
+      await tester.pump();
+
+      final snackBar = tester.widget<SnackBar>(find.byType(SnackBar));
+      expect(snackBar.margin, const EdgeInsets.fromLTRB(16, 0, 16, 88));
+    },
+  );
+
   testWidgets('el badge del carrito refleja la cantidad de unidades', (
     tester,
   ) async {
@@ -184,6 +205,50 @@ void main() {
     await tester.pump();
     expect(find.text('3'), findsOneWidget);
   });
+
+  NotificationHistoryItem notificationAt(int i, {bool read = false}) =>
+      NotificationHistoryItem(
+        title: 'Notificación $i',
+        body: 'Cuerpo $i',
+        receivedAt: DateTime.utc(2026, 8, 12).add(Duration(minutes: i)),
+        data: {'orderId': 'order-$i'},
+        read: read,
+      );
+
+  testWidgets('el badge de la campana refleja la cantidad de notificaciones no '
+      'leídas (mismo patrón que el badge del carrito)', (tester) async {
+    await pumpHome(
+      tester,
+      menu: [category],
+      notifications: [
+        notificationAt(0),
+        notificationAt(1),
+        notificationAt(2, read: true),
+      ],
+    );
+
+    expect(
+      find.byKey(const ValueKey('home-notifications-badge')),
+      findsOneWidget,
+    );
+    expect(find.text('2'), findsOneWidget);
+  });
+
+  testWidgets(
+    'sin notificaciones no leídas (o sin historial) → campana sin badge',
+    (tester) async {
+      await pumpHome(
+        tester,
+        menu: [category],
+        notifications: [notificationAt(0, read: true)],
+      );
+
+      expect(
+        find.byKey(const ValueKey('home-notifications-badge')),
+        findsNothing,
+      );
+    },
+  );
 
   testWidgets('chips de categorías: filtrar por categoría', (tester) async {
     const chicken = PublicMenuCategory(
@@ -620,4 +685,16 @@ void main() {
       },
     );
   });
+}
+
+/// Fake sin persistencia real, mismo criterio que
+/// `notifications_screen_test.dart`: la lista se fija en el `build()`, sin
+/// tocar `shared_preferences`.
+class _FakeNotificationHistoryNotifier extends NotificationHistoryNotifier {
+  _FakeNotificationHistoryNotifier(this._items);
+
+  final List<NotificationHistoryItem> _items;
+
+  @override
+  Future<List<NotificationHistoryItem>> build() async => _items;
 }

@@ -14,7 +14,7 @@ class NotificationHistoryRepository {
 
   /// Público: `NotificationHistoryNotifier.add()` también lo usa para
   /// recortar la lista en memoria, no solo lo persistido acá.
-  static const maxItems = 50;
+  static const maxItems = 30;
 
   Future<List<NotificationHistoryItem>> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -31,9 +31,8 @@ class NotificationHistoryRepository {
   Future<void> save(List<NotificationHistoryItem> items) async {
     final prefs = await SharedPreferences.getInstance();
     final capped = items.take(maxItems).toList();
-    await prefs.setStringList(
-      _key,
-      [for (final item in capped) jsonEncode(item.toJson())],
-    );
+    await prefs.setStringList(_key, [
+      for (final item in capped) jsonEncode(item.toJson()),
+    ]);
   }
 }

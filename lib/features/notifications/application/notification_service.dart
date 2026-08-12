@@ -51,7 +51,8 @@ class NotificationService {
 
     await _localNotifications
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(_androidChannel);
 
     await _localNotifications.initialize(
@@ -102,8 +103,7 @@ class NotificationService {
     // Terminated: la app arrancó porque el usuario tocó la notificación. El
     // bootstrap de sesión puede seguir en curso, así que la navegación
     // espera a que quede autenticada.
-    final initialMessage =
-        await FirebaseMessaging.instance.getInitialMessage();
+    final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
     if (initialMessage != null) {
       _navigateWhenAuthenticated(initialMessage.data);
       _saveToHistory(initialMessage);
@@ -125,7 +125,9 @@ class NotificationService {
       CouponNotificationTarget() => 'Tenés un cupón nuevo',
       NoneNotificationTarget() => 'Celtas',
     };
-    _container.read(notificationHistoryProvider.notifier).add(
+    _container
+        .read(notificationHistoryProvider.notifier)
+        .add(
           NotificationHistoryItem(
             title: message.notification?.title ?? fallbackTitle,
             body: message.notification?.body ?? '',
@@ -211,10 +213,7 @@ class NotificationService {
       return;
     }
     late final ProviderSubscription<AuthState> subscription;
-    subscription = _container.listen(authControllerProvider, (
-      previous,
-      next,
-    ) {
+    subscription = _container.listen(authControllerProvider, (previous, next) {
       if (next.status == AuthStatus.authenticated) {
         _navigateFor(data);
         subscription.close();
