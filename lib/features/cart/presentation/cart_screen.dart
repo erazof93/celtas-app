@@ -36,6 +36,35 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     super.dispose();
   }
 
+  Future<void> _confirmClearCart() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: CeltasColors.card,
+        title: const Text('¿Vaciar el carrito?'),
+        content: const Text(
+          'Se van a quitar todos los ítems y el cupón aplicado, si '
+          'corresponde. Esta acción no se puede deshacer.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => context.pop(false),
+            child: const Text('CANCELAR'),
+          ),
+          TextButton(
+            onPressed: () => context.pop(true),
+            style: TextButton.styleFrom(foregroundColor: CeltasColors.redLight),
+            child: const Text('VACIAR'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    // `clear()` resetea a `const CartState()`: limpia ítems y cupón en un
+    // solo paso, no hace falta invocar nada aparte para el cupón.
+    ref.read(cartProvider.notifier).clear();
+  }
+
   Future<void> _applyCoupon() async {
     final code = _couponController.text.trim();
     if (code.isEmpty) {
@@ -112,16 +141,36 @@ class _CartScreenState extends ConsumerState<CartScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Título (mockup: Cinzel 22px, padding 14/24/4).
+            // Título (mockup: Cinzel 22px, padding 14/24/4). El mockup no
+            // trae un ícono de "vaciar carrito" — se agregó siguiendo el
+            // mismo patrón ya usado en Home/Mis Cupones (ícono a la derecha
+            // del título), solo visible con ítems en el carrito.
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 14, 24, 4),
-              child: Text(
-                'Tu carrito',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: CeltasColors.cream,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Tu carrito',
+                      style:
+                          Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700,
+                                color: CeltasColors.cream,
+                              ),
                     ),
+                  ),
+                  if (cart.items.isNotEmpty)
+                    IconButton(
+                      key: const ValueKey('cart-clear'),
+                      onPressed: _confirmClearCart,
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        color: CeltasColors.textMuted,
+                      ),
+                      tooltip: 'Vaciar carrito',
+                    ),
+                ],
               ),
             ),
             Expanded(

@@ -397,6 +397,75 @@ void main() {
     });
   });
 
+  group('vaciar carrito', () {
+    testWidgets('carrito vacío → sin ícono de vaciar', (tester) async {
+      await pumpCart(tester, couponRepository: MockCouponRepository());
+
+      expect(find.byKey(const ValueKey('cart-clear')), findsNothing);
+    });
+
+    testWidgets('con ítems → ícono visible, pide confirmación antes de '
+        'vaciar', (tester) async {
+      await pumpCart(
+        tester,
+        couponRepository: MockCouponRepository(),
+        items: [burger],
+      );
+
+      expect(find.byKey(const ValueKey('cart-clear')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('cart-clear')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('¿Vaciar el carrito?'), findsOneWidget);
+      expect(find.text('CANCELAR'), findsOneWidget);
+      expect(find.text('VACIAR'), findsOneWidget);
+      // Todavía no se vació — el diálogo solo pregunta.
+      expect(find.text('Berserker Burger'), findsOneWidget);
+    });
+
+    testWidgets('CANCELAR en el diálogo no toca el carrito', (tester) async {
+      final container = await pumpCart(
+        tester,
+        couponRepository: MockCouponRepository(),
+        items: [burger, wings],
+      );
+
+      await tester.tap(find.byKey(const ValueKey('cart-clear')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('CANCELAR'));
+      await tester.pumpAndSettle();
+
+      expect(container.read(cartProvider).items, hasLength(2));
+      expect(find.text('Berserker Burger'), findsOneWidget);
+    });
+
+    testWidgets(
+        'VACIAR confirma → limpia todos los ítems Y el cupón aplicado en '
+        'un solo paso', (tester) async {
+      final container = await pumpCart(
+        tester,
+        couponRepository: MockCouponRepository(),
+        items: [burger, wings],
+      );
+      container.read(cartProvider.notifier).applyCoupon(percentageCoupon);
+      await tester.pumpAndSettle();
+      expect(container.read(cartProvider).coupon, isNotNull);
+
+      await tester.tap(find.byKey(const ValueKey('cart-clear')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('VACIAR'));
+      await tester.pumpAndSettle();
+
+      final state = container.read(cartProvider);
+      expect(state.items, isEmpty);
+      expect(state.coupon, isNull);
+      expect(find.text('Tu carrito está vacío'), findsOneWidget);
+      // El ícono desaparece junto con los ítems.
+      expect(find.byKey(const ValueKey('cart-clear')), findsNothing);
+    });
+  });
+
   testWidgets('CONTINUAR navega al checkout', (tester) async {
     await pumpCart(
       tester,
