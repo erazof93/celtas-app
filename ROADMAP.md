@@ -230,6 +230,41 @@ celtas-mobile/
       excepción async, gradiente del banner con `CeltasColors.black.withValues(alpha: 0.85)` +
       `Colors.transparent` = CSS real `rgba(13,13,13,.85) 20% → transparent 70%`, placeholder
       eliminado. 79/79 tests, `flutter analyze` limpio. Auditado por `@tester`: veredicto LISTO)
+- [x] **Mejora post-cierre: tap sobre banners según `actionType`** (`home_screen.dart`,
+      `home_providers.dart`). `Banner.actionType`/`actionValue` ya existían en el modelo pero no
+      se usaban al tocar el banner:
+      - `none`: sin acción, sin afordancia visual.
+      - `category`: `actionValue` = **id real** de la categoría, NO un slug pese a que el Swagger
+        del backend lo describe como tal — confirmado leyendo `BannerForm.tsx` del panel admin
+        (el `<Select>` usa `category.id` como `value`). Selecciona la categoría vía
+        `selectedCategoryIdProvider` (`StateProvider<String?>` nuevo, compartido con `_MenuList`
+        — antes ese estado vivía local en `_MenuListState`, ahora `_MenuList` es `ConsumerWidget`).
+        Categoría sin productos disponibles (o borrada): `GET /menu` ya excluye del todo las
+        categorías sin productos, así que se reutiliza el `_EmptyMenu` existente sin código nuevo.
+      - `menuItem`: `actionValue` = id real del producto (mismo contrato verificado). Navega a
+        `/product/:id`, mismo flujo que una tarjeta de producto. Producto ya no disponible: sin
+        manejo especial — `ProductDetailScreen` ya busca en el menú cargado y ya tiene el estado
+        "Producto no encontrado" (el backend también excluye productos no disponibles de
+        `GET /menu`), así que cae ahí solo.
+      - `external_url`: `launchUrl` directo, mismo criterio ya aprendido con el `whatsappUrl` del
+        checkout (módulo 5) — no usa `canLaunchUrl` como gate.
+      - Afordancia visual opcional: chevron sutil (`Icons.chevron_right_rounded`) cuando
+        `actionType != none`.
+      244/244 tests, `flutter analyze` limpio. **Auditado por `@tester` en dos pasadas**: la
+      primera encontró un bug real (el título del banner sin `maxLines`/`overflow` se solapaba
+      con el chevron en títulos largos, verificado con `tester.getRect`); corregido acotando el
+      `Positioned` del título (`right: tappable ? 40 : 16`) + `maxLines: 1` +
+      `overflow: TextOverflow.ellipsis`, con test de regresión que falla si se revierte el fix.
+      La segunda pasada dio veredicto **LISTO**, con un riesgo no bloqueante (medición conservadora
+      con `TextPainter` sugería que títulos reales largos podrían truncarse con "…" en pantallas
+      angostas) — **cerrado verificando en el dispositivo real** (Xiaomi, `wm density` 450dpi,
+      ancho lógico ≈384dp) que los 2 títulos señalados ("APROVECHA LA 2X1", "CARNES SALTADOS") se
+      ven completos, sin truncar. **Prueba real en dispositivo** con 3 banners reales creados
+      desde el panel admin (uno por `actionType`) + 1 preexistente (`none`): `category` → chip
+      "pollo" seleccionado y menú filtrado correctamente; `menuItem` → navegó al detalle exacto
+      de "Pollo Broaster"; `external_url` → abrió `com.google.android.youtube/.UrlActivity`
+      (confirmado por logcat); `none` → sin chevron, tap sin efecto. Sin `FATAL EXCEPTION` en
+      logcat durante toda la sesión.
 
 ### 4. Producto + Carrito — ✅ COMPLETO
 - [x] Pantalla de detalle de producto (selector de cantidad, agregar al carrito)

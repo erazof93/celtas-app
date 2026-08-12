@@ -62,6 +62,107 @@ solo cuando pasa lo aplicable de este checklist.
 - [x] Menú agrupado por categoría, con imágenes cacheadas correctamente
 - [x] Error de banners visible con reintento (no tragado en silencio)
 - [x] Pull-to-refresh sin excepción async sin manejar
+- [x] **Tap sobre banners según `actionType`** (`home_screen.dart`, `home_providers.dart`, sin
+      commitear todavía — mejora post-cierre de este módulo). `flutter analyze` limpio, `flutter
+      test` 243/243 (verificado por `@tester`, salida cruda). Contrato `actionValue` = id real
+      (no slug) de categoría/producto confirmado independientemente contra
+      `../celtas-admin/src/features/banners/BannerForm.tsx` (el `<Select>` de categoría/producto
+      usa `category.id`/`item.id` como `value`). `category` selecciona
+      `selectedCategoryIdProvider` (compartido con `_MenuList`, antes estado local); `menuItem`
+      navega a `/product/:id`, mismo flujo que una tarjeta; `external_url` usa `launchUrl` sin
+      `canLaunchUrl` como gate, mismo criterio que el `whatsappUrl` del checkout. Los 2 casos
+      borde (categoría sin productos / ya no existe, producto descontinuado) están cubiertos
+      reutilizando estados vacíos/`_DetailNotFound` ya existentes — confirmado con test.
+      **Bug real encontrado, sin corregir todavía**: el título del banner
+      (`_BannerCard`, `home_screen.dart:430-441`, `Positioned(left: 16, bottom: 14, child:
+      Text(...))`) no tiene `maxLines`/`overflow`/ancho acotado. Con un título largo, el texto
+      renderizado se solapa visualmente con el chevron de afordancia
+      (`home_screen.dart:446-455`, `Positioned(right: 12, bottom: 10)`) — el chevron se pinta
+      encima de las últimas letras del título porque va después en el `Stack`. Confirmado con un
+      widget test de sondeo (no incluido en el suite, descartado tras la prueba) que compara
+      `tester.getRect` del texto vs. del ícono con un título de 63 caracteres: `TEXT RECT:
+      Rect.fromLTRB(42.0, 159.0, 1085.1, 183.0)`, `CHEVRON RECT: Rect.fromLTRB(740.0, 165.0,
+      762.0, 187.0)`, `OVERLAPS: true` (viewport de test 800px de ancho — el chevron está dentro
+      del área visible, no clippeado). Riesgo real con títulos de banner largos en producción, no
+      solo un caso de laboratorio. Sugerencia para la sesión principal: envolver el título en un
+      `Positioned` con `right` acotado (dejando espacio para el chevron cuando `tappable`) +
+      `maxLines: 1` + `overflow: TextOverflow.ellipsis`.
+      **Riesgos/hallazgos no bloqueantes, verificados**:
+      - `selectedCategoryIdProvider` es un `StateProvider` global (no `autoDispose`): persiste
+        correctamente al navegar a `/cart`/`/product/:id` y volver (comportamiento esperado, el
+        `ProviderScope` raíz no se desmonta en esas rutas empujadas). Doble-tap rápido sobre dos
+        banners de categoría distintos resuelve determinísticamente al último tocado (Flutter
+        procesa los gestos de forma secuencial). Tocar un banner de categoría mientras
+        `publicMenuProvider` todavía está en `loading` no causa condición de carrera: el estado
+        se fija igual y `_MenuList` lo lee recién cuando el menú llega y se construye.
+      - `external_url` con `http://` en vez de `https://`: el `<queries>` del
+        `AndroidManifest.xml` solo declara `android:scheme="https"`, pero **no aplica en la
+        práctica** — confirmado leyendo el código nativo del plugin
+        (`url_launcher_android-6.3.32/.../UrlLauncher.java`, método `launchUrl`): llama
+        `activity.startActivity(launchIntent)` directo, sin pasar por `resolveActivity`/
+        `queryIntentActivities` (que es lo que sí restringe la visibilidad de paquetes en Android
+        11+). El paquete `<queries>` solo condiciona `canLaunchUrl` (no usado acá). `startActivity`
+        con un intent implícito no está sujeto a esa restricción de visibilidad, esté o no
+        declarado el scheme.
+      - Doble-tap rápido sobre el mismo banner `menuItem` puede empujar `/product/:id` dos veces
+        al stack (sin debounce) — **no es un bug nuevo de esta mejora**: mismo patrón ya existente
+        sin protección en `_ProductCard`/`_CartIconButton` y en todo el proyecto (`grep -rn
+        "debounce" lib/` sin resultados). Riesgo sistémico preexistente, no exclusivo de banners;
+        no se bloquea esta mejora por eso pero vale la pena una solución transversal a futuro.
+      - Comentario desactualizado en el modelo: `banner.dart:13` sigue diciendo `actionValue` =
+        "slug/nombre" para `category`, pero el código (y el contrato real verificado) lo trata
+        como el id — el comentario del archivo principal (`home_screen.dart:25-29`) sí es preciso,
+        pero el de `banner.dart` no se actualizó. Menor, pero puede inducir a error a quien lea
+        solo el modelo.
+      **Re-auditoría (fix aplicado): LISTO.** Verifiqué el código real de `home_screen.dart`:
+      `Positioned(left: 16, right: tappable ? 40 : 16, bottom: 14, child: Text(..., maxLines: 1,
+      overflow: TextOverflow.ellipsis, ...))` — exactamente el fix descrito, no parcial.
+      `flutter analyze` limpio, `flutter test` 244/244 (suite completa). El test de regresión
+      nuevo (`home_screen_test.dart`, grupo "tap sobre banners", primer test) reproduce mi
+      metodología original con un título de 59 caracteres y `tester.getRect`; confirmé
+      manualmente revirtiendo el fix (quitando `right`/`maxLines`/`overflow` del `Positioned`) que
+      el test falla con el mismo patrón: `Expected: <= 740.0, Actual: 1050.9` — mismo tipo de
+      solape que documenté en la auditoría anterior — y que vuelve a pasar al restaurar el fix.
+      `right: tappable ? 40 : 16`: para `tappable == false` el margen derecho (16) es simétrico
+      con el izquierdo (16), consistente y sin layout raro; nótese que el comportamiento
+      *previo a la mejora completa* (commit `c0f68f5`, antes de que existiera cualquier versión
+      de esta mejora) no tenía `right` en absoluto — un título largo en un banner sin acción
+      hacía *wrap* a 2 líneas en vez de truncarse. El fix actual unifica el comportamiento con
+      `maxLines: 1` para tappable y no-tappable por igual, lo cual es una mejora deliberada
+      razonable (evita que un título largo en un banner sin acción crezca en altura e invada el
+      resto del carrusel), no una regresión.
+      Comentario desactualizado de `banner.dart:13` (reportado en la auditoría anterior): **corregido** —
+      ahora documenta correctamente que `actionValue` es el `id` real, con la explicación de
+      banners viejos con valor escrito a mano.
+      **Hallazgo nuevo, no bloqueante — riesgo a verificar en dispositivo con títulos reales
+      largos**: con `maxLines: 1` + `ellipsis`, medí (`TextPainter` con el estilo real resuelto
+      del `RichText` de producción, en un viewport de 360×800 lógicos — Android angosto típico,
+      `tester.view.physicalSize = Size(1080, 2400)` @ dpr 3) el ancho intrínseco de los 4 títulos
+      reales ya probados en dispositivo vs. el ancho disponible real (`boxWidth` = 252px en ese
+      viewport): "PIZZA 2X1" (153.9px, sin riesgo), "2X1 BRASAS" (171.0px, sin riesgo),
+      "APROVECHA LA 2X1" (273.6px, **excede el disponible por ~22px → `didExceedMaxLines: true`,
+      se truncaría con "…"**), "CARNES SALTADOS" (256.5px, excede por ~4.5px, límite). Medido con
+      la fuente de fallback de test (Cinzel vía `google_fonts` no carga en el entorno de test,
+      `allowRuntimeFetching = false`) — Cinzel es una serif ornamental típicamente más ancha que
+      un fallback sans, así que el riesgo real en dispositivo es igual o mayor, no menor. La
+      captura de pantalla que confirmó el fix en el dispositivo real solo usó "PIZZA 2X1" (título
+      corto, no representativo de este caso). No es bloqueante porque: (1) el comportamiento
+      resultante es degradación controlada (ellipsis), no solape ni corte a mitad de glifo; (2) no
+      hay evidencia de que ocurra en el dispositivo físico ya usado para verificar (probablemente
+      >360dp de ancho lógico).
+      **Riesgo cerrado**: verificado en el dispositivo real (Xiaomi, `adb shell wm density` →
+      450dpi, ancho lógico real ≈384dp según `wm size` 1080px físicos — más ancho que el
+      viewport de 360dp que asumió la medición con `TextPainter`) con capturas de pantalla
+      directas de los 2 títulos señalados como en riesgo: "APROVECHA LA 2X1" y "CARNES SALTADOS"
+      se ven completos en ambos casos, sin "…", sin solape con el chevron. La medición con
+      `TextPainter`/fuente de fallback fue conservadora (viewport más angosto que el dispositivo
+      real de prueba); no bloqueaba el veredicto y ahora además está confirmado con evidencia
+      real, no solo con el razonamiento de "no hay evidencia de que ocurra".
+      **Hallazgos no bloqueantes de la auditoría anterior, siguen sin ser bloqueantes** (no se
+      pidió corregirlos): `http://` vs `https://` en `external_url` (confirmado que no aplica en
+      la práctica por cómo `url_launcher_android` invoca `startActivity`), doble-tap en `menuItem`
+      (riesgo sistémico preexistente, no exclusivo de banners), `selectedCategoryIdProvider`
+      persistente (comportamiento esperado, verificado).
 
 ## Carrito / Checkout
 

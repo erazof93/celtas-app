@@ -9,8 +9,10 @@ import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
 import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
 import 'package:celtas_mobile/shared/widgets/svg_stroke_icon.dart';
 import 'package:flutter/material.dart' hide Banner;
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Pantalla Home: carrusel de banners + menú por categorías.
 ///
@@ -19,6 +21,23 @@ import 'package:go_router/go_router.dart';
 /// tarjeta agrega directo al carrito local (`cartProvider`, módulo 4); tocar
 /// la tarjeta abre el detalle (`/product/:id`). El ícono de carrito del header
 /// muestra el total de unidades en un badge.
+///
+/// Mejora post-cierre: tap sobre cada banner según su `actionType`
+/// (`Banner.actionType`/`actionValue`, contrato real verificado contra
+/// `BannerForm.tsx` del panel admin — `actionValue` es el `id` real de la
+/// categoría/producto, NO un slug pese a como lo describe el Swagger del
+/// backend):
+///   - `none`: sin acción.
+///   - `category`: selecciona el chip de esa categoría (`selectedCategoryIdProvider`,
+///     compartido con `_MenuList`). Si la categoría ya no tiene productos
+///     disponibles (o ya no existe), se reutiliza el estado vacío del menú.
+///   - `menuItem`: navega a `/product/:id` con el mismo flujo que una tarjeta
+///     de producto. Si el producto ya no está disponible, la propia pantalla
+///     de detalle ya resuelve ese caso con su estado "Producto no encontrado"
+///     (el backend excluye productos no disponibles de `GET /menu`, así que
+///     no aparece en la búsqueda local) — no hace falta manejo especial acá.
+///   - `external_url`: abre `actionValue` con `url_launcher`, mismo criterio
+///     aprendido con WhatsApp (módulo 5): no usa `canLaunchUrl` como gate.
 ///
 /// Estados:
 ///   - Carga: spinner + `SlowBackendNotice` (el backend de Render puede tardar
@@ -115,7 +134,12 @@ class _HomeHeader extends ConsumerWidget {
     );
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(CeltasSpacing.page, 14, CeltasSpacing.page, 8),
+      padding: const EdgeInsets.fromLTRB(
+        CeltasSpacing.page,
+        14,
+        CeltasSpacing.page,
+        8,
+      ),
       child: Row(
         children: [
           const SvgStrokeIcon(
@@ -133,17 +157,17 @@ class _HomeHeader extends ConsumerWidget {
                 Text(
                   'Entregar en',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontSize: 11,
-                        color: CeltasColors.textMuted,
-                      ),
+                    fontSize: 11,
+                    color: CeltasColors.textMuted,
+                  ),
                 ),
                 Text(
                   'Casa · Av. Corrientes 1234',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: CeltasColors.cream,
-                      ),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: CeltasColors.cream,
+                  ),
                 ),
               ],
             ),
@@ -187,7 +211,8 @@ class _CartIconButton extends StatelessWidget {
         children: [
           const SvgStrokeIcon(
             // Mismo path de carrito que el tab "Pedidos" del mockup.
-            path: 'M3 3h2l2.6 13h11.8L21 8H6'
+            path:
+                'M3 3h2l2.6 13h11.8L21 8H6'
                 'M9 18.6a1.4 1.4 0 1 0 0 2.8a1.4 1.4 0 1 0 0-2.8'
                 'M18 18.6a1.4 1.4 0 1 0 0 2.8a1.4 1.4 0 1 0 0-2.8',
             size: 20,
@@ -209,10 +234,10 @@ class _CartIconButton extends StatelessWidget {
                 child: Text(
                   '$count',
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w800,
-                        color: CeltasColors.black,
-                      ),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    color: CeltasColors.black,
+                  ),
                 ),
               ),
             ),
@@ -280,40 +305,107 @@ class _BannerCarouselState extends State<_BannerCarousel> {
   }
 }
 
-class _BannerCard extends StatelessWidget {
+class _BannerCard extends ConsumerWidget {
   const _BannerCard({required this.banner});
 
   final Banner banner;
 
+  void _handleTap(BuildContext context, WidgetRef ref) {
+    final actionValue = banner.actionValue;
+    if (actionValue == null || actionValue.isEmpty) return;
+    switch (banner.actionType) {
+      case BannerActionType.none:
+        return;
+      case BannerActionType.category:
+        ref.read(selectedCategoryIdProvider.notifier).state = actionValue;
+      case BannerActionType.menuItem:
+        // Mismo criterio que el resto del Home: ocultar el SnackBar "Agregado"
+        // antes de navegar, para que no persista tapando el detalle.
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        context.push('/product/$actionValue');
+      case BannerActionType.externalUrl:
+        _openExternalUrl(context, actionValue);
+    }
+  }
+
+  /// NO usa `canLaunchUrl` como gate (mismo criterio ya aprendido con el
+  /// `whatsappUrl` del checkout, módulo 5): `launchUrl` directo es la señal
+  /// confiable de éxito/fallo real.
+  Future<void> _openExternalUrl(BuildContext context, String url) async {
+    final uri = Uri.tryParse(url);
+    var opened = false;
+    if (uri != null) {
+      try {
+        opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } on PlatformException {
+        opened = false;
+      }
+    }
+    if (opened || !context.mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            'No se pudo abrir el enlace del banner.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: CeltasColors.cream),
+          ),
+          backgroundColor: CeltasColors.surface,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+  }
+
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 2),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(CeltasRadii.banner),
-        color: CeltasColors.surface,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (banner.imageUrl != null && banner.imageUrl!.isNotEmpty)
-            CachedNetworkImage(
-              imageUrl: banner.imageUrl!,
-              fit: BoxFit.cover,
-              placeholder: (context, url) => Container(
-                color: CeltasColors.surface,
-                alignment: Alignment.center,
-                child: const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: CeltasColors.orange,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tappable =
+        banner.actionType != BannerActionType.none &&
+        banner.actionValue != null &&
+        banner.actionValue!.isNotEmpty;
+
+    return GestureDetector(
+      key: ValueKey('banner-${banner.id}'),
+      onTap: tappable ? () => _handleTap(context, ref) : null,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(CeltasRadii.banner),
+          color: CeltasColors.surface,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (banner.imageUrl != null && banner.imageUrl!.isNotEmpty)
+              CachedNetworkImage(
+                imageUrl: banner.imageUrl!,
+                fit: BoxFit.cover,
+                placeholder: (context, url) => Container(
+                  color: CeltasColors.surface,
+                  alignment: Alignment.center,
+                  child: const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: CeltasColors.orange,
+                    ),
                   ),
                 ),
-              ),
-              errorWidget: (context, url, error) => Container(
+                errorWidget: (context, url, error) => Container(
+                  color: CeltasColors.surface,
+                  alignment: Alignment.center,
+                  child: Text(
+                    banner.title,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+              )
+            else
+              Container(
                 color: CeltasColors.surface,
                 alignment: Alignment.center,
                 child: Text(
@@ -321,43 +413,54 @@ class _BannerCard extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
               ),
-            )
-          else
-            Container(
-              color: CeltasColors.surface,
-              alignment: Alignment.center,
+            // Gradiente oscuro de izquierda a derecha (del CSS real del mockup:
+            // `linear-gradient(90deg, rgba(13,13,13,.85) 20%, transparent 70%)`).
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    CeltasColors.black.withValues(alpha: 0.85),
+                    Colors.transparent,
+                  ],
+                  stops: const [0.2, 0.7],
+                ),
+              ),
+            ),
+            // Título del banner (Cinzel, abajo a la izquierda). `right` deja
+            // espacio para el chevron de afordancia cuando el banner es
+            // tocable — sin esto, un título largo se solapa con el ícono
+            // (hallazgo real de `@tester`, verificado con `tester.getRect`).
+            Positioned(
+              left: 16,
+              right: tappable ? 40 : 16,
+              bottom: 14,
               child: Text(
-                banner.title,
-                style: Theme.of(context).textTheme.titleSmall,
+                banner.title.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: CeltasColors.cream,
+                ),
               ),
             ),
-          // Gradiente oscuro de izquierda a derecha (del CSS real del mockup:
-          // `linear-gradient(90deg, rgba(13,13,13,.85) 20%, transparent 70%)`).
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  CeltasColors.black.withValues(alpha: 0.85),
-                  Colors.transparent,
-                ],
-                stops: const [0.2, 0.7],
+            // Afordancia sutil de "tocable": no hay precedente en el mockup
+            // (banner sin comportamiento de tap), así que se mantiene mínima —
+            // mismo ícono/tamaño que ya usa `coupon_picker_sheet.dart` para
+            // indicar una fila tocable.
+            if (tappable)
+              const Positioned(
+                right: 12,
+                bottom: 10,
+                child: Icon(
+                  Icons.chevron_right_rounded,
+                  size: 22,
+                  color: CeltasColors.cream,
+                ),
               ),
-            ),
-          ),
-          // Título del banner (Cinzel, abajo a la izquierda).
-          Positioned(
-            left: 16,
-            bottom: 14,
-            child: Text(
-              banner.title.toUpperCase(),
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: CeltasColors.cream,
-                  ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -365,31 +468,22 @@ class _BannerCard extends StatelessWidget {
 
 // ─── Menú por categorías ────────────────────────────────────────────────────
 
-class _MenuList extends StatefulWidget {
+/// Lista del menú, con el chip seleccionado en `selectedCategoryIdProvider`
+/// (compartido con el carrusel de banners: un banner con `actionType:
+/// category` selecciona la categoría desde ahí, no desde acá).
+class _MenuList extends ConsumerWidget {
   const _MenuList({required this.categories});
 
   final List<PublicMenuCategory> categories;
 
   @override
-  State<_MenuList> createState() => _MenuListState();
-}
-
-class _MenuListState extends State<_MenuList> {
-  /// Categoría seleccionada en los chips (null = "todas").
-  String? _selectedCategoryId;
-
-  List<PublicMenuCategory> get _visibleCategories {
-    final selected = _selectedCategoryId;
-    if (selected == null) return widget.categories;
-    return widget.categories
-        .where((category) => category.id == selected)
-        .toList();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final categories = widget.categories;
-    final visible = _visibleCategories;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selectedCategoryId = ref.watch(selectedCategoryIdProvider);
+    final visible = selectedCategoryId == null
+        ? categories
+        : categories
+              .where((category) => category.id == selectedCategoryId)
+              .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -401,38 +495,48 @@ class _MenuListState extends State<_MenuList> {
             children: [
               _CategoryChip(
                 label: 'Todas',
-                selected: _selectedCategoryId == null,
-                onTap: () => setState(() => _selectedCategoryId = null),
+                selected: selectedCategoryId == null,
+                onTap: () =>
+                    ref.read(selectedCategoryIdProvider.notifier).state = null,
               ),
               for (final category in categories) ...[
                 const SizedBox(width: 10),
                 _CategoryChip(
                   label: category.name,
-                  selected: _selectedCategoryId == category.id,
+                  selected: selectedCategoryId == category.id,
                   onTap: () =>
-                      setState(() => _selectedCategoryId = category.id),
+                      ref.read(selectedCategoryIdProvider.notifier).state =
+                          category.id,
                 ),
               ],
             ],
           ),
         ),
         const SizedBox(height: 20),
-        for (final category in visible) ...[
-          Text(
-            category.name.toUpperCase(),
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: CeltasColors.cream,
-                ),
-          ),
-          const SizedBox(height: 12),
-          for (final item in category.items) ...[
-            _ProductCard(item: item),
+        // Categoría seleccionada (por chip o por banner) que ya no tiene
+        // productos disponibles, o que ya no existe: `GET /menu` excluye del
+        // todo las categorías sin productos disponibles, así que este caso
+        // se ve igual que "sin categorías" — mismo estado vacío, en vez de
+        // dejar la sección en blanco.
+        if (selectedCategoryId != null && visible.isEmpty)
+          const _EmptyMenu()
+        else
+          for (final category in visible) ...[
+            Text(
+              category.name.toUpperCase(),
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: CeltasColors.cream,
+              ),
+            ),
             const SizedBox(height: 12),
+            for (final item in category.items) ...[
+              _ProductCard(item: item),
+              const SizedBox(height: 12),
+            ],
+            const SizedBox(height: 8),
           ],
-          const SizedBox(height: 8),
-        ],
       ],
     );
   }
@@ -458,17 +562,15 @@ class _CategoryChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? CeltasColors.orange : CeltasColors.surface,
           borderRadius: BorderRadius.circular(CeltasRadii.pill),
-          border: selected
-              ? null
-              : Border.all(color: CeltasColors.border),
+          border: selected ? null : Border.all(color: CeltasColors.border),
         ),
         child: Text(
           label,
           style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                fontSize: 13,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                color: selected ? CeltasColors.black : CeltasColors.textLabel,
-              ),
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+            color: selected ? CeltasColors.black : CeltasColors.textLabel,
+          ),
         ),
       ),
     );
@@ -517,10 +619,10 @@ class _ProductCard extends ConsumerWidget {
                     Text(
                       item.name,
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: CeltasColors.cream,
-                          ),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: CeltasColors.cream,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     if (item.description != null &&
@@ -530,19 +632,19 @@ class _ProductCard extends ConsumerWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              fontSize: 12,
-                              color: CeltasColors.textMuted,
-                            ),
+                          fontSize: 12,
+                          color: CeltasColors.textMuted,
+                        ),
                       ),
                       const SizedBox(height: 6),
                     ],
                     Text(
                       'S/ ${item.price.toStringAsFixed(2)}',
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: CeltasColors.gold,
-                          ),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: CeltasColors.gold,
+                      ),
                     ),
                   ],
                 ),
@@ -561,8 +663,8 @@ class _ProductCard extends ConsumerWidget {
                       content: Text(
                         'Agregado: ${item.name}',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: CeltasColors.cream,
-                            ),
+                          color: CeltasColors.cream,
+                        ),
                       ),
                       backgroundColor: CeltasColors.surface,
                       behavior: SnackBarBehavior.floating,
@@ -745,16 +847,14 @@ class _BannersError extends StatelessWidget {
           Expanded(
             child: Text(
               'No se pudieron cargar los banners',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: CeltasColors.textMuted,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: CeltasColors.textMuted),
             ),
           ),
           TextButton(
             onPressed: onRetry,
-            style: TextButton.styleFrom(
-              foregroundColor: CeltasColors.orange,
-            ),
+            style: TextButton.styleFrom(foregroundColor: CeltasColors.orange),
             child: const Text('REINTENTAR'),
           ),
         ],
@@ -814,15 +914,12 @@ class _MenuError extends StatelessWidget {
           Text(
             message,
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: CeltasColors.textMuted,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: CeltasColors.textMuted),
           ),
           const SizedBox(height: 16),
-          CeltasButton(
-            label: 'REINTENTAR',
-            onPressed: onRetry,
-          ),
+          CeltasButton(label: 'REINTENTAR', onPressed: onRetry),
         ],
       ),
     );
@@ -852,9 +949,9 @@ class _EmptyMenu extends StatelessWidget {
           Text(
             'Volvé pronto, estamos preparando algo rico.',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: CeltasColors.textMuted,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: CeltasColors.textMuted),
           ),
         ],
       ),

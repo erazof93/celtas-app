@@ -21,3 +21,10 @@ final activeBannersProvider = FutureProvider<List<Banner>>(
 final publicMenuProvider = FutureProvider<List<PublicMenuCategory>>(
   (ref) => ref.watch(homeRepositoryProvider).getMenu(),
 );
+
+/// Categoría seleccionada en los chips del menú (`null` = "Todas").
+///
+/// Vive acá (no como estado local de `_MenuList`) porque un banner con
+/// `actionType: category` necesita poder seleccionarla desde el carrusel,
+/// que es un widget hermano en el árbol, no un ancestro/descendiente.
+final selectedCategoryIdProvider = StateProvider<String?>((ref) => null);

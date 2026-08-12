@@ -10,7 +10,12 @@ enum BannerActionType {
   @JsonValue('none')
   none,
 
-  /// Lleva a una categoría del menú (`actionValue` = slug/nombre).
+  /// Lleva a una categoría del menú (`actionValue` = id real de la
+  /// categoría, NO un slug — el Swagger del backend lo describe como "slug"
+  /// pero el panel admin (`BannerForm.tsx`) guarda el `id` real; algunos
+  /// banners creados antes del selector pudieron quedar con un valor escrito
+  /// a mano que no matchea ningún id real, mismo caso que una categoría
+  /// borrada: el estado vacío del menú ya lo cubre).
   @JsonValue('category')
   category,
 
