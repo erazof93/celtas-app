@@ -3,7 +3,8 @@ import 'dart:ui';
 import 'package:celtas_mobile/shared/widgets/svg_path.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// Paths reales usados en la app (celtas_flame.dart y google_logo.dart).
+/// Path con comandos suaves C, usado antes en celtas_flame.dart (ya eliminado en favor
+/// del SVG real de marca) — se mantiene acá como caso de regresión del parser.
 const flamePath =
     'M4 20 L11 4 M11 4 C11 4 9 8 13 10 M20 20 L13 4 M13 4 C13 4 15 8 11 10';
 

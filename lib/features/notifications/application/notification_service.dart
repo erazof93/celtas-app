@@ -57,7 +57,7 @@ class NotificationService {
 
     await _localNotifications.initialize(
       settings: const InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        android: AndroidInitializationSettings('@drawable/ic_stat_celtas'),
         iOS: DarwinInitializationSettings(),
       ),
       onDidReceiveNotificationResponse: _onLocalNotificationTapped,

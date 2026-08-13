@@ -2,10 +2,10 @@ import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
 import 'package:celtas_mobile/features/auth/application/auth_state.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
-import 'package:celtas_mobile/shared/widgets/celtas_flame.dart';
 import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 /// Splash / onboarding (pantalla 01 del mockup).
@@ -48,7 +48,15 @@ class SplashScreen extends ConsumerWidget {
               child: Column(
                 children: [
                   const Spacer(flex: 3),
-                  const CeltasFlame(size: 88, color: CeltasColors.gold),
+                  SvgPicture.asset(
+                    'assets/branding/iconos.svg',
+                    width: 88,
+                    height: 88,
+                    colorFilter: const ColorFilter.mode(
+                      CeltasColors.gold,
+                      BlendMode.srcIn,
+                    ),
+                  ),
                   const SizedBox(height: 22),
                   Text(
                     'CELTAS',

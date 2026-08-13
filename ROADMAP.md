@@ -660,6 +660,108 @@ celtas-mobile/
       y=2267, margen 22px) y modo gestos (nav termina en y=2333, barra empieza en y=2355, mismo
       margen de 22px) — confirma que el fix usa el inset real que reporta el SO en vez de un valor
       fijo por modo. `flutter analyze` limpio, 197/197 tests sin regresión)
+- [x] **Branding real: ícono de app + splash nativo con el logo real** (reemplaza la aproximación
+      "CeltasFlame" usada hasta ahora solo en el Splash hecho a mano en Flutter, que sigue
+      existiendo tal cual — este ítem es solo el ícono del launcher y el splash NATIVO, dibujado
+      por el sistema operativo antes de que Flutter tome control).
+
+      **`assets/branding/` es la carpeta fuente fija del logo** — 3 archivos, siempre con estos
+      nombres exactos:
+      - `logo_completo.jpg` (1000×1000, fondo negro/fuego, opaco) — ícono legacy Android <8 e iOS
+        (ninguno soporta transparencia real en el ícono de la app).
+      - `logo_sin_banner_transparente.png` (2992×2073, fondo transparente, sin el texto
+        "Burger-Chicken" — ilegible a tamaño de ícono/splash) — adaptive icon foreground
+        (Android 8+) y splash nativo (pre-Android 12).
+      - `logo_con_banner_transparente.png` (2991×2072, fondo transparente, versión completa con
+        el texto del banner) — copiado por si se necesita a futuro, no usado en la config actual.
+
+      **Procedimiento para actualizar el logo en el futuro**: reemplazar esos 3 archivos en
+      `assets/branding/` (mismos nombres exactos) → correr `dart run flutter_launcher_icons` y
+      `dart run flutter_native_splash:create` → recompilar. Si se reemplaza
+      `logo_sin_banner_transparente.png`, hay que regenerar también
+      `assets/branding/logo_sin_banner_android12_splash.png` (ver bug de abajo) antes de correr
+      `flutter_native_splash:create` — no es automático.
+
+      Config completa en `pubspec.yaml` (`flutter_launcher_icons:` / `flutter_native_splash:`),
+      con comentario inline explicando por qué esos archivos NO están en `flutter.assets` (los
+      generadores leen la ruta directo del `pubspec.yaml`, no del bundle de la app — agregarlos
+      ahí solo infla el APK sin necesidad).
+
+      **Bug real encontrado y corregido en dispositivo (Xiaomi, HyperOS)**: el splash nativo de
+      Android 12+ usa la `SplashScreen` API del sistema, que trata el ícono como un adaptive icon
+      y recorta cualquier contenido fuera de una "zona segura" central (~55-66% del ancho) — el
+      logo original casi no tiene margen (el texto toca los bordes), así que el sistema le
+      cortaba la "C" inicial y la "S" final (confirmado visualmente: solo se veía "ELTA"), aunque
+      el PNG generado en `drawable-xxxhdpi/android12splash.png` sí contenía el logo completo sin
+      recortar — el recorte pasa en tiempo de ejecución por la máscara del sistema, no por el
+      asset. Fix: se generó `assets/branding/logo_sin_banner_android12_splash.png` (mismo logo
+      centrado en un canvas cuadrado transparente, ocupando ~48% del ancho) específicamente para
+      `flutter_native_splash.android_12.image`, dejando el `image:` base (splash pre-Android 12,
+      que usa `android:gravity="center"` por densidad y no tiene este problema) con el archivo
+      original sin relleno. Verificado en dispositivo tras el fix: el splash de Android 12+ ya
+      muestra el logo completo sin recortes. El ícono adaptativo del launcher (mismo archivo sin
+      relleno) NO tuvo este problema porque `flutter_launcher_icons` inserta automáticamente un
+      `<inset android:inset="16%"/>` en el XML del adaptive icon — confirmado en
+      `mipmap-anydpi-v26/launcher_icon.xml` — mientras que `flutter_native_splash` no aplica
+      ningún inset al `android_12.image`, por eso ahí sí hacía falta el relleno manual. Riesgo
+      menor documentado (no bloqueante): el 16% de inset automático deja visible ~68% del canvas,
+      un poco más ancho que el ~61-66% de "zona segura" garantizada oficialmente para máscaras
+      circulares agresivas — en teoría algunos launchers (Samsung One UI, terceros) podrían
+      recortar por un margen pequeño las puntas de las hachas o los bordes de "C"/"S"; no
+      verificable sin esos dispositivos a mano.
+
+      **Segundo bug real encontrado (por `@tester`, preexistente, no introducido por este
+      cambio) y corregido**: el ícono de las notificaciones push FCM seguía siendo el ala azul
+      default de Flutter (`AndroidManifest.xml`, meta-data
+      `com.google.firebase.messaging.default_notification_icon` apuntaba a `@mipmap/ic_launcher`,
+      que `flutter_launcher_icons` nunca tocó porque el ícono del launcher se configuró con el
+      nombre `launcher_icon`, no el nombre default `ic_launcher`). Fix: se generó un ícono
+      monocromático (silueta blanca sobre transparente, requisito de Android API 21+ para íconos
+      pequeños de notificación — un ícono a color se vería como un blob blanco sólido) a partir
+      del canal alfa de `logo_sin_banner_transparente.png`, en los 5 tamaños estándar
+      (`android/app/src/main/res/drawable-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}/ic_stat_celtas.png`).
+      Actualizados los dos lugares que referenciaban `@mipmap/ic_launcher` para notificaciones:
+      el meta-data de FCM en el manifest, y `AndroidInitializationSettings` en
+      `notification_service.dart` (gobierna el ícono cuando la app muestra la notificación a mano
+      en foreground). Es el logo completo convertido a silueta (no un mark simplificado dedicado,
+      no existe ese asset todavía) — legible en inspección visual a 96px compuesto sobre negro,
+      pero con más detalle del ideal para el tamaño real de 24dp en la barra de estado; validado
+      solo de forma indirecta (build compila referenciando el recurso + inspección visual del
+      PNG) — no se disparó una notificación push real de punta a punta para no mutar datos de
+      producción sin pedido explícito para este fix puntual (a diferencia del módulo 9, que sí
+      probó con un cupón/pedido real). Queda como mejora futura opcional: un mark simplificado
+      dedicado para este ícono si en el uso real se ve poco legible en la barra de estado.
+
+      `flutter analyze` limpio, tests sin regresión en ambas rondas. Auditado por `@tester` en dos
+      pasadas (ícono/splash primero, fix del ícono FCM después) — detalle completo en
+      `docs/testing-checklist.md`, sección "Branding / Íconos y Splash nativos".
+
+      **Actualización posterior (ronda de rebranding con assets nuevos)**: los 3 archivos
+      descritos arriba (`logo_completo.jpg`, `logo_sin_banner_transparente.png`,
+      `logo_con_banner_transparente.png`) ya no existen — se reemplazaron por un set nuevo con
+      otros nombres (`logomarcaios.png`, `logobackground.png`,
+      `logomarcalienzotransparente.png` para el ícono del launcher; `logo1024splash.png` para el
+      splash). El **mismo bug de clase del recorte en Android 12+ reapareció** con el asset
+      nuevo: la sección `android_12.image` de `pubspec.yaml` quedó apuntando al PNG base sin
+      relleno (el comentario describía la solución correcta — imagen separada con ~48% de
+      relleno — pero la clave `image:` nunca se actualizó a un archivo distinto). Refix: se
+      generó `assets/branding/logo1024splash_android12.png` (canvas cuadrado 1024×1024, logo
+      centrado al ~48% del ancho, relleno transparente) y se apuntó `android_12.image` ahí.
+      Verificado en dispositivo real (Xiaomi, HyperOS, Android 15/API 35): splash sin recorte.
+
+      **`CeltasFlame` (el `CustomPainter` a mano) fue eliminado** — reemplazado por el SVG real
+      de marca (`assets/branding/iconos.svg`, agregado a `flutter.assets`) vía el paquete
+      `flutter_svg` (`SvgPicture.asset` + `colorFilter: ColorFilter.mode(color, BlendMode.srcIn)`
+      para tintar el path de un solo color con el color sólido de cada contexto). Los 2 usos:
+      Splash (`splash_screen.dart`, dorado `CeltasColors.gold`, 88px) y Login
+      (`login_screen.dart`, naranja `CeltasColors.orange`, 24px), verificados visualmente en el
+      mismo dispositivo real. El widget `lib/shared/widgets/celtas_flame.dart` se borró; el
+      parser SVG casero (`lib/shared/widgets/svg_path.dart`) **no se tocó** — sigue siendo
+      necesario para `SvgStrokeIcon`, `google_logo.dart` y `checkout_screen.dart`. Ícono del
+      launcher explícitamente NO tocado en esta ronda (ya reemplazado manualmente antes,
+      confirmado por timestamps de archivo). `flutter analyze` limpio, tests sin regresión (283
+      tras esta ronda, incluye un test nuevo de regresión para el asset del ícono). Auditado por
+      `@tester`: veredicto LISTO.
 - [ ] Definir distribución: Google Play (pago único ~$25) vs. APK directo mientras se valida
 
 ---

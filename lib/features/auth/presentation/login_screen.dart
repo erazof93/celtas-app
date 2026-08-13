@@ -3,12 +3,12 @@ import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
 import 'package:celtas_mobile/features/auth/data/auth_repository.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
-import 'package:celtas_mobile/shared/widgets/celtas_flame.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_text_field.dart';
 import 'package:celtas_mobile/shared/widgets/google_logo.dart';
 import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 /// Login (pantalla 02 del mockup): email + password, o continuar con Google.
@@ -101,7 +101,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 // Header: llama + CELTAS.
                 Row(
                   children: [
-                    const CeltasFlame(),
+                    SvgPicture.asset(
+                      'assets/branding/iconos.svg',
+                      width: 24,
+                      height: 24,
+                      colorFilter: const ColorFilter.mode(
+                        CeltasColors.orange,
+                        BlendMode.srcIn,
+                      ),
+                    ),
                     const SizedBox(width: 9),
                     Text(
                       'CELTAS',
