@@ -220,6 +220,31 @@ solo cuando pasa lo aplicable de este checklist.
 - [x] El historial refleja un pedido recién creado al volver del checkout (invalidar +
       re-fetchear, no insertar a mano)
 - [x] Cupones muestran estado (activo/usado/expirado) correctamente
+- [x] "Mis cupones" ordena la lista LOCALMENTE por `effectiveStatus` (no `status` crudo):
+      activos → usados → expirados al final, sin importar el orden en que responde el backend
+      (`_sortedByEffectiveStatus` en `coupons_screen.dart`, concatenación de tres `where()` en
+      vez de `list.sort()` con comparador, porque `List.sort` no garantiza estabilidad). Los
+      usados/expirados NUNCA se ocultan ni se recortan — sin límite de cantidad ni paginación en
+      esta pantalla (`GET /coupons/me` ya se llamaba sin paginar desde el cierre original del
+      módulo; confirmado que este ajuste no le agregó `page`/`limit`). Cubierto con test de
+      widget (`coupons_screen_test.dart`, "orden local...") que alimenta el mock en orden
+      "raro" (expirado, activo, usado) y verifica el orden visual leyendo los `Text` que
+      contienen "Código:" en orden de aparición en el árbol — técnica confiable acá porque son
+      3 `Text` simples dentro de un `ListView.separated` de un solo nivel, sin reordenamiento
+      de render (`Stack`/`Positioned`) que pudiera desacoplar orden de build de orden visual.
+      `CouponStatus` es un enum cerrado de 3 valores (`active`/`used`/`expired`), así que los
+      tres `where()` particionan la lista completa sin riesgo de un caso fuera de rango que se
+      pierda. Dos huecos de cobertura señalados por `@tester` en la auditoría original, cerrados
+      después con tests dedicados: (1) orden relativo estable DENTRO de cada categoría con 2+
+      cupones por grupo (activo/usado/expirado en pares, backend responde "B antes que A" en
+      cada categoría; el test confirma que se pinta B→A tal cual llegó, no reordenado por código
+      ni por ningún otro criterio) — usa una superficie de test más alta
+      (`tester.view.physicalSize`, mismo patrón que `orders_screen_test.dart`) porque
+      `ListView.separated` es perezoso y las 6 tarjetas no caben en el viewport default; (2) el
+      orden se recalcula correctamente tras pull-to-refresh cuando el backend devuelve datos
+      nuevos y en otro orden que la carga inicial (un solo cupón usado → los 3 estados
+      desordenados), confirmando que el reordenamiento no queda pegado al primer fetch. 279/279
+      tests, `flutter analyze` limpio. Auditado por `@tester`: veredicto LISTO
 - [x] Monto mínimo de compra (`minPurchaseAmount`): el subtotal del carrito se envía a
       `POST /coupons/validate` para que el backend rechace cupones que no lo alcanzan con su
       mensaje real; `0` se trata igual que `null` ("sin mínimo", mismo criterio que

@@ -551,6 +551,23 @@ celtas-mobile/
       el panel admin. 215/215 tests, `flutter analyze` limpio. Auditado por `@tester`: veredicto
       LISTO (parte de la misma mejora que también toca el módulo 4, ver esa nota para el detalle
       completo de la re-validación en el carrito)
+- [x] **Mejora post-cierre: orden local activos → usados → expirados**. `GET /coupons/me` ya
+      se llamaba sin paginar desde el cierre original de este módulo (nada que tocar ahí). Se
+      agregó `_sortedByEffectiveStatus` en `coupons_screen.dart`: concatena tres `where()`
+      sobre `effectiveStatus` (no `status` crudo, mismo criterio del cron desfasado ya
+      documentado arriba) en vez de `list.sort()` con comparador, porque `List.sort` no
+      garantiza estabilidad. Decisión de producto explícita: usados/expirados nunca se ocultan
+      ni se recortan, sin límite de cantidad ni paginación agregados a esta pantalla. Test de
+      widget nuevo en `coupons_screen_test.dart` alimenta el mock en orden "raro" del backend
+      (expirado, activo, usado) y confirma el orden visual leyendo los `Text` con "Código:" en
+      orden de aparición. 277/277 tests, `flutter analyze` limpio. Auditado por `@tester`:
+      veredicto LISTO — 2 huecos de cobertura no bloqueantes señalados en esa auditoría y
+      cerrados después con 2 tests adicionales: (1) orden relativo estable dentro de cada
+      categoría con 2+ cupones (activo/usado/expirado en pares "B antes que A", confirma que
+      `where()` no reordena por código ni por ningún otro criterio propio, solo preserva el
+      orden de llegada del backend); (2) el orden se recalcula tras pull-to-refresh sobre datos
+      nuevos y distintos de la carga inicial, no queda pegado al primer fetch. 279/279 tests,
+      `flutter analyze` limpio.
 
 ### 9. Notificaciones push — ✅ COMPLETO
 - [x] Configurar Firebase en la app (archivos de configuración del proyecto ya existente)

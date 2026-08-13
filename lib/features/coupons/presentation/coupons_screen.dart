@@ -25,6 +25,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// (`lib/features/coupons/data/models/user_coupon.dart`), no `status` crudo:
 /// el backend solo pasa `active` → `expired` una vez al día (cron), así que
 /// un cupón puede seguir marcado `active` hasta 24h después de vencer.
+///
+/// Orden local (`_sortedByEffectiveStatus`, sin tocar el backend): activos →
+/// usados → expirados. Decisión de producto: nunca se ocultan ni se
+/// recortan los vencidos/usados — ver un cupón vencido refuerza que hubo
+/// beneficios reales y da incentivo a revisar la app seguido.
 class CouponsScreen extends ConsumerWidget {
   const CouponsScreen({super.key});
 
@@ -76,19 +81,23 @@ class CouponsScreen extends ConsumerWidget {
                       ),
                     ],
                   ),
-                  data: (coupons) => coupons.isEmpty
-                      ? ListView(
-                          padding: const EdgeInsets.all(24),
-                          children: const [_EmptyCoupons()],
-                        )
-                      : ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(24, 14, 24, 16),
-                          itemCount: coupons.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: 14),
-                          itemBuilder: (context, index) =>
-                              _CouponCard(coupon: coupons[index]),
-                        ),
+                  data: (coupons) {
+                    final sorted = _sortedByEffectiveStatus(coupons);
+                    return sorted.isEmpty
+                        ? ListView(
+                            padding: const EdgeInsets.all(24),
+                            children: const [_EmptyCoupons()],
+                          )
+                        : ListView.separated(
+                            padding:
+                                const EdgeInsets.fromLTRB(24, 14, 24, 16),
+                            itemCount: sorted.length,
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(height: 14),
+                            itemBuilder: (context, index) =>
+                                _CouponCard(coupon: sorted[index]),
+                          );
+                  },
                 ),
               ),
             ),
@@ -98,6 +107,19 @@ class CouponsScreen extends ConsumerWidget {
     );
   }
 }
+
+/// Orden local por `effectiveStatus` (no `status` crudo, mismo criterio del
+/// resto de la pantalla): activos primero, luego usados, luego expirados al
+/// final. Decisión de producto: los vencidos/usados se muestran siempre —
+/// nunca se ocultan ni se recortan — refuerzan que el cliente recibió
+/// beneficios reales con el tiempo. `where` preserva el orden relativo
+/// dentro de cada grupo (llega ya así del backend), así que no hace falta
+/// un `sort` con comparador (Dart no garantiza que sea estable).
+List<UserCoupon> _sortedByEffectiveStatus(List<UserCoupon> coupons) => [
+      ...coupons.where((c) => c.effectiveStatus == CouponStatus.active),
+      ...coupons.where((c) => c.effectiveStatus == CouponStatus.used),
+      ...coupons.where((c) => c.effectiveStatus == CouponStatus.expired),
+    ];
 
 class _CouponStyle {
   const _CouponStyle({
