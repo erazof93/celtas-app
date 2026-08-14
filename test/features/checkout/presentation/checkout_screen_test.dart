@@ -13,6 +13,7 @@ import 'package:celtas_mobile/features/coupons/data/models/validated_coupon.dart
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
 import 'package:celtas_mobile/features/orders/application/order_history_providers.dart';
 import 'package:celtas_mobile/features/orders/data/order_history_repository.dart';
+import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -531,6 +532,89 @@ void main() {
       await tester.pump();
       // Sin onPressed no dispara nada: sigue en /checkout.
       expect(find.text('HOME'), findsNothing);
+    });
+  });
+
+  group('aviso de dirección faltante', () {
+    testWidgets(
+        'sin dirección seleccionada → aviso visible y botón deshabilitado; '
+        'al agregar una dirección, el aviso desaparece y el botón se habilita',
+        (tester) async {
+      final addressRepo = MockAddressRepository();
+      when(() => addressRepo.getAddresses()).thenAnswer((_) async => []);
+      const created = Address(
+        id: 'addr-new',
+        alias: 'Depto',
+        fullAddress: 'Jr. Nueva 456',
+        district: 'Surco',
+      );
+      when(() => addressRepo.createAddress(
+            alias: 'Depto',
+            fullAddress: 'Jr. Nueva 456',
+            district: 'Surco',
+          )).thenAnswer((_) async => created);
+
+      final orderRepo = MockOrderRepository();
+
+      await pumpCheckout(
+        tester,
+        addressRepository: addressRepo,
+        orderRepository: orderRepo,
+        items: [burger],
+      );
+
+      // Sin direcciones: el aviso está visible y el botón, deshabilitado.
+      expect(
+        find.byKey(const ValueKey('checkout-missing-address-notice')),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Elegí o agregá una dirección de entrega para continuar'),
+        findsOneWidget,
+      );
+      var button = tester.widget<CeltasButton>(
+        find.byKey(const ValueKey('checkout-confirm')),
+      );
+      expect(button.onPressed, isNull);
+
+      // Tocar el botón deshabilitado no dispara ninguna llamada al backend.
+      await tester.tap(find.byKey(const ValueKey('checkout-confirm')));
+      await tester.pump();
+      verifyNever(() => orderRepo.createOrder(
+            items: any(named: 'items'),
+            addressId: any(named: 'addressId'),
+            couponCode: any(named: 'couponCode'),
+          ));
+
+      // Se completa y guarda el formulario de nueva dirección.
+      await tester.enterText(
+        find.byKey(const ValueKey('checkout-address-alias')),
+        'Depto',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('checkout-address-full')),
+        'Jr. Nueva 456',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('checkout-address-district')),
+        'Surco',
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('checkout-address-save')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('checkout-address-save')));
+      await tester.pumpAndSettle();
+
+      // Con dirección seleccionada: el aviso desaparece y el botón se habilita.
+      expect(
+        find.byKey(const ValueKey('checkout-missing-address-notice')),
+        findsNothing,
+      );
+      button = tester.widget<CeltasButton>(
+        find.byKey(const ValueKey('checkout-confirm')),
+      );
+      expect(button.onPressed, isNotNull);
     });
   });
 }

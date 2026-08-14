@@ -100,11 +100,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   Future<void> _confirmOrder(CartState cart) async {
-    final addressId = _selectedAddressId;
-    if (addressId == null) {
-      setState(() => _orderError = 'Elegí o agregá una dirección de entrega');
-      return;
-    }
+    final addressId = _selectedAddressId!;
     setState(() {
       _confirming = true;
       _orderError = null;
@@ -331,15 +327,27 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 color: CeltasColors.black,
                 border: Border(top: BorderSide(color: CeltasColors.divider)),
               ),
-              child: CeltasButton(
-                key: const ValueKey('checkout-confirm'),
-                angled: true,
-                label: 'CONFIRMAR PEDIDO POR WHATSAPP',
-                loading: _confirming,
-                icon: const _WhatsappIcon(),
-                onPressed: cart.items.isEmpty || _confirming
-                    ? null
-                    : () => _confirmOrder(cart),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (_selectedAddressId == null) ...[
+                    const _MissingAddressNotice(),
+                    const SizedBox(height: 12),
+                  ],
+                  CeltasButton(
+                    key: const ValueKey('checkout-confirm'),
+                    angled: true,
+                    label: 'CONFIRMAR PEDIDO POR WHATSAPP',
+                    loading: _confirming,
+                    icon: const _WhatsappIcon(),
+                    onPressed:
+                        cart.items.isEmpty ||
+                            _confirming ||
+                            _selectedAddressId == null
+                        ? null
+                        : () => _confirmOrder(cart),
+                  ),
+                ],
               ),
             ),
           ],
@@ -538,6 +546,48 @@ class _AddressCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── Aviso de dirección faltante ───────────────────────────────────────────
+
+/// Mismo patrón de "notice" que [SlowBackendNotice] (card + ícono + texto),
+/// en tono gold de advertencia en vez de neutro, pegado al botón de
+/// confirmar para que la relación "por qué está bloqueado" sea obvia.
+class _MissingAddressNotice extends StatelessWidget {
+  const _MissingAddressNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('checkout-missing-address-notice'),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: CeltasColors.gold.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(CeltasRadii.input),
+        border: Border.all(color: CeltasColors.gold, width: 1.2),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            size: 18,
+            color: CeltasColors.gold,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Elegí o agregá una dirección de entrega para continuar',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: CeltasColors.gold,
+                fontWeight: FontWeight.w700,
+                fontSize: 12.5,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

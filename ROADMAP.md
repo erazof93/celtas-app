@@ -479,6 +479,27 @@ celtas-mobile/
       resumen con cupón, confirmar con éxito, error real del backend, WhatsApp no instalado,
       `PlatformException`, carrito vacío deshabilita el botón) — 132/132 tests totales,
       `flutter analyze` limpio. Auditado por `@tester`: veredicto LISTO
+- [x] **Mejora post-cierre: aviso explícito de dirección faltante + botón realmente deshabilitado**
+      (`checkout_screen.dart`). Antes el aviso "Elegí o agregá una dirección de entrega" solo
+      aparecía como `_orderError` DESPUÉS de tocar "CONFIRMAR PEDIDO" sin dirección — el botón
+      nunca estaba deshabilitado por esa causa. Ahora `_MissingAddressNotice` (mismo patrón
+      card+ícono+texto que `SlowBackendNotice`, tono gold de advertencia en vez de neutro) se
+      muestra de forma reactiva junto al botón mientras `_selectedAddressId == null`, y el
+      `onPressed` queda `null` en ese caso (mismo criterio que carrito vacío/`_confirming`). Se
+      quitó el `if (addressId == null) { setState... return; }` de `_confirmOrder` por quedar
+      inalcanzable con el botón deshabilitado. Auditado por `@tester`: `flutter analyze` limpio
+      (`No issues found!`), 284/284 tests (`flutter test` completo). Revisado el diff completo:
+      sin código muerto ni referencias rotas, `_orderError` sigue usándose solo para errores
+      reales de API/WhatsApp sin colisionar con el nuevo aviso (widgets distintos, en distintas
+      zonas del layout). No existía cobertura para el flujo completo (vacío → aviso+deshabilitado
+      → dirección agregada → aviso desaparece+habilitado); se agregó un test nuevo en
+      `checkout_screen_test.dart` y se confirmó que es un test de regresión real revirtiendo
+      temporalmente el fix con `git stash` (el test falla sin el fix con `Found 0 widgets with
+      key [checkout-missing-address-notice]`, pasa con el fix restaurado). **Pendiente**: no se
+      pudo verificar en dispositivo Android real en esta sesión (`flutter devices` solo listó
+      Windows/Chrome/Edge, sin dispositivo conectado) — queda pendiente confirmar visualmente el
+      color/contraste del aviso gold y el estado gris del botón en pantalla física antes de dar
+      por cerrado el 100% de la verificación. Veredicto: **LISTO CON OBSERVACIONES**.
 
 ### 6. Perfil + Direcciones — ✅ COMPLETO
 - [x] Ver/editar perfil (`GET`/`PATCH /users/me`)

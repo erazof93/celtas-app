@@ -299,6 +299,45 @@ solo cuando pasa lo aplicable de este checklist.
       la misma pantalla (`cart_screen.dart:601`) — consistente, no inventado para este chip.
       Ambos cambios cubiertos por los tests ya existentes (mismos `ValueKey`, sin necesidad de
       tests nuevos). `flutter analyze` limpio, 258/258 tests. Sin bloqueadores.
+- [x] **Aviso explícito de dirección faltante en checkout + botón realmente deshabilitado**
+      (`checkout_screen.dart`, sin commitear todavía): `_MissingAddressNotice` (mismo patrón
+      card+ícono+texto que `SlowBackendNotice`, tono `CeltasColors.gold` de advertencia) se
+      muestra de forma reactiva junto al botón mientras `_selectedAddressId == null`; `onPressed`
+      del `CeltasButton` queda `null` en ese caso (mismo criterio que carrito vacío/`_confirming`,
+      confirmado leyendo `celtas_button.dart`: `enabled = onPressed != null && !loading`, fondo
+      pasa de `CeltasColors.orange` a `CeltasColors.border`). Se quitó el `if (addressId == null)
+      {...}` muerto de `_confirmOrder` (inalcanzable con el botón deshabilitado) — confirmado por
+      lectura completa del diff, sin referencias rotas. `_orderError` se sigue usando solo para
+      errores reales de API/WhatsApp (`ListView` del cuerpo), sin colisionar con el nuevo aviso
+      (`Column` de la barra inferior fija) — son widgets distintos en zonas distintas del layout.
+      `flutter analyze`: `No issues found!`. `flutter test`: 284/284 (283 existentes + 1 nuevo).
+      **Hallazgo cerrado en el momento**: no existía cobertura para el flujo completo (dirección
+      vacía → aviso visible + botón deshabilitado → dirección agregada → aviso desaparece + botón
+      habilitado) — los tests existentes cubrían "sin direcciones → muestra el formulario" y
+      "agregar dirección → queda seleccionada" por separado, pero ninguno verificaba el estado del
+      aviso/`onPressed` explícitamente. Se agregó un test nuevo en `checkout_screen_test.dart`
+      ("aviso de dirección faltante...") y se confirmó que es un test de regresión real: revertido
+      temporalmente el fix vía `git stash push -- lib/features/checkout/presentation/
+      checkout_screen.dart` (reversible, restaurado con `git stash pop` acto seguido), el test
+      falla con `Expected: exactly one matching candidate / Actual: Found 0 widgets with key
+      [checkout-missing-address-notice]` — confirma que ejercita el código real, no un falso
+      positivo. Sin precedente exacto en `design-reference/` para este aviso (es un estado
+      dinámico/interactivo que el mockup estático no representa), pero usa únicamente tokens ya
+      aprobados (`CeltasColors.gold`, `CeltasRadii.input`, sin `Color(0xFF...)` sueltos) y respeta
+      la semántica de color ya establecida en la app (gold = advertencia/atención, no error —
+      igual criterio que el ícono de reloj de `SlowBackendNotice`; `redLight` sigue reservado para
+      errores reales de `_orderError`/`_AddressError`).
+
+      ⚠️ **Pendiente de validar en dispositivo real**: no hay un dispositivo Android conectado en
+      esta sesión (`flutter devices` solo lista Windows/Chrome/Edge) — no se pudo confirmar
+      visualmente en pantalla física el contraste del aviso gold sobre el fondo, ni el estado
+      gris real del botón deshabilitado, ni que el layout de la barra inferior (aviso + botón +
+      `SafeArea`) no se corte en un dispositivo angosto real. Esto NO se probó y no se reporta
+      como probado.
+
+      **Veredicto: LISTO CON OBSERVACIONES** — todo lo verificable desde análisis estático, tests
+      y lectura de código pasa; queda pendiente la verificación visual en dispositivo real antes
+      de considerar el cambio 100% cerrado.
 
 ## Notificaciones
 
