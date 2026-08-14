@@ -5,7 +5,7 @@
          33+ aunque el usuario nunca vea el diálogo de permiso. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
-        android:label="celtas_mobile"
+        android:label="Celtas FastFood"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
         <activity
