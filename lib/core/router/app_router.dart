@@ -5,6 +5,7 @@ import 'package:celtas_mobile/features/auth/application/auth_state.dart';
 import 'package:celtas_mobile/features/auth/presentation/login_screen.dart';
 import 'package:celtas_mobile/features/auth/presentation/register_screen.dart';
 import 'package:celtas_mobile/features/auth/presentation/splash_screen.dart';
+import 'package:celtas_mobile/features/cart/data/models/cart_item.dart';
 import 'package:celtas_mobile/features/cart/presentation/cart_screen.dart';
 import 'package:celtas_mobile/features/checkout/presentation/checkout_screen.dart';
 import 'package:celtas_mobile/features/coupons/presentation/coupons_screen.dart';
@@ -93,10 +94,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       // Detalle de producto: se empuja sobre el shell (sin bottom nav,
       // como el mockup 05). El producto se resuelve desde el menú ya cargado.
+      // `extra` opcional: el `CartItem` que se está editando (ícono de lápiz
+      // del carrito) — precarga cantidad/salsas y cambia el flujo de
+      // `_addToCart` a `updateLine`, ver `product_detail_screen.dart`.
       GoRoute(
         path: '/product/:id',
         builder: (context, state) => ProductDetailScreen(
           productId: state.pathParameters['id']!,
+          editingItem: state.extra as CartItem?,
         ),
       ),
       // Carrito: pantalla completa sobre el shell (mockup 06, sin bottom nav).

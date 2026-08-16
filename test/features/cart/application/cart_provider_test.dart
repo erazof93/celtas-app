@@ -197,6 +197,145 @@ void main() {
     );
   });
 
+  group('updateLine (edición desde el carrito)', () {
+    const mayo = SauceOption(id: 's-1', name: 'Mayonesa');
+    const mostaza = SauceOption(id: 's-2', name: 'Mostaza');
+
+    test('reemplaza cantidad y salsas de la fila indicada', () {
+      final container = createContainer();
+      container
+          .read(cartProvider.notifier)
+          .addItem(burger, selectedSauces: const [mayo]);
+
+      container.read(cartProvider.notifier).updateLine(
+            'i-1::s-1',
+            quantity: 4,
+            selectedSauces: const [mayo, mostaza],
+          );
+
+      final state = container.read(cartProvider);
+      expect(state.items, hasLength(1));
+      final item = state.items.single;
+      expect(item.quantity, 4);
+      expect(item.selectedSauces, [mayo, mostaza]);
+    });
+
+    test(
+      'la cantidad nueva REEMPLAZA la anterior, no se suma (a diferencia '
+      'de addItem)',
+      () {
+        final container = createContainer();
+        container.read(cartProvider.notifier).addItem(burger, quantity: 5);
+
+        container.read(cartProvider.notifier).updateLine(
+              'i-1',
+              quantity: 2,
+              selectedSauces: const [],
+            );
+
+        expect(container.read(cartProvider).items.single.quantity, 2);
+      },
+    );
+
+    test(
+      'cambiar las salsas de forma que ya no coincida con otra fila NO la '
+      'duplica: solo se actualiza la fila editada',
+      () {
+        final container = createContainer();
+        container
+            .read(cartProvider.notifier)
+            .addItem(burger, selectedSauces: const [mayo]);
+
+        container.read(cartProvider.notifier).updateLine(
+              'i-1::s-1',
+              quantity: 1,
+              selectedSauces: const [mostaza],
+            );
+
+        final state = container.read(cartProvider);
+        expect(state.items, hasLength(1));
+        expect(state.items.single.lineKey, 'i-1::s-2');
+        expect(state.items.single.selectedSauces, [mostaza]);
+      },
+    );
+
+    test(
+      'editar sin cambiar nada (misma combinación de salsas comparada '
+      'consigo misma) deja una sola fila, sin duplicar',
+      () {
+        final container = createContainer();
+        container
+            .read(cartProvider.notifier)
+            .addItem(burger, quantity: 2, selectedSauces: const [mayo]);
+
+        container.read(cartProvider.notifier).updateLine(
+              'i-1::s-1',
+              quantity: 2,
+              selectedSauces: const [mayo],
+            );
+
+        final state = container.read(cartProvider);
+        expect(state.items, hasLength(1));
+        expect(state.items.single.quantity, 2);
+      },
+    );
+
+    test(
+      'si la nueva combinación de salsas coincide con OTRA fila ya '
+      'existente, se fusionan sumando cantidades (no quedan dos filas '
+      'duplicadas del mismo producto + misma selección)',
+      () {
+        final container = createContainer();
+        final notifier = container.read(cartProvider.notifier);
+        notifier.addItem(burger, selectedSauces: const [mayo]);
+        notifier.addItem(burger, quantity: 3, selectedSauces: const [mostaza]);
+
+        // Se edita la fila "mostaza" para que pase a tener "mayo" — ya
+        // existe una fila con esa combinación exacta.
+        notifier.updateLine(
+          'i-1::s-2',
+          quantity: 3,
+          selectedSauces: const [mayo],
+        );
+
+        final state = container.read(cartProvider);
+        expect(state.items, hasLength(1));
+        expect(state.items.single.lineKey, 'i-1::s-1');
+        // 1 (fila original con mayo) + 3 (fila editada, fusionada) = 4.
+        expect(state.items.single.quantity, 4);
+      },
+    );
+
+    test('lineKey inexistente no hace nada (fila ya no está en el carrito)',
+        () {
+      final container = createContainer();
+      container.read(cartProvider.notifier).addItem(burger);
+
+      container.read(cartProvider.notifier).updateLine(
+            'i-999',
+            quantity: 5,
+            selectedSauces: const [],
+          );
+
+      final state = container.read(cartProvider);
+      expect(state.items, hasLength(1));
+      expect(state.items.single.quantity, 1);
+    });
+
+    test('quantity <= 0 no hace nada', () {
+      final container = createContainer();
+      container.read(cartProvider.notifier).addItem(burger, quantity: 3);
+
+      container.read(cartProvider.notifier).updateLine(
+            'i-1',
+            quantity: 0,
+            selectedSauces: const [],
+          );
+
+      expect(container.read(cartProvider).items.single.quantity, 3);
+    });
+  });
+
   group('increment / decrement', () {
     test('increment suma 1 a la cantidad del ítem', () {
       final container = createContainer();

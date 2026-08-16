@@ -499,11 +499,12 @@ celtas-mobile/
         omiten cuando no aplican). El mensaje de WhatsApp con las salsas concatenadas ya lo arma
         el backend (`OrdersService.buildWhatsappUrl`, verificado y cerrado en la sesión de ese
         repo) — este repo no necesita tocar nada para eso.
-      - El botón "+" rápido del Home (`_AddButton` en `home_screen.dart`) se dejó **sin cambios a
-        propósito**: sigue agregando sin pasar por el selector de salsas (decisión documentada en
-        el doc del propio `HomeScreen` — agregar sin salsas es un estado válido para el backend,
-        y es el atajo de "agregar rápido" ya probado). Si un producto ofrece salsas y el cliente
-        quiere elegirlas, toca la tarjeta para abrir el detalle.
+      - El botón "+" rápido del Home (`_AddButton` en `home_screen.dart`) agrega sin pasar por el
+        selector de salsas SOLO si el producto no ofrece salsas — agregar sin salsas sigue siendo
+        un estado válido para el backend, y es el atajo de "agregar rápido" ya probado. Si el
+        producto SÍ ofrece salsas, el "+" navega al detalle en vez de agregar directo (ver
+        **hallazgo de dispositivo real** más abajo — este comportamiento cambió después del cierre
+        inicial del módulo).
       - Tests actualizados/agregados a mano (no corridos — ver advertencia arriba):
         `product_detail_screen_test.dart` (reescrito para navegar con `GoRouter` real en vez de
         `MaterialApp(home: ...)` suelto, necesario porque ahora `_addToCart` llama a
@@ -524,12 +525,38 @@ celtas-mobile/
         (301 tests) verde. Auditado por `@tester`: veredicto **LISTO** para este hallazgo puntual
         — detalle en `docs/testing-checklist.md`, sección Salsas/cremas → "Auditoría puntual: fix
         de la carrera SnackBar/`pop()` en `_addToCart()`".
+      - **Dos hallazgos de dispositivo real (probados por el dueño del negocio, no encontrados en
+        revisión de código):**
+        1. El "+" rápido del Home agregaba SIEMPRE directo al carrito, incluso en productos que sí
+           ofrecen salsas — el atajo se sentía roto porque nunca dejaba elegirlas. Arreglado: si
+           `item.sauces.isNotEmpty`, el "+" navega a `/product/:id` (mismo `context.push` que ya
+           usa el tap sobre la tarjeta) en vez de agregar directo.
+        2. Faltaba poder editar la selección de salsas de un ítem ya agregado al carrito sin
+           borrarlo y repetir el flujo desde cero. Agregado: `ProductDetailScreen` gana un modo de
+           edición (`editingItem`, un `CartItem?` opcional) — precarga cantidad/salsas, el botón
+           dice "GUARDAR CAMBIOS", y confirma con `CartNotifier.updateLine` (nuevo método:
+           reemplaza cantidad y salsas de la fila, fusiona con otra fila si la combinación nueva
+           de salsas coincide con una ya existente) en vez de `addItem`. El carrito
+           (`cart_screen.dart`) gana un ícono de lápiz por ítem (visible solo si el producto ofrece
+           salsas) que navega a `/product/:id` pasando el `CartItem` por `extra` de `go_router`
+           (sin serializar). El `pop()` diferido tras guardar es el mismo en ambos modos: como el
+           modo edición siempre se llega con `push` desde `/cart`, cae de vuelta ahí solo, sin
+           necesitar una rama de navegación aparte.
+
+        Tests nuevos en `home_screen_test.dart`, `cart_provider_test.dart` (grupo `updateLine`),
+        `cart_screen_test.dart` (grupo del ícono de lápiz) y `product_detail_screen_test.dart`
+        (grupo "modo edición"). `flutter analyze` limpio, `flutter test` completo (316 tests)
+        verde. Verificado en dispositivo Android real (vía `adb` + automatización de toques) los 4
+        escenarios: "+" con salsas → abre detalle; "+" sin salsas → agrega directo; lápiz del
+        carrito → modo edición con precarga; guardar cambios → vuelve al Carrito (no a Home) con
+        la fila actualizada sin duplicar. Auditado por `@tester`: veredicto **LISTO** para estos
+        dos hallazgos — detalle en `docs/testing-checklist.md`, sección Salsas/cremas.
       - **Pendiente antes de poder marcar esto LISTO:** correr `flutter pub get`, regenerar
         código con `build_runner` y comparar contra lo escrito a mano acá, y una verificación
         visual real (emulador o dispositivo) del flujo completo Home → detalle con salsas →
         Agregar (vuelve a Home) → VER CARRITO → "cremas: ..." visible → Checkout → WhatsApp con
         las salsas concatenadas. Auditoría de `@tester` sobre el resto del módulo (más allá de
-        este hallazgo puntual) pendiente.
+        los hallazgos puntuales ya auditados) pendiente.
 
 ### 5. Checkout — ✅ COMPLETO (5/5)
 - [x] Selector de dirección guardada (o agregar nueva): `GET /users/me/addresses` con

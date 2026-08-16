@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
+import 'package:celtas_mobile/features/cart/data/models/cart_item.dart';
 import 'package:celtas_mobile/features/home/application/home_providers.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
 import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
@@ -37,10 +38,26 @@ import 'package:go_router/go_router.dart';
 ///     `/product/:id` siempre se llega con `push` desde Home (ver
 ///     `home_screen.dart`: tarjeta de producto y banner tipo `menuItem`),
 ///     así que el pop siempre cae de vuelta ahí.
+///
+/// Modo edición (`editingItem`, mejora post-cierre pedida por el dueño del
+/// negocio): cuando se llega con un `CartItem` ya en el carrito (ícono de
+/// lápiz de `cart_screen.dart`, pasado por `extra` de `go_router` — ver
+/// `app_router.dart`), la cantidad y las salsas arrancan precargadas con las
+/// de esa fila, el botón dice "GUARDAR CAMBIOS" en vez del precio, y
+/// confirmar llama a `CartNotifier.updateLine` en vez de `addItem` (reemplaza
+/// la fila en vez de crear/sumar una nueva). El `pop()` sigue siendo el mismo
+/// en ambos modos: como el modo edición siempre se llega con `push` desde
+/// `/cart` (nunca desde Home), el pop cae de vuelta ahí solo — no hace falta
+/// una rama de navegación aparte.
 class ProductDetailScreen extends ConsumerWidget {
-  const ProductDetailScreen({super.key, required this.productId});
+  const ProductDetailScreen({
+    super.key,
+    required this.productId,
+    this.editingItem,
+  });
 
   final String productId;
+  final CartItem? editingItem;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -56,7 +73,7 @@ class ProductDetailScreen extends ConsumerWidget {
         for (final category in categories) {
           for (final item in category.items) {
             if (item.id == productId) {
-              return _ProductDetailBody(item: item);
+              return _ProductDetailBody(item: item, editingItem: editingItem);
             }
           }
         }
@@ -68,17 +85,32 @@ class ProductDetailScreen extends ConsumerWidget {
 
 /// Cuerpo del detalle: hero + contenido scrollable + barra de agregar fija.
 class _ProductDetailBody extends ConsumerStatefulWidget {
-  const _ProductDetailBody({required this.item});
+  const _ProductDetailBody({required this.item, this.editingItem});
 
   final PublicMenuItem item;
+  final CartItem? editingItem;
 
   @override
   ConsumerState<_ProductDetailBody> createState() => _ProductDetailBodyState();
 }
 
 class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
-  int _quantity = 1;
-  final Set<String> _selectedSauceIds = {};
+  late int _quantity;
+  late final Set<String> _selectedSauceIds;
+
+  @override
+  void initState() {
+    super.initState();
+    // Modo edición: precarga cantidad y salsas de la fila que se está
+    // editando en vez de arrancar en 1/vacío — ver doc de `editingItem` en
+    // `ProductDetailScreen`.
+    final editingItem = widget.editingItem;
+    _quantity = editingItem?.quantity ?? 1;
+    _selectedSauceIds = {
+      for (final sauce in editingItem?.selectedSauces ?? const [])
+        sauce.id,
+    };
+  }
 
   void _toggleSauce(String sauceId) {
     setState(() {
@@ -90,14 +122,23 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
 
   void _addToCart() {
     final item = widget.item;
+    final editingItem = widget.editingItem;
     final selectedSauces = item.sauces
         .where((sauce) => _selectedSauceIds.contains(sauce.id))
         .toList();
-    ref.read(cartProvider.notifier).addItem(
-          item,
-          quantity: _quantity,
-          selectedSauces: selectedSauces,
-        );
+    if (editingItem != null) {
+      ref.read(cartProvider.notifier).updateLine(
+            editingItem.lineKey,
+            quantity: _quantity,
+            selectedSauces: selectedSauces,
+          );
+    } else {
+      ref.read(cartProvider.notifier).addItem(
+            item,
+            quantity: _quantity,
+            selectedSauces: selectedSauces,
+          );
+    }
     // El SnackBar vive en el ScaffoldMessenger raíz (por encima del
     // Navigator), así que sigue visible aunque esta pantalla haga `pop()` a
     // continuación — mismo criterio que ya usa el botón "+" rápido del
@@ -111,7 +152,9 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
       ..showSnackBar(
         SnackBar(
           content: Text(
-            'Agregado: ${item.name} ×$_quantity',
+            editingItem != null
+                ? 'Cambios guardados: ${item.name}'
+                : 'Agregado: ${item.name} ×$_quantity',
             style: Theme.of(
               context,
             ).textTheme.bodyMedium?.copyWith(color: CeltasColors.cream),
@@ -124,11 +167,14 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 88),
         ),
       );
-    // Vuelve a Home para seguir agregando productos — el flujo de "captura"
-    // normal de la app (pedido explícito del negocio: agregar no debe
-    // dejarte varado en el detalle). El pop se difiere al siguiente frame
-    // porque en el mismo frame en que se inserta el SnackBar, hacerlo de
-    // inmediato duplica momentáneamente el SnackBar en el árbol de widgets.
+    // Vuelve a la pantalla desde la que se llegó acá — Home en el flujo
+    // normal de "agregar" (pedido explícito del negocio: agregar no debe
+    // dejarte varado en el detalle), o /cart en modo edición, porque
+    // `/product/:id` en modo edición siempre se llega con `push` desde
+    // `cart_screen.dart` (ver doc de `editingItem` arriba) y el pop cae de
+    // vuelta ahí solo. El pop se difiere al siguiente frame porque en el
+    // mismo frame en que se inserta el SnackBar, hacerlo de inmediato
+    // duplica momentáneamente el SnackBar en el árbol de widgets.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.pop();
@@ -281,8 +327,10 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
               child: CeltasButton(
                 key: const ValueKey('detail-add'),
                 angled: true,
-                label:
-                    'AGREGAR AL CARRITO · S/ ${totalPrice.toStringAsFixed(2)}',
+                label: widget.editingItem != null
+                    ? 'GUARDAR CAMBIOS'
+                    : 'AGREGAR AL CARRITO · '
+                          'S/ ${totalPrice.toStringAsFixed(2)}',
                 onPressed: _addToCart,
               ),
             ),

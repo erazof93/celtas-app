@@ -6,6 +6,7 @@ import 'package:celtas_mobile/features/home/application/home_providers.dart';
 import 'package:celtas_mobile/features/home/data/models/banner.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_category.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
+import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
 import 'package:celtas_mobile/features/home/presentation/home_screen.dart';
 import 'package:celtas_mobile/features/notifications/application/notification_providers.dart';
 import 'package:celtas_mobile/features/notifications/data/models/notification_history_item.dart';
@@ -15,6 +16,7 @@ import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
@@ -167,6 +169,59 @@ void main() {
     expect(state.items.single.quantity, 1);
     expect(state.totalCount, 1);
   });
+
+  testWidgets(
+    'botón "+" en un producto CON salsas → navega al detalle en vez de '
+    'agregar directo (hallazgo real probando en dispositivo: el atajo se '
+    'sentía roto porque nunca dejaba elegir las salsas)',
+    (tester) async {
+      const withSauces = PublicMenuCategory(
+        id: 'c-5',
+        name: 'Con salsas',
+        items: [
+          PublicMenuItem(
+            id: 'i-5',
+            name: 'Con Salsas Burger',
+            price: 10,
+            sauces: [SauceOption(id: 's-1', name: 'Mayonesa')],
+          ),
+        ],
+      );
+      final container = ProviderContainer(
+        overrides: [
+          activeBannersProvider.overrideWith((ref) async => const []),
+          publicMenuProvider.overrideWith((ref) async => [withSauces]),
+        ],
+      );
+      addTearDown(container.dispose);
+      final router = GoRouter(
+        initialLocation: '/home',
+        routes: [
+          GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
+          GoRoute(
+            path: '/product/:id',
+            builder: (_, state) =>
+                Scaffold(body: Text('DETAIL ${state.pathParameters['id']}')),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('add-i-5')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('DETAIL i-5'), findsOneWidget);
+      // No agregó directo: el carrito sigue vacío, la elección de salsas
+      // queda en manos del detalle.
+      expect(container.read(cartProvider).items, isEmpty);
+    },
+  );
 
   testWidgets(
     'el SnackBar de "Agregado" desde el "+" rápido tiene margen para no '

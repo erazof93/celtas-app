@@ -6,6 +6,7 @@ import 'package:celtas_mobile/features/cart/data/models/cart_item.dart';
 import 'package:celtas_mobile/features/cart/presentation/widgets/coupon_picker_sheet.dart';
 import 'package:celtas_mobile/features/coupons/application/coupon_providers.dart';
 import 'package:celtas_mobile/features/coupons/data/models/validated_coupon.dart';
+import 'package:celtas_mobile/features/home/application/home_providers.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
 import 'package:celtas_mobile/shared/widgets/svg_stroke_icon.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +20,14 @@ import 'package:go_router/go_router.dart';
 /// contra `POST /coupons/validate` ANTES de ir al checkout — el descuento se
 /// muestra como vista previa, el canje real ocurre al crear el pedido
 /// (módulo 5).
+///
+/// Mejora post-cierre pedida por el dueño del negocio (probando en
+/// dispositivo real): cada fila cuyo producto ofrece salsas muestra un
+/// ícono de lápiz junto al nombre (`_CartItemRow._offersSauces`) que abre
+/// `/product/:id` en modo edición (`extra: item`, ver `app_router.dart` y
+/// el doc de `editingItem` en `product_detail_screen.dart`) — permite
+/// cambiar cantidad/salsas de una fila ya agregada sin borrarla y repetir
+/// el flujo desde cero.
 class CartScreen extends ConsumerStatefulWidget {
   const CartScreen({super.key});
 
@@ -283,8 +292,28 @@ class _CartItemRow extends ConsumerWidget {
 
   final CartItem item;
 
+  /// El ícono de editar salsas solo tiene sentido si el producto ofrece
+  /// salsas — ya tenga alguna seleccionada (`item.selectedSauces`, snapshot
+  /// de cuando se agregó) o el menú público lo siga ofreciendo aunque el
+  /// cliente no haya elegido ninguna todavía (ej. agregado desde el "+"
+  /// rápido del Home antes de este cambio, o con todas las salsas
+  /// deseleccionadas a propósito). Un producto sin salsas (ej. arroz
+  /// chaufa) no tiene nada que editar acá — la fila se queda como está.
+  bool _offersSauces(WidgetRef ref) {
+    if (item.selectedSauces.isNotEmpty) return true;
+    final categories = ref.watch(publicMenuProvider).valueOrNull;
+    if (categories == null) return false;
+    for (final category in categories) {
+      for (final menuItem in category.items) {
+        if (menuItem.id == item.menuItemId) return menuItem.sauces.isNotEmpty;
+      }
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final offersSauces = _offersSauces(ref);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
@@ -295,13 +324,42 @@ class _CartItemRow extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  item.name,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: CeltasColors.cream,
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.name,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: CeltasColors.cream,
+                            ),
                       ),
+                    ),
+                    if (offersSauces)
+                      GestureDetector(
+                        key: ValueKey('cart-edit-${item.lineKey}'),
+                        onTap: () {
+                          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                          context.push(
+                            '/product/${item.menuItemId}',
+                            extra: item,
+                          );
+                        },
+                        // Tap target más grande que el ícono visible (mismo
+                        // criterio ya usado por `cart-clear` más abajo en
+                        // este archivo): 16px quedaba chico y difícil de
+                        // acertar.
+                        child: const Padding(
+                          padding: EdgeInsets.all(6),
+                          child: Icon(
+                            Icons.edit_outlined,
+                            size: 16,
+                            color: CeltasColors.textMuted,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
                 // Salsas elegidas (si el producto ofrece y el cliente
                 // seleccionó alguna) — debajo del nombre, arriba del precio,

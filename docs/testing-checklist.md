@@ -311,6 +311,137 @@ por su cuenta.
 "Salsas/cremas" de arriba — esta auditoría cubrió únicamente la carrera SnackBar/`pop()`, no el
 resto del módulo.
 
+#### Auditoría puntual: 2 hallazgos de la prueba en dispositivo real del dueño del negocio (el "+" del Home debe respetar el selector, editar salsas de un ítem ya en el carrito)
+
+Alcance de esta auditoría: SOLO estos dos ajustes (sin commitear todavía), no el resto de la
+sección "Salsas/cremas" de arriba (sigue pendiente, sin correr formalmente). No se marca ningún
+checkbox de esa sección por esta auditoría. Documentado explícitamente por pedido del encargo:
+**ambos hallazgos vinieron de la prueba del dueño del negocio en dispositivo real, no de una
+revisión de código** — es la app en producción (backend real) la que expuso el "+" rápido
+agregando sin dejar elegir salsas, y la falta de forma de corregir una selección de salsas ya en
+el carrito sin borrar la fila y repetir el flujo desde cero.
+
+`flutter analyze`: `No issues found!` (salida cruda propia). `flutter test` (suite completa):
+`316: All tests passed!` (salida cruda propia).
+
+✅ Pasó:
+- **Hallazgo 1 (botón "+" del Home)**: confirmado por lectura de código
+  (`home_screen.dart:818-848`) que el `onTap` de `_AddButton` ahora bifurca en
+  `item.sauces.isNotEmpty` — si las ofrece, `context.push('/product/${item.id}')` (mismo
+  `push` que ya usa el tap sobre la tarjeta) y `return` temprano, sin llamar a `addItem`; si no
+  las ofrece, seguido igual que antes (`addItem` + `SnackBar`). Verificado que no es un cambio
+  cosmético: reverté el `lib/features/home/presentation/home_screen.dart` completo con `git
+  stash push -- <archivo>` y corrí `flutter test test/features/home/presentation/
+  home_screen_test.dart` — el test nuevo (`'botón "+" en un producto CON salsas → navega al
+  detalle...'`) es el ÚNICO que falla (`Expected: exactly one matching candidate / Actual: Found
+  0 widgets with text "DETAIL i-5"`), el resto de la suite del archivo (26 tests) sigue pasando
+  igual — confirma que el test ejercita el código real del fix, no un falso positivo, y que el
+  cambio no rompió nada del comportamiento previo (SnackBar de margen, carrusel de banners,
+  etc.). Restauré con `git stash pop` acto seguido.
+- **Hallazgo 2 (editar salsas desde el carrito)**: `CartNotifier.updateLine` (nuevo,
+  `cart_provider.dart`) revisado línea por línea — `lineKey` es un getter calculado sobre
+  `CartItem` (no cacheado, confirmado en `cart_item.dart:44-49`), así que `updated.lineKey` tras
+  el `copyWith` con las salsas nuevas siempre refleja la combinación real, sin arrastrar el
+  `lineKey` viejo. Casos borde verificados con evidencia, no solo lectura:
+  - **Fusión real, no solo nominal**: reproduje el escenario completo pedido en el encargo (2
+    filas del mismo producto con distinta combinación, se edita una para que coincida con la
+    otra) con una mutación deliberada del código (cambié
+    `items[i].copyWith(quantity: items[i].quantity + quantity)` a
+    `items[i].copyWith(quantity: quantity)` — quitando la suma) y corrí
+    `cart_provider_test.dart` + `product_detail_screen_test.dart`: los 2 tests de fusión (uno en
+    cada archivo) fallan exactamente con esa mutación (`Expected: <4> / Actual: <3>`), confirmando
+    que sí ejercitan la suma real y no un valor que coincidiría igual sin ella. Revertido con
+    `git checkout -- lib/features/cart/application/cart_provider.dart` acto seguido y
+    reconfirmado con `git diff` (idéntico byte a byte al estado previo a la mutación) + `flutter
+    analyze`/`flutter test` limpios de nuevo (316/316).
+  - **Editar sin cambios (fila comparada consigo misma)**: `mergeIndex == oldIndex` en ese caso
+    (la única fila que coincide con la combinación nueva es la misma que se está editando), así
+    que cae en la rama `else` (reemplazo simple, no fusión) — no hay riesgo de que la fila se
+    "fusione consigo misma" duplicando su propia cantidad. Cubierto con test explícito
+    (`'editar sin cambiar nada...'`).
+  - **`oldLineKey` inexistente / `quantity <= 0`**: ambos son no-op (`return` temprano),
+    cubiertos con test. `quantity <= 0` es inalcanzable desde la UI real (el stepper de
+    `product_detail_screen.dart:307` tiene piso en 1), documentado como guardia defensiva
+    consistente con el resto del archivo (mismo criterio que `addItem`).
+  - Ruta de navegación (`app_router.dart`): `state.extra as CartItem?` en `/product/:id`
+    confirmado — `cart_screen.dart` pasa el `CartItem` completo por `extra` (sin serializar,
+    correcto: no hay necesidad de codificarlo a query string, y `go_router` soporta objetos
+    arbitrarios por `extra` en navegación in-memory).
+  - **El `pop()` en modo edición**: confirmado que es literalmente el mismo código que el modo
+    normal (mismo `WidgetsBinding.instance.addPostFrameCallback` + `context.pop()`), sin rama
+    nueva — razonable porque, a diferencia de Home, no existe ningún camino real en la app hoy
+    que llegue a `/product/:id` con `editingItem != null` que no sea `push` desde
+    `cart_screen.dart` (`grep -rn "editingItem:" lib/` solo dentro de `app_router.dart`, y
+    `grep -rn "extra: item" lib/` solo dentro de `_CartItemRow` de `cart_screen.dart`) — no hay
+    forma hoy de que el pop caiga en un lugar distinto de `/cart`.
+- **`_offersSauces` no le pega a la red en el helper `pumpCart` de `cart_screen_test.dart`**:
+  confirmado que el override por defecto (`publicMenuProvider.overrideWith((ref) async =>
+  menu)`, `menu: const []` por defecto) sí resuelve el problema para toda la suite existente —
+  pero además, el tercer test del grupo nuevo ("ítem con salsas ya seleccionadas...") demuestra
+  con evidencia que ni siquiera hace falta el override en ese caso puntual: monta el árbol con un
+  `ProviderContainer` que NO overridea `publicMenuProvider` en absoluto y el ícono igual aparece
+  — porque `_offersSauces` hace `if (item.selectedSauces.isNotEmpty) return true;` ANTES de
+  tocar `ref.watch(publicMenuProvider)`, así que el provider ni se llega a leer cuando la fila ya
+  trae salsas seleccionadas (snapshot del propio `CartItem`, sin depender de una segunda
+  consulta al menú). Confirma que el guard de orden de evaluación es real, no solo un detalle de
+  implementación incidental.
+- **El ícono de lápiz no aparece para productos sin salsas**: confirmado por lectura y por el
+  test dedicado (`'producto que NO ofrece salsas...'`, con el menú vacío por defecto de
+  `pumpCart`) — sin `item.selectedSauces` Y sin coincidencia en `publicMenuProvider`, `_offersSauces`
+  devuelve `false` y el `if (offersSauces)` de `cart_screen.dart:339` ni construye el
+  `GestureDetector`. No hay "nada que editar" ahí, tal como pide el encargo.
+- **`_CartItemRow` sigue mostrando "cremas: ..." debajo del nombre y arriba del precio**: el
+  nuevo `Row` (nombre + ícono opcional) reemplazó solo el `Text` suelto que había antes, sin
+  tocar el bloque `if (item.selectedSauces.isNotEmpty) ...` que sigue exactamente donde estaba
+  (`cart_screen.dart:360-375`) — confirmado por lectura completa del widget, no solo el diff.
+- **Fidelidad visual**: `Icons.edit_outlined` sin `Color(0xFF...)` suelto (`CeltasColors.textMuted`,
+  mismo token que ya usa el resto de la app para texto secundario) — consistente con el
+  precedente ya establecido en el mismo archivo de usar `Icons.*` de Material para íconos
+  interactivos sin equivalente en `design-reference/` (`Icons.delete_outline` para vaciar
+  carrito, mismo criterio que la auditoría anterior de esta sección ya validó). No hay mockup de
+  este ícono en `design-reference/` (es un estado interactivo nuevo, el mockup estático no lo
+  representa) — mismo criterio ya aceptado en auditorías previas de este documento para el aviso
+  de dirección faltante del checkout.
+
+❌ Falló:
+- Ninguno.
+
+⚠️ Riesgos / casos borde no cubiertos, no bloqueantes:
+- **Tap target del ícono de lápiz notablemente más chico que el precedente ya establecido en el
+  mismo archivo**: `cart_screen.dart:349-356` — `Icon(Icons.edit_outlined, size: 16)` envuelto en
+  `Padding(padding: EdgeInsets.only(left: 8))`, sin padding arriba/abajo/derecha. El área
+  tocable real es ~16×16 (el padding izquierdo agranda el ancho del `GestureDetector` pero no el
+  alto). Esto es notablemente más chico que el ícono de vaciar carrito del MISMO archivo
+  (`cart_screen.dart:193-200`, `size: 24` + `Padding(all: 4)` ≈ 32×32), que una auditoría anterior
+  de esta misma sección corrigió explícitamente por ser "chico y difícil de acertar". No es un
+  bug funcional (el flujo se probó y funciona en dispositivo real según el encargo) y no bloquea
+  el veredicto, pero es una inconsistencia real de usabilidad dentro del mismo archivo que vale
+  la pena revisar si se toca de nuevo esta pantalla — sugerencia: `Padding(all: 8)` en vez de
+  `EdgeInsets.only(left: 8)`, dejando el ícono visualmente en el mismo lugar pero con un área
+  tocable ~32×32 consistente con el ícono de papelera.
+  **Aplicado tras esta auditoría**: `Padding(only(left: 8))` → `Padding(all(6))`, área tocable
+  ahora ~28×28 (ícono 16 + padding 6 por lado). `flutter analyze`/`flutter test` verificados de
+  nuevo, limpios.
+- **Sin test de regresión para la carrera "el menú público cambia mientras `_CartItemRow` ya está
+  en pantalla"** (ej. `publicMenuProvider` pasa de ya no ofrecer salsas para ese producto — poco
+  realista en la práctica, el menú no suele cambiar mid-sesión, y el propio encargo advierte que
+  el catálogo real de salsas estuvo cambiando en vivo durante la prueba del dueño del negocio) —
+  `_offersSauces` usa `ref.watch`, así que el ícono reaccionaría solo (aparecer/desaparecer) ante
+  ese cambio, pero no hay un test explícito que lo confirme. Riesgo bajo: no hay reporte de que
+  esto haya causado un problema real en la sesión de prueba en dispositivo.
+- Sigue pendiente, fuera del alcance de esta auditoría puntual, el resto de la sección
+  "Salsas/cremas" de arriba (todos los `[ ]` sin marcar).
+- `test/features/checkout/data/order_repository_test.dart` aparece modificado en `git status`
+  pero sin diff real contra `HEAD` (`git diff` vacío) — no forma parte de este encargo, no se
+  auditó.
+
+**Veredicto de este fix puntual: LISTO.** Ambos hallazgos del dueño del negocio quedan resueltos
+con evidencia verificada de forma independiente (no solo por lectura del diff): mutación
+deliberada + reversión confirmada byte a byte para el caso de fusión, y `git stash`/reversión
+confirmada para el botón "+" del Home. Único hallazgo nuevo (no bloqueante): tap target chico del
+ícono de lápiz, inconsistente con el precedente ya corregido en el mismo archivo para el ícono de
+papelera.
+
 ## Perfil / Direcciones
 
 - [ ] DTO de edición de perfil no permite cambiar campos que el backend no acepta

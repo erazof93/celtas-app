@@ -56,8 +56,10 @@ abstract class CartState with _$CartState {
 /// Notifier del carrito local.
 ///
 /// Métodos: `addItem` (desde Home "+" o desde el detalle con cantidad y
-/// salsas), `increment`/`decrement` (steppers del carrito), `removeItem`,
-/// `clear` (tras confirmar el pedido), `applyCoupon`/`removeCoupon`.
+/// salsas), `updateLine` (edición de una fila ya existente desde el ícono de
+/// lápiz del carrito), `increment`/`decrement` (steppers del carrito),
+/// `removeItem`, `clear` (tras confirmar el pedido),
+/// `applyCoupon`/`removeCoupon`.
 ///
 /// `increment`/`decrement`/`removeItem` identifican la fila por
 /// `CartItem.lineKey` (no por `menuItemId` puro): un mismo producto puede
@@ -103,6 +105,53 @@ class CartNotifier extends Notifier<CartState> {
       );
     } else {
       state = state.copyWith(items: [...items, newLine]);
+    }
+  }
+
+  /// Reemplaza la fila `oldLineKey` con la cantidad y salsas nuevas —
+  /// edición desde el ícono de lápiz del carrito (`ProductDetailScreen` en
+  /// modo edición). A diferencia de `addItem`, no suma a lo que ya había:
+  /// la cantidad nueva REEMPLAZA la anterior (el detalle precarga el stepper
+  /// con la cantidad actual de la fila, así que lo que confirma el usuario
+  /// ya es el total final que quiere, no un incremento).
+  ///
+  /// Si la combinación nueva de salsas coincide con OTRA fila ya existente
+  /// del mismo producto, se fusionan sumando cantidades y la fila vieja se
+  /// descarta — mismo criterio de fusión por `lineKey` que ya usa `addItem`,
+  /// para no terminar con dos filas duplicadas del mismo producto + misma
+  /// combinación de salsas. Si `oldLineKey` no existe (fila ya eliminada por
+  /// otra vía mientras se editaba), no hace nada.
+  void updateLine(
+    String oldLineKey, {
+    required int quantity,
+    required List<SauceOption> selectedSauces,
+  }) {
+    if (quantity <= 0) return;
+    final items = state.items;
+    final oldIndex = items.indexWhere((i) => i.lineKey == oldLineKey);
+    if (oldIndex < 0) return;
+    final updated = items[oldIndex].copyWith(
+      quantity: quantity,
+      selectedSauces: selectedSauces,
+    );
+    final mergeIndex = items.indexWhere((i) => i.lineKey == updated.lineKey);
+    if (mergeIndex >= 0 && mergeIndex != oldIndex) {
+      state = state.copyWith(
+        items: [
+          for (var i = 0; i < items.length; i++)
+            if (i == mergeIndex)
+              items[i].copyWith(quantity: items[i].quantity + quantity)
+            else if (i != oldIndex)
+              items[i],
+        ],
+      );
+    } else {
+      state = state.copyWith(
+        items: [
+          for (var i = 0; i < items.length; i++)
+            if (i == oldIndex) updated else items[i],
+        ],
+      );
     }
   }
 

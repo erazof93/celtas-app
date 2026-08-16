@@ -20,13 +20,16 @@ import 'package:url_launcher/url_launcher.dart';
 /// Módulo 3: consume `GET /banners/active` (carrusel con indicador de puntos)
 /// y `GET /menu` (categorías con tarjetas de producto). El botón "+" de cada
 /// tarjeta agrega directo al carrito local (`cartProvider`, módulo 4) SIN
-/// pasar por el selector de salsas del detalle — decisión deliberada: es el
-/// atajo de "agregar rápido" ya existente y probado, y agregar sin salsas es
-/// un estado válido para el backend (`selectedSauces: null`, ver
-/// `orders.service.ts`). Si un producto ofrece salsas y el cliente quiere
-/// elegirlas, toca la tarjeta para abrir el detalle (`/product/:id`), que sí
-/// muestra el selector. El ícono de carrito del header muestra el total de
-/// unidades en un badge.
+/// pasar por el selector de salsas del detalle SOLO si el producto no ofrece
+/// salsas (`item.sauces.isEmpty`) — es el atajo de "agregar rápido" ya
+/// existente y probado, y agregar sin salsas es un estado válido para el
+/// backend (`selectedSauces: null`, ver `orders.service.ts`). Si el producto
+/// SÍ ofrece salsas, el "+" navega al detalle (`/product/:id`) en vez de
+/// agregar directo — hallazgo real probando en dispositivo (dueño del
+/// negocio): el atajo se sentía roto en un producto con salsas porque nunca
+/// dejaba elegirlas. Tocar la tarjeta ya abría el detalle antes de este
+/// cambio, y lo sigue haciendo para cualquier producto. El ícono de carrito
+/// del header muestra el total de unidades en un badge.
 ///
 /// Mejora post-cierre: tap sobre cada banner según su `actionType`
 /// (`Banner.actionType`/`actionValue`, contrato real verificado contra
@@ -745,7 +748,9 @@ class _CategoryChip extends StatelessWidget {
 /// (`clip-path: polygon(12px 0, ...)` del CSS real).
 ///
 /// Tocar la tarjeta abre el detalle (`/product/:id`); el botón "+" agrega
-/// directo al carrito local sin entrar al detalle.
+/// directo al carrito local sin entrar al detalle SOLO si el producto no
+/// ofrece salsas — si las ofrece, navega al detalle igual que la tarjeta
+/// (ver doc de `HomeScreen`).
 class _ProductCard extends ConsumerWidget {
   const _ProductCard({required this.item});
 
@@ -814,32 +819,40 @@ class _ProductCard extends ConsumerWidget {
               ),
             ),
             const SizedBox(width: 12),
-            // Botón "+" rápido: agrega al carrito local sin entrar al detalle.
+            // Botón "+" rápido: agrega al carrito local sin entrar al detalle
+            // SOLO si el producto no ofrece salsas. Si las ofrece, navega al
+            // detalle en vez de agregar directo (mismo `push` que el tap
+            // sobre la tarjeta) para que el cliente pueda elegirlas — antes
+            // agregaba siempre directo, sin importar si el producto tenía
+            // salsas, y eso se sentía roto en dispositivo real.
             _AddButton(
               key: ValueKey('add-${item.id}'),
               onTap: () {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                if (item.sauces.isNotEmpty) {
+                  context.push('/product/${item.id}');
+                  return;
+                }
                 ref.read(cartProvider.notifier).addItem(item);
-                ScaffoldMessenger.of(context)
-                  ..hideCurrentSnackBar()
-                  ..showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Agregado: ${item.name}',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: CeltasColors.cream,
-                        ),
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Agregado: ${item.name}',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: CeltasColors.cream,
                       ),
-                      backgroundColor: CeltasColors.surface,
-                      behavior: SnackBarBehavior.floating,
-                      duration: const Duration(seconds: 2),
-                      // Este agregado deja el carrito no vacío, así que
-                      // `_CartSummaryBar` va a estar visible en este mismo
-                      // Home — sin este margen el SnackBar queda tapado por
-                      // esa barra. Mismo valor de 88 ya usado más arriba
-                      // (padding del `ListView`) para la misma barra.
-                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 88),
                     ),
-                  );
+                    backgroundColor: CeltasColors.surface,
+                    behavior: SnackBarBehavior.floating,
+                    duration: const Duration(seconds: 2),
+                    // Este agregado deja el carrito no vacío, así que
+                    // `_CartSummaryBar` va a estar visible en este mismo
+                    // Home — sin este margen el SnackBar queda tapado por
+                    // esa barra. Mismo valor de 88 ya usado más arriba
+                    // (padding del `ListView`) para la misma barra.
+                    margin: const EdgeInsets.fromLTRB(16, 0, 16, 88),
+                  ),
+                );
               },
             ),
           ],

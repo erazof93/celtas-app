@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
+import 'package:celtas_mobile/features/cart/data/models/cart_item.dart';
 import 'package:celtas_mobile/features/home/application/home_providers.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_category.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
@@ -375,6 +376,178 @@ void main() {
         final state = container.read(cartProvider);
         expect(state.items, hasLength(2));
         expect(state.totalCount, 2);
+      },
+    );
+  });
+
+  group('modo edición (editingItem, ícono de lápiz del carrito)', () {
+    /// Router con `/cart` como origen (destino real del `pop()` en modo
+    /// edición, ver doc de `editingItem` en `product_detail_screen.dart`) y
+    /// `/product/:id` leyendo `editingItem` de `state.extra` — mismo mapeo
+    /// que hace `app_router.dart` de verdad.
+    GoRouter editRouter() => GoRouter(
+          initialLocation: '/cart',
+          routes: [
+            GoRoute(
+              path: '/cart',
+              builder: (_, _) => const Scaffold(body: Text('CART')),
+            ),
+            GoRoute(
+              path: '/product/:id',
+              builder: (_, state) => ProductDetailScreen(
+                productId: state.pathParameters['id']!,
+                editingItem: state.extra as CartItem?,
+              ),
+            ),
+          ],
+        );
+
+    /// Arranca en `/cart` con el carrito ya poblado por `seed` (agrega la
+    /// fila que se va a editar, y opcionalmente otras) y navega a
+    /// `/product/:id` en modo edición, igual que el ícono de lápiz real de
+    /// `cart_screen.dart`.
+    Future<(ProviderContainer, GoRouter)> pumpEdit(
+      WidgetTester tester, {
+      required void Function(CartNotifier notifier) seed,
+      required String Function(CartState state) pickEditingLineKey,
+      required String productId,
+    }) async {
+      tester.view.physicalSize = const Size(1170, 2532);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final container = ProviderContainer(
+        overrides: [
+          publicMenuProvider.overrideWith((ref) async => [category]),
+        ],
+      );
+      addTearDown(container.dispose);
+      seed(container.read(cartProvider.notifier));
+      final editingLineKey = pickEditingLineKey(container.read(cartProvider));
+      final editingItem = container
+          .read(cartProvider)
+          .items
+          .firstWhere((i) => i.lineKey == editingLineKey);
+
+      final goRouter = editRouter();
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(
+            theme: AppTheme.dark,
+            routerConfig: goRouter,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      unawaited(goRouter.push('/product/$productId', extra: editingItem));
+      await tester.pumpAndSettle();
+      return (container, goRouter);
+    }
+
+    testWidgets(
+      'precarga la cantidad y las salsas de la fila que se está editando, '
+      'y el botón dice GUARDAR CAMBIOS',
+      (tester) async {
+        await pumpEdit(
+          tester,
+          seed: (notifier) => notifier.addItem(
+            category.items.firstWhere((i) => i.id == 'i-3'),
+            quantity: 3,
+            selectedSauces: const [mayo],
+          ),
+          pickEditingLineKey: (state) => state.items.single.lineKey,
+          productId: 'i-3',
+        );
+
+        // Cantidad precargada (no arranca en 1).
+        expect(find.text('3'), findsOneWidget);
+        // Botón de confirmar en modo edición, sin el precio.
+        expect(find.text('GUARDAR CAMBIOS'), findsOneWidget);
+        expect(find.textContaining('AGREGAR AL CARRITO'), findsNothing);
+        // Mayonesa (única salsa de la fila editada) aparece seleccionada —
+        // el chip seleccionado es el único que muestra el ícono de check.
+        expect(find.byIcon(Icons.check), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'GUARDAR CAMBIOS actualiza la fila correcta (misma cantidad de filas, '
+      'sin duplicar) y vuelve al carrito, no a Home',
+      (tester) async {
+        final (container, _) = await pumpEdit(
+          tester,
+          seed: (notifier) => notifier.addItem(
+            category.items.firstWhere((i) => i.id == 'i-3'),
+            quantity: 2,
+            selectedSauces: const [mayo],
+          ),
+          pickEditingLineKey: (state) => state.items.single.lineKey,
+          productId: 'i-3',
+        );
+
+        // Sube la cantidad de 2 a 4 antes de guardar.
+        await tester.tap(find.byKey(const ValueKey('detail-qty-plus')));
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('detail-qty-plus')));
+        await tester.pump();
+
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pump();
+        await tester.pumpAndSettle();
+
+        final state = container.read(cartProvider);
+        expect(state.items, hasLength(1)); // sigue siendo una sola fila
+        expect(state.items.single.quantity, 4);
+        expect(state.items.single.selectedSauces, [mayo]);
+
+        // Volvió al carrito (de donde se navegó en modo edición), no a
+        // Home — `/product/:id` en este flujo siempre se llega con `push`
+        // desde `/cart`.
+        expect(find.text('CART'), findsOneWidget);
+        expect(find.byKey(const ValueKey('detail-add')), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'si la edición hace coincidir la combinación de salsas con otra fila '
+      'ya existente del mismo producto, se fusionan sumando cantidades '
+      '(no quedan dos filas duplicadas)',
+      (tester) async {
+        final salsasBurger = category.items.firstWhere((i) => i.id == 'i-3');
+        final (container, _) = await pumpEdit(
+          tester,
+          seed: (notifier) {
+            notifier.addItem(salsasBurger, selectedSauces: const [mayo]);
+            notifier.addItem(
+              salsasBurger,
+              quantity: 3,
+              selectedSauces: const [mostaza],
+            );
+          },
+          pickEditingLineKey: (state) => state.items
+              .firstWhere((i) => i.selectedSauces.contains(mostaza))
+              .lineKey,
+          productId: 'i-3',
+        );
+
+        // La fila editada trae "Mostaza" precargada: se deselecciona y se
+        // elige "Mayonesa" en su lugar — esa combinación ya la tiene la
+        // otra fila del carrito.
+        await tester.tap(find.byKey(const ValueKey('detail-sauce-s-2')));
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('detail-sauce-s-1')));
+        await tester.pump();
+
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pump();
+        await tester.pumpAndSettle();
+
+        final state = container.read(cartProvider);
+        expect(state.items, hasLength(1)); // se fusionaron en una sola fila
+        expect(state.items.single.lineKey, 'i-3::s-1');
+        // 1 (fila original con mayo) + 3 (fila editada, fusionada) = 4.
+        expect(state.items.single.quantity, 4);
       },
     );
   });

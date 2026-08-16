@@ -3,12 +3,15 @@ import 'dart:async';
 import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
+import 'package:celtas_mobile/features/cart/data/models/cart_item.dart';
 import 'package:celtas_mobile/features/cart/presentation/cart_screen.dart';
 import 'package:celtas_mobile/features/coupons/application/coupon_providers.dart';
 import 'package:celtas_mobile/features/coupons/data/coupon_repository.dart';
 import 'package:celtas_mobile/features/coupons/data/models/coupon_status.dart';
 import 'package:celtas_mobile/features/coupons/data/models/user_coupon.dart';
 import 'package:celtas_mobile/features/coupons/data/models/validated_coupon.dart';
+import 'package:celtas_mobile/features/home/application/home_providers.dart';
+import 'package:celtas_mobile/features/home/data/models/public_menu_category.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
 import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
 import 'package:flutter/material.dart';
@@ -75,7 +78,11 @@ void main() {
     );
   });
 
-  /// Router mínimo: /cart y rutas de destino para push/go.
+  /// Router mínimo: /cart y rutas de destino para push/go. `/product/:id`
+  /// muestra la cantidad del `CartItem` recibido por `extra` (si vino uno) —
+  /// suficiente para confirmar en el test que el ícono de editar navega ahí
+  /// pasando la fila real, sin tener que montar `ProductDetailScreen` (ya
+  /// cubierto en `product_detail_screen_test.dart`).
   GoRouter router() => GoRouter(
         initialLocation: '/cart',
         routes: [
@@ -88,6 +95,20 @@ void main() {
             path: '/home',
             builder: (_, _) => const Scaffold(body: Text('HOME')),
           ),
+          GoRoute(
+            path: '/product/:id',
+            builder: (_, state) {
+              final extra = state.extra;
+              final id = state.pathParameters['id'];
+              return Scaffold(
+                body: Text(
+                  extra is CartItem
+                      ? 'PRODUCT $id EDIT qty=${extra.quantity}'
+                      : 'PRODUCT $id',
+                ),
+              );
+            },
+          ),
         ],
       );
 
@@ -96,10 +117,18 @@ void main() {
     required MockCouponRepository couponRepository,
     List<PublicMenuItem> items = const [],
     Map<String, int> quantities = const {},
+    // El menú público que ve el ícono de editar salsas (`_offersSauces` en
+    // `cart_screen.dart`) para decidir si un producto SIN salsas
+    // seleccionadas todavía las ofrece. Vacío por defecto: mismo criterio
+    // que ya usaban `burger`/`wings` en el resto de este archivo (sin
+    // salsas, sin ícono) — evita que cada test existente tenga que
+    // overridear `publicMenuProvider` a mano.
+    List<PublicMenuCategory> menu = const [],
   }) async {
     final container = ProviderContainer(
       overrides: [
         couponRepositoryProvider.overrideWithValue(couponRepository),
+        publicMenuProvider.overrideWith((ref) async => menu),
       ],
     );
     addTearDown(container.dispose);
@@ -741,6 +770,111 @@ void main() {
         );
 
         expect(find.textContaining('cremas:'), findsNothing);
+      },
+    );
+  });
+
+  group('editar salsas desde el carrito (ícono de lápiz)', () {
+    const withSaucesMenu = [
+      PublicMenuCategory(
+        id: 'c-1',
+        name: 'Hamburguesa',
+        items: [
+          PublicMenuItem(
+            id: 'i-1',
+            name: 'Berserker Burger',
+            price: 15.5,
+            sauces: [SauceOption(id: 's-1', name: 'Mayonesa')],
+          ),
+        ],
+      ),
+    ];
+
+    testWidgets(
+      'producto SIN salsas seleccionadas pero que el menú público SÍ '
+      'ofrece → muestra el ícono de editar',
+      (tester) async {
+        await pumpCart(
+          tester,
+          couponRepository: MockCouponRepository(),
+          items: [burger],
+          menu: withSaucesMenu,
+        );
+
+        expect(find.byKey(const ValueKey('cart-edit-i-1')), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'producto que NO ofrece salsas (ni seleccionadas ni en el menú) → '
+      'sin ícono de editar, la fila queda como está',
+      (tester) async {
+        await pumpCart(
+          tester,
+          couponRepository: MockCouponRepository(),
+          items: [burger],
+          // Menú por defecto (vacío): el producto no aparece con salsas.
+        );
+
+        expect(find.byKey(const ValueKey('cart-edit-i-1')), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'ítem con salsas ya seleccionadas → muestra el ícono aunque el menú '
+      'público no esté cargado (no depende de una segunda consulta)',
+      (tester) async {
+        final container = ProviderContainer(
+          overrides: [
+            couponRepositoryProvider.overrideWithValue(
+              MockCouponRepository(),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+        container.read(cartProvider.notifier).addItem(
+          burger,
+          selectedSauces: const [SauceOption(id: 's-1', name: 'Mayonesa')],
+        );
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp.router(
+              theme: AppTheme.dark,
+              routerConfig: router(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // lineKey con salsas incluye el sufijo de la combinación elegida.
+        expect(
+          find.byKey(const ValueKey('cart-edit-i-1::s-1')),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'tocar el ícono navega a /product/:id pasando el CartItem actual por '
+      '`extra` (modo edición, sin serializar a query string)',
+      (tester) async {
+        await pumpCart(
+          tester,
+          couponRepository: MockCouponRepository(),
+          items: [burger],
+          quantities: {'i-1': 3},
+          menu: withSaucesMenu,
+        );
+
+        await tester.tap(find.byKey(const ValueKey('cart-edit-i-1')));
+        await tester.pumpAndSettle();
+
+        // El fake `/product/:id` del router de este test solo puede mostrar
+        // este texto si `state.extra` llegó como un `CartItem` real (no
+        // nulo, no una query string) con la cantidad correcta.
+        expect(find.text('PRODUCT i-1 EDIT qty=3'), findsOneWidget);
       },
     );
   });
