@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
 import 'package:celtas_mobile/features/home/application/home_providers.dart';
@@ -93,7 +94,7 @@ void main() {
     await tester.pumpAndSettle();
     // Llega al detalle igual que en producción: `push` desde Home — así el
     // `pop()` que dispara "Agregar" tiene a dónde volver.
-    goRouter.push('/product/$productId');
+    unawaited(goRouter.push('/product/$productId'));
     await tester.pumpAndSettle();
     return (container, goRouter);
   }
@@ -178,6 +179,7 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('detail-add')));
       await tester.pump();
+      await tester.pumpAndSettle();
 
       final state = container.read(cartProvider);
       expect(state.items, hasLength(1));
@@ -210,7 +212,7 @@ void main() {
 
       // El "Agregar" ya hizo pop a Home — se vuelve a entrar al detalle
       // para simular al usuario agregando el mismo producto de nuevo.
-      goRouter.push('/product/i-1');
+      unawaited(goRouter.push('/product/i-1'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('detail-add')));
       await tester.pumpAndSettle();
@@ -250,6 +252,7 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('detail-add')));
       await tester.pump();
+      await tester.pumpAndSettle();
 
       final snackBar = tester.widget<SnackBar>(find.byType(SnackBar));
       expect(snackBar.margin, const EdgeInsets.fromLTRB(16, 0, 16, 88));
@@ -362,7 +365,7 @@ void main() {
         await tester.pumpAndSettle();
 
         // Segunda pasada: con Mayonesa.
-        goRouter.push('/product/i-3');
+        unawaited(goRouter.push('/product/i-3'));
         await tester.pumpAndSettle();
         await tester.tap(find.byKey(const ValueKey('detail-sauce-s-1')));
         await tester.pump();

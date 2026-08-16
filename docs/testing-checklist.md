@@ -231,6 +231,86 @@ Escrito en una sesión sin acceso al toolchain de Flutter (ver `ROADMAP.md`, sec
       `OrdersService.buildWhatsappUrl` en `celtas-backend`, ya verificado en su propia sesión;
       acá solo confirmar que el texto que abre `url_launcher` las trae)
 
+#### Auditoría puntual: fix de la carrera SnackBar/`pop()` en `_addToCart()`
+
+Alcance de esta auditoría: SOLO el fix descrito abajo (commit sin commitear todavía sobre
+`product_detail_screen.dart` + `product_detail_screen_test.dart`), no el resto de la sección
+"Salsas/cremas" de arriba (sigue pendiente, sin correr). No se marca ningún checkbox de la
+sección anterior por esta auditoría.
+
+`flutter analyze`: `No issues found!` (confirmado con salida cruda propia). `flutter test`
+(suite completa): `301: All tests passed!` (confirmado con salida cruda propia).
+
+Diff auditado (`git diff`, verificado byte a byte contra lo reportado por la sesión principal):
+en `_addToCart()`, el `context.pop()` final pasó de ejecutarse inmediato a diferirse con
+`WidgetsBinding.instance.addPostFrameCallback((_) { if (!mounted) return; context.pop(); });`;
+en el test se agregó `await tester.pumpAndSettle();` tras el `pump()` que sigue al tap en
+`detail-add` en los 2 tests señalados. El diff también trae 3 cambios no mencionados en el
+encargo (`goRouter.push(...)` → `unawaited(goRouter.push(...))` en el helper `pumpDetail` y en
+2 tests) — confirmado que son necesarios y no decorativos: revertí solo esos 3 sitios
+(`git stash` del archivo de test) y `flutter analyze` reporta 3 issues reales de
+`unawaited_futures` en esas líneas exactas; no es un cambio de comportamiento, solo silencia un
+lint ya activo (`analysis_options.yaml:38`) que aparentemente no se había corrido antes sobre
+este archivo.
+
+**Verificación de causa raíz, no solo confianza en el diagnóstico reportado** — reconstruí la
+matriz de combinaciones reales (prod × test) copiando versiones intermedias a un scratchpad y
+restaurando con `git diff`/comparación byte a byte al terminar, sin dejar el repo en un estado
+intermedio:
+- `pop()` inmediato + test con un solo `pump()` (estado real de HEAD antes de este fix): **falla
+  igual que lo descrito** — reproduje el error exacto, evidencia cruda:
+  `Expected: exactly one matching candidate / Actual: Found 2 widgets with text "Agregado:
+  Berserker Burger ×3"` en el primer test, y `Bad state: Too many elements` en el segundo
+  (`tester.widget<SnackBar>(find.byType(SnackBar))` con 2 candidatos). Confirma que el bug
+  reportado es real, no una descripción inventada.
+- `pop()` diferido (el fix real, confirmado por diff que coincide con el commit) + test con un
+  solo `pump()` (sin el `pumpAndSettle()` agregado): el SnackBar YA NO se duplica (el test de
+  margen, que solo depende del `SnackBar`, pasa con un solo `pump()`) — confirma que diferir el
+  `pop()` sí resuelve la causa raíz real de la duplicación, no es un cambio cosmético. El otro
+  test sí sigue fallando con un solo `pump()`, pero por un motivo DISTINTO y esperado: el
+  `context.pop()` deferido con `addPostFrameCallback` necesita un frame adicional para que el
+  `Navigator` refleje la ruta removida (`Found 1 widget with key [detail-add]`, no el error de
+  duplicado) — exactamente la razón por la que el `pumpAndSettle()` agregado en ese test es
+  necesario y no redundante.
+- Con ambos cambios juntos (estado final real): los 2 tests pasan limpio, confirmado arriba.
+
+Conclusión: el diagnóstico y el fix de la sesión principal son correctos — diferir el `pop()`
+elimina la ventana en la que el `ScaffoldMessenger` pinta dos veces el mismo `SnackBar` durante
+la transición de `hideCurrentSnackBar()`+`showSnackBar()` superpuesta con la remoción de ruta;
+el `pumpAndSettle()` agregado en los tests es una consecuencia necesaria de ese mismo cambio
+(el `pop()` deferido tarda un frame más en reflejarse), no un parche que enmascare el problema
+por su cuenta.
+
+✅ Pasó:
+- `mounted` se chequea antes de usar `context` dentro del callback diferido — evita un
+  `use_build_context_synchronously`/crash si el usuario navega fuera de la pantalla (ej. back
+  del sistema) en la ventana de un frame entre el tap y que corra el callback. `flutter analyze`
+  no reporta el lint `use_build_context_synchronously` en este archivo, consistente con el guard.
+- No hay doble-pop ni fuga observable: el callback se registra una sola vez por tap (no hay
+  acumulación de callbacks si el usuario no puede volver a tocar "AGREGAR" durante la ventana de
+  un frame — `CeltasButton` no se deshabilita durante ese frame, pero un segundo tap real
+  requeriría que el usuario interactúe más rápido que un frame de render, no es un escenario
+  practicable).
+- Las aserciones de los 2 tests modificados no se debilitaron: mismo `expect` sobre el estado del
+  `cartProvider`, mismo texto del `SnackBar`, mismo `margin` esperado, mismo
+  `find.byKey(detail-add), findsNothing` — el único cambio es CUÁNDO se evalúan (después de
+  `pumpAndSettle()` en vez de justo después de `pump()`), no QUÉ se evalúa.
+
+⚠️ Riesgos / casos borde no cubiertos, no bloqueantes:
+- No hay test de regresión explícito para el caso "back del sistema mientras el `postFrameCallback`
+  está pendiente" (el guard `if (!mounted) return;` lo cubre por código, pero no hay un test que
+  fuerce esa ventana de carrera de un frame — difícil de reproducir de forma determinística en
+  `flutter_test` sin acoplarse a detalles de implementación de `pump()`).
+- Sigue pendiente, fuera del alcance de esta auditoría puntual, el resto de la sección
+  "Salsas/cremas" de arriba (todos los `[ ]` sin marcar) — en particular la verificación en
+  dispositivo/emulador real del flujo "Agregar → vuelve a Home" (el widget test ya confirma la
+  mecánica, pero el propio checklist pide una verificación aparte en dispositivo real porque la
+  transición de `go_router` puede comportarse distinto).
+
+**Veredicto de este fix puntual: LISTO.** No se marca ningún checkbox de la sección
+"Salsas/cremas" de arriba — esta auditoría cubrió únicamente la carrera SnackBar/`pop()`, no el
+resto del módulo.
+
 ## Perfil / Direcciones
 
 - [ ] DTO de edición de perfil no permite cambiar campos que el backend no acepta

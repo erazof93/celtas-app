@@ -212,7 +212,7 @@ return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that
 
 class _CartItem extends CartItem {
   const _CartItem({required this.menuItemId, required this.name, required this.unitPrice, required this.quantity, this.image, final  List<SauceOption> selectedSauces = const <SauceOption>[]}): _selectedSauces = selectedSauces,super._();
-
+  
 
 @override final  String menuItemId;
 @override final  String name;

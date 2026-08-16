@@ -126,8 +126,13 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
       );
     // Vuelve a Home para seguir agregando productos — el flujo de "captura"
     // normal de la app (pedido explícito del negocio: agregar no debe
-    // dejarte varado en el detalle).
-    context.pop();
+    // dejarte varado en el detalle). El pop se difiere al siguiente frame
+    // porque en el mismo frame en que se inserta el SnackBar, hacerlo de
+    // inmediato duplica momentáneamente el SnackBar en el árbol de widgets.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.pop();
+    });
   }
 
   @override

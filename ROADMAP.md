@@ -511,12 +511,25 @@ celtas-mobile/
         `cart_provider_test.dart` (grupo nuevo "salsas/cremas"), `cart_screen_test.dart` (línea
         "cremas: ..." visible/ausente), `order_repository_test.dart` (nuevo — no existía; cubre
         el contrato de `sauceIds` en el payload).
+      - **Bug encontrado y resuelto:** corriendo `flutter test` de verdad (primera corrida real
+        contra el toolchain) aparecieron 2 fallos "too many elements" en
+        `product_detail_screen_test.dart` al buscar el `SnackBar` justo después de tocar
+        "detail-add". Causa: en `_addToCart()`, `context.pop()` se llamaba en el mismo frame en
+        que se insertaba el `SnackBar`, y `ScaffoldMessenger` lo duplicaba momentáneamente en el
+        árbol de widgets durante ese frame. Arreglado diferiendo el `pop()` con
+        `WidgetsBinding.instance.addPostFrameCallback((_) { if (!mounted) return;
+        context.pop(); });`; los 2 tests afectados ahora agregan `await tester.pumpAndSettle();`
+        tras el `pump()` que sigue al tap (el `Navigator` necesita un frame extra para reflejar
+        la ruta removida por el pop diferido). `flutter analyze` limpio, `flutter test` completo
+        (301 tests) verde. Auditado por `@tester`: veredicto **LISTO** para este hallazgo puntual
+        — detalle en `docs/testing-checklist.md`, sección Salsas/cremas → "Auditoría puntual: fix
+        de la carrera SnackBar/`pop()` en `_addToCart()`".
       - **Pendiente antes de poder marcar esto LISTO:** correr `flutter pub get`, regenerar
-        código con `build_runner` y comparar contra lo escrito a mano acá, `flutter analyze`,
-        `flutter test`, y una verificación visual real (emulador o dispositivo) del flujo
-        completo Home → detalle con salsas → Agregar (vuelve a Home) → VER CARRITO → "cremas:
-        ..." visible → Checkout → WhatsApp con las salsas concatenadas. Auditoría de `@tester`
-        pendiente.
+        código con `build_runner` y comparar contra lo escrito a mano acá, y una verificación
+        visual real (emulador o dispositivo) del flujo completo Home → detalle con salsas →
+        Agregar (vuelve a Home) → VER CARRITO → "cremas: ..." visible → Checkout → WhatsApp con
+        las salsas concatenadas. Auditoría de `@tester` sobre el resto del módulo (más allá de
+        este hallazgo puntual) pendiente.
 
 ### 5. Checkout — ✅ COMPLETO (5/5)
 - [x] Selector de dirección guardada (o agregar nueva): `GET /users/me/addresses` con

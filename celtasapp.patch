@@ -1,0 +1,2101 @@
+From ecb27359452d52c810f5e88a79c37251b64fa1cb Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 16 Aug 2026 02:52:40 +0000
+Subject: [PATCH] feat(product-detail,cart): selector de salsas/cremas y vuelta
+ a Home al agregar
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Detalle de producto: sección nueva "SALSAS Y CREMAS" (chips de selección
+múltiple, opcional) cuando el producto ofrece salsas; "Agregar al carrito"
+ahora hace pop() de vuelta a Home después de agregar, para seguir
+capturando el pedido sin fricción (antes se quedaba en el detalle con un
+SnackBarAction "VER CARRITO").
+
+Carrito: mismo producto con distinta combinación de salsas queda en filas
+separadas (CartItem.lineKey = menuItemId + salsas ordenadas; sin salsas
+sigue siendo igual al menuItemId puro, así que nada cambia para productos
+sin salsas). Cada fila muestra "cremas: ..." debajo del nombre y arriba
+del precio cuando corresponde. POST /orders manda sauceIds por ítem solo
+cuando el ítem tiene selección (el mensaje de WhatsApp ya lo arma el
+backend).
+
+Escrito en una sesión sin acceso al toolchain de Flutter (sandbox sin
+flutter/dart ni red para instalarlo) — incluye código *.freezed.dart/*.g.dart
+escrito a mano replicando el patrón real de build_runner del repo. Falta
+correr flutter analyze/test y build_runner de verdad, y la auditoría de
+@tester, antes de dar esto por cerrado (ver ROADMAP.md y
+docs/testing-checklist.md, ambos actualizados con el detalle y la
+advertencia).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01CH29SPjv7tbUH7nxpMdv8Z
+---
+ ROADMAP.md                                    |  76 +++++
+ docs/testing-checklist.md                     |  27 ++
+ .../cart/application/cart_provider.dart       |  73 +++--
+ lib/features/cart/data/models/cart_item.dart  |  32 +-
+ .../cart/data/models/cart_item.freezed.dart   |  51 ++--
+ .../cart/presentation/cart_screen.dart        |  26 +-
+ .../checkout/data/order_repository.dart       |  18 +-
+ .../home/data/models/public_menu_item.dart    |   9 +
+ .../data/models/public_menu_item.freezed.dart |  49 +--
+ .../home/data/models/public_menu_item.g.dart  |   6 +
+ .../home/data/models/sauce_option.dart        |  24 ++
+ .../data/models/sauce_option.freezed.dart     | 280 ++++++++++++++++++
+ .../home/data/models/sauce_option.g.dart      |  13 +
+ .../home/presentation/home_screen.dart        |  11 +-
+ .../presentation/product_detail_screen.dart   | 179 +++++++++--
+ .../cart/application/cart_provider_test.dart  | 104 +++++++
+ .../cart/presentation/cart_screen_test.dart   |  48 +++
+ .../checkout/data/order_repository_test.dart  | 196 ++++++++++++
+ .../product_detail_screen_test.dart           | 180 +++++++++--
+ 19 files changed, 1277 insertions(+), 125 deletions(-)
+ create mode 100644 lib/features/home/data/models/sauce_option.dart
+ create mode 100644 lib/features/home/data/models/sauce_option.freezed.dart
+ create mode 100644 lib/features/home/data/models/sauce_option.g.dart
+ create mode 100644 test/features/checkout/data/order_repository_test.dart
+
+diff --git a/ROADMAP.md b/ROADMAP.md
+index 3699343..7a5f127 100644
+--- a/ROADMAP.md
++++ b/ROADMAP.md
+@@ -441,6 +441,82 @@ celtas-mobile/
+       tapado por `_CartSummaryBar` cuando el carrito ya tiene ítems. Auditado por `@tester`: sin
+       bugs, veredicto LISTO — detalle completo en `docs/testing-checklist.md`, sección
+       Notificaciones (auditoría conjunta de esta ronda).
++- [ ] **Mejora nueva (en curso): selección de salsas/cremas en el detalle de producto.**
++      Feature cross-repo pedida por el dueño del negocio (backend y `celtas-admin` ya cerrados y
++      verificados en sesiones previas contra Postgres/servidor reales — ver `ROADMAP.md` de esos
++      dos repos, sección Menu/Orders). Cambios en este repo, hechos en una sesión **sin acceso al
++      toolchain de Flutter** (sandbox sin `flutter`/`dart` instalado ni acceso de red para
++      instalarlo) — todo el código, incluido el código generado de `freezed`/`json_serializable`
++      (`*.freezed.dart`, `*.g.dart`), se escribió a mano replicando exactamente el patrón de
++      salida real de `build_runner` ya presente en el resto del repo (mismos comentarios
++      `GENERATED CODE`, mismo uso de `DeepCollectionEquality`/`EqualUnmodifiableListView` para
++      campos `List`, mismo formato de `@JsonKey()` en campos `@Default`). **Esto NO reemplaza
++      correr `flutter pub get && dart run build_runner build --delete-conflicting-outputs`,
++      `flutter analyze` y `flutter test` de verdad** — es un paso obligatorio antes de dar esta
++      mejora por completa, y antes de la auditoría de `@tester`.
++      - `SauceOption` (`features/home/data/models/sauce_option.dart`, nuevo): `{id, name}`,
++        mismo shape que ya expone `GET /menu` para las salsas de cada producto
++        (`MenuService.findPublicMenu` en el backend, ya filtrado a `active: true` y ordenado).
++        Se reusa para `CartItem.selectedSauces` (ahí no viene de un `fromJson`, se arma a mano en
++        el detalle a partir de las opciones ya cargadas).
++      - `PublicMenuItem.sauces` (nuevo campo, `@Default(<SauceOption>[])`): lista vacía = el
++        producto no ofrece selector de salsas (ej. arroz chaufa) — mismo criterio que ya usa
++        `celtas-admin` para decidir si el checklist de salsas aparece en el formulario de un
++        producto.
++      - `product_detail_screen.dart`: nueva sección "SALSAS Y CREMAS" (chips multi-selección,
++        solo si `item.sauces` no está vacío) entre el precio y el selector de cantidad — no
++        estaba en el mockup original de 12 pantallas, se siguió el lenguaje visual ya establecido
++        (borde dorado/naranja en seleccionado, mismo criterio que el círculo de selección de
++        `_AddressCard` en checkout y el chip "VER MIS CUPONES" del carrito). Selección 100%
++        opcional (el backend acepta `sauceIds` ausente o vacío sin problema).
++        **Cambio de comportamiento pedido explícitamente por el dueño del negocio:** al tocar
++        "AGREGAR AL CARRITO" ahora se hace `context.pop()` después de agregar (antes se quedaba
++        en el detalle con un `SnackBarAction` "VER CARRITO"), para volver a Home y seguir
++        agregando productos sin fricción — el flujo de "captura" normal de la app. Se quitó la
++        acción "VER CARRITO" del `SnackBar` (ya no tiene sentido: el usuario ya vuelve a Home,
++        que muestra su propia barra flotante de carrito) y se evitó dejar un callback capturando
++        el `context` de una pantalla que está por hacer `pop()`.
++      - `CartItem.selectedSauces` (nuevo campo) + `CartItem.lineKey` (getter nuevo): identifica
++        una fila única del carrito por `menuItemId` + salsas seleccionadas (ordenadas antes de
++        comparar, para que el orden de selección no importe). Sin salsas, `lineKey == menuItemId`
++        — mismo valor que ya usaban `increment`/`decrement`/`removeItem`/los `ValueKey` del
++        carrito antes de este cambio, así ningún producto sin salsas cambia de comportamiento.
++        **Decisión de producto:** el mismo producto agregado con distinta combinación de salsas
++        queda en una fila aparte del carrito (no se fusiona) — una Celtas Burguesa con mayonesa y
++        otra sin nada son dos líneas con su propio stepper de cantidad. `CartNotifier.addItem`
++        ahora recibe `selectedSauces` opcional (default `[]`, no rompe ningún caller existente);
++        `increment`/`decrement`/`removeItem` cambiaron su parámetro de `menuItemId` a `lineKey`
++        (mismo tipo `String`, mismos valores para cualquier producto sin salsas — no rompe los
++        tests existentes que ya llamaban a estos métodos con el id plano del producto).
++      - `cart_screen.dart`: línea nueva "cremas: mayonesa, mostaza..." debajo del nombre y arriba
++        del precio unitario de cada ítem (solo si `selectedSauces` no está vacío) — pedido
++        explícito del dueño del negocio, mismo lugar que marcó en su captura de referencia. Los
++        `ValueKey`/llamadas al notifier de los steppers pasaron de `item.menuItemId` a
++        `item.lineKey`.
++      - `order_repository.dart`: cada ítem del payload de `POST /orders` manda `sauceIds` (los
++        ids de `selectedSauces`) SOLO si el ítem tiene salsas seleccionadas — nunca una lista
++        vacía, mismo criterio que el resto del DTO (`addressSnapshot`/`couponCode` también se
++        omiten cuando no aplican). El mensaje de WhatsApp con las salsas concatenadas ya lo arma
++        el backend (`OrdersService.buildWhatsappUrl`, verificado y cerrado en la sesión de ese
++        repo) — este repo no necesita tocar nada para eso.
++      - El botón "+" rápido del Home (`_AddButton` en `home_screen.dart`) se dejó **sin cambios a
++        propósito**: sigue agregando sin pasar por el selector de salsas (decisión documentada en
++        el doc del propio `HomeScreen` — agregar sin salsas es un estado válido para el backend,
++        y es el atajo de "agregar rápido" ya probado). Si un producto ofrece salsas y el cliente
++        quiere elegirlas, toca la tarjeta para abrir el detalle.
++      - Tests actualizados/agregados a mano (no corridos — ver advertencia arriba):
++        `product_detail_screen_test.dart` (reescrito para navegar con `GoRouter` real en vez de
++        `MaterialApp(home: ...)` suelto, necesario porque ahora `_addToCart` llama a
++        `context.pop()`; casos nuevos de selector de salsas y de fusión/no-fusión de filas),
++        `cart_provider_test.dart` (grupo nuevo "salsas/cremas"), `cart_screen_test.dart` (línea
++        "cremas: ..." visible/ausente), `order_repository_test.dart` (nuevo — no existía; cubre
++        el contrato de `sauceIds` en el payload).
++      - **Pendiente antes de poder marcar esto LISTO:** correr `flutter pub get`, regenerar
++        código con `build_runner` y comparar contra lo escrito a mano acá, `flutter analyze`,
++        `flutter test`, y una verificación visual real (emulador o dispositivo) del flujo
++        completo Home → detalle con salsas → Agregar (vuelve a Home) → VER CARRITO → "cremas:
++        ..." visible → Checkout → WhatsApp con las salsas concatenadas. Auditoría de `@tester`
++        pendiente.
+ 
+ ### 5. Checkout — ✅ COMPLETO (5/5)
+ - [x] Selector de dirección guardada (o agregar nueva): `GET /users/me/addresses` con
+diff --git a/docs/testing-checklist.md b/docs/testing-checklist.md
+index 75f0921..1a18cfd 100644
+--- a/docs/testing-checklist.md
++++ b/docs/testing-checklist.md
+@@ -204,6 +204,33 @@ solo cuando pasa lo aplicable de este checklist.
+ - [x] Carrito se limpia tras confirmar pedido exitosamente
+ - [x] Validación de cupón (`/coupons/validate`) no lo marca como usado antes de confirmar
+ 
++### Salsas/cremas (selector en el detalle + carrito + payload) — ⚠️ PENDIENTE DE CORRER
++
++Escrito en una sesión sin acceso al toolchain de Flutter (ver `ROADMAP.md`, sección 4, entrada
++"Mejora nueva (en curso)"). Ninguno de los ítems siguientes fue confirmado corriendo
++`flutter analyze`/`flutter test` de verdad — son el checklist a correr antes de la auditoría de
++`@tester`, no un reporte de resultados.
++
++- [ ] `flutter pub get` + `dart run build_runner build --delete-conflicting-outputs` no genera
++      diffs distintos a los `*.freezed.dart`/`*.g.dart` escritos a mano en esta sesión
++      (`sauce_option.*`, `public_menu_item.*`, `cart_item.freezed.dart`)
++- [ ] `flutter analyze` limpio
++- [ ] `flutter test` verde, incluyendo los archivos tocados/nuevos: `product_detail_screen_test.dart`,
++      `cart_provider_test.dart`, `cart_screen_test.dart`, `order_repository_test.dart` (nuevo)
++- [ ] Producto sin salsas configuradas (ej. arroz chaufa) no muestra la sección en el detalle
++- [ ] Producto con salsas: selección múltiple funciona, es opcional (se puede agregar sin elegir
++      ninguna)
++- [ ] "Agregar al carrito" vuelve a Home automáticamente (verificar en dispositivo/emulador real,
++      no solo en el widget test — la transición de `go_router` puede comportarse distinto)
++- [ ] Mismo producto con distinta combinación de salsas → filas separadas en el carrito, cada una
++      con su propio stepper de cantidad; misma combinación → se fusiona (suma cantidad)
++- [ ] Carrito muestra "cremas: ..." debajo del nombre y arriba del precio, solo cuando hay
++      selección
++- [ ] `POST /orders` manda `sauceIds` por ítem solo cuando corresponde (nunca lista vacía)
++- [ ] Mensaje de WhatsApp final incluye las salsas concatenadas (esto lo arma el backend — ver
++      `OrdersService.buildWhatsappUrl` en `celtas-backend`, ya verificado en su propia sesión;
++      acá solo confirmar que el texto que abre `url_launcher` las trae)
++
+ ## Perfil / Direcciones
+ 
+ - [ ] DTO de edición de perfil no permite cambiar campos que el backend no acepta
+diff --git a/lib/features/cart/application/cart_provider.dart b/lib/features/cart/application/cart_provider.dart
+index 0169937..c858f49 100644
+--- a/lib/features/cart/application/cart_provider.dart
++++ b/lib/features/cart/application/cart_provider.dart
+@@ -1,6 +1,7 @@
+ import 'package:celtas_mobile/features/cart/data/models/cart_item.dart';
+ import 'package:celtas_mobile/features/coupons/data/models/validated_coupon.dart';
+ import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
++import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
+ import 'package:flutter_riverpod/flutter_riverpod.dart';
+ import 'package:freezed_annotation/freezed_annotation.dart';
+ 
+@@ -54,19 +55,42 @@ abstract class CartState with _$CartState {
+ 
+ /// Notifier del carrito local.
+ ///
+-/// Métodos: `addItem` (desde Home "+" o desde el detalle con cantidad),
+-/// `increment`/`decrement` (steppers del carrito), `removeItem`, `clear`
+-/// (tras confirmar el pedido), `applyCoupon`/`removeCoupon`.
++/// Métodos: `addItem` (desde Home "+" o desde el detalle con cantidad y
++/// salsas), `increment`/`decrement` (steppers del carrito), `removeItem`,
++/// `clear` (tras confirmar el pedido), `applyCoupon`/`removeCoupon`.
++///
++/// `increment`/`decrement`/`removeItem` identifican la fila por
++/// `CartItem.lineKey` (no por `menuItemId` puro): un mismo producto puede
++/// tener varias filas si el cliente lo agregó con distintas combinaciones
++/// de salsas — ver el doc de `lineKey` en `cart_item.dart`. Sin salsas,
++/// `lineKey == menuItemId`, así que todo lo que ya llamaba a estos métodos
++/// con un `menuItemId` sigue funcionando igual.
+ class CartNotifier extends Notifier<CartState> {
+   @override
+   CartState build() => const CartState();
+ 
+-  /// Agrega `quantity` unidades de un producto del menú. Si el ítem ya está
+-  /// en el carrito, suma a la cantidad existente (no duplica la fila).
+-  void addItem(PublicMenuItem item, {int quantity = 1}) {
++  /// Agrega `quantity` unidades de un producto del menú, con la selección
++  /// de salsas hecha en el detalle (vacía si el producto no ofrece salsas
++  /// o el cliente no eligió ninguna). Si ya existe una fila con el mismo
++  /// producto Y la misma combinación de salsas, suma a la cantidad
++  /// existente (no duplica la fila); si las salsas son distintas, se agrega
++  /// como una fila nueva.
++  void addItem(
++    PublicMenuItem item, {
++    int quantity = 1,
++    List<SauceOption> selectedSauces = const [],
++  }) {
+     if (quantity <= 0) return;
++    final newLine = CartItem(
++      menuItemId: item.id,
++      name: item.name,
++      unitPrice: item.price,
++      quantity: quantity,
++      image: item.image,
++      selectedSauces: selectedSauces,
++    );
+     final items = state.items;
+-    final index = items.indexWhere((i) => i.menuItemId == item.id);
++    final index = items.indexWhere((i) => i.lineKey == newLine.lineKey);
+     if (index >= 0) {
+       state = state.copyWith(
+         items: [
+@@ -78,27 +102,16 @@ class CartNotifier extends Notifier<CartState> {
+         ],
+       );
+     } else {
+-      state = state.copyWith(
+-        items: [
+-          ...items,
+-          CartItem(
+-            menuItemId: item.id,
+-            name: item.name,
+-            unitPrice: item.price,
+-            quantity: quantity,
+-            image: item.image,
+-          ),
+-        ],
+-      );
++      state = state.copyWith(items: [...items, newLine]);
+     }
+   }
+ 
+-  /// Suma 1 unidad. Si el ítem no existe, no hace nada.
+-  void increment(String menuItemId) {
++  /// Suma 1 unidad. Si la fila no existe, no hace nada.
++  void increment(String lineKey) {
+     state = state.copyWith(
+       items: [
+         for (final item in state.items)
+-          if (item.menuItemId == menuItemId)
++          if (item.lineKey == lineKey)
+             item.copyWith(quantity: item.quantity + 1)
+           else
+             item,
+@@ -106,14 +119,14 @@ class CartNotifier extends Notifier<CartState> {
+     );
+   }
+ 
+-  /// Resta 1 unidad. Al llegar a 0 el ítem se elimina del carrito.
+-  void decrement(String menuItemId) {
++  /// Resta 1 unidad. Al llegar a 0 la fila se elimina del carrito.
++  void decrement(String lineKey) {
+     state = state.copyWith(
+       items: [
+         for (final item in state.items)
+-          if (item.menuItemId == menuItemId && item.quantity > 1)
++          if (item.lineKey == lineKey && item.quantity > 1)
+             item.copyWith(quantity: item.quantity - 1)
+-          else if (item.menuItemId == menuItemId)
++          else if (item.lineKey == lineKey)
+             // quantity == 1 → se elimina (filtrado abajo).
+             item.copyWith(quantity: 0)
+           else
+@@ -123,12 +136,10 @@ class CartNotifier extends Notifier<CartState> {
+     _clearCouponIfInvalid();
+   }
+ 
+-  /// Elimina el ítem del carrito.
+-  void removeItem(String menuItemId) {
++  /// Elimina la fila del carrito.
++  void removeItem(String lineKey) {
+     state = state.copyWith(
+-      items: state.items
+-          .where((item) => item.menuItemId != menuItemId)
+-          .toList(),
++      items: state.items.where((item) => item.lineKey != lineKey).toList(),
+     );
+     _clearCouponIfInvalid();
+   }
+diff --git a/lib/features/cart/data/models/cart_item.dart b/lib/features/cart/data/models/cart_item.dart
+index 6715d5e..1cba86b 100644
+--- a/lib/features/cart/data/models/cart_item.dart
++++ b/lib/features/cart/data/models/cart_item.dart
+@@ -1,16 +1,20 @@
++import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
+ import 'package:freezed_annotation/freezed_annotation.dart';
+ 
+ part 'cart_item.freezed.dart';
+ 
+ /// Ítem del carrito local (100% en memoria, Riverpod).
+ ///
+-/// Snapshot al momento de agregar: `unitPrice` y `image` se copian del
+-/// producto del menú cuando se agrega, así el carrito no depende de que el
+-/// menú siga cargado ni de cambios de precio posteriores en el backend.
++/// Snapshot al momento de agregar: `unitPrice`, `image` y `selectedSauces`
++/// se copian del producto del menú y de la selección hecha en el detalle
++/// cuando se agrega, así el carrito no depende de que el menú siga cargado
++/// ni de cambios posteriores en el backend (mismo criterio "snapshot" que
++/// ya usa el resto del proyecto, ej. `OrderItem.selectedSauces` en el
++/// backend).
+ ///
+ /// Es estado local: no se serializa a JSON (el backend nunca recibe el
+-/// carrito, solo `menuItemId` + `quantity` al crear el pedido), por eso no
+-/// tiene `fromJson`.
++/// carrito completo, solo `menuItemId` + `quantity` + `sauceIds` al crear
++/// el pedido — ver `order_repository.dart`), por eso no tiene `fromJson`.
+ @freezed
+ abstract class CartItem with _$CartItem {
+   const factory CartItem({
+@@ -19,10 +23,28 @@ abstract class CartItem with _$CartItem {
+     required double unitPrice,
+     required int quantity,
+     String? image,
++    @Default(<SauceOption>[]) List<SauceOption> selectedSauces,
+   }) = _CartItem;
+ 
+   const CartItem._();
+ 
+   /// Subtotal del ítem (precio unitario × cantidad).
+   double get lineTotal => unitPrice * quantity;
++
++  /// Identifica una fila única del carrito. El mismo producto CON la misma
++  /// combinación de salsas se fusiona en una sola fila (suma cantidad); el
++  /// mismo producto con OTRA combinación queda en una fila aparte — ej. una
++  /// Celtas Burguesa con mayonesa y otra sin nada son dos líneas distintas
++  /// del carrito, cada una con su propio stepper de cantidad.
++  ///
++  /// Sin salsas seleccionadas, la key es igual al `menuItemId` puro — mismo
++  /// valor que ya usaban `increment`/`decrement`/`removeItem` y los
++  /// `ValueKey` del carrito antes de que existieran las salsas, así ningún
++  /// producto sin salsas cambia de comportamiento con este agregado.
++  String get lineKey {
++    if (selectedSauces.isEmpty) return menuItemId;
++    final sortedIds = selectedSauces.map((sauce) => sauce.id).toList()
++      ..sort();
++    return '$menuItemId::${sortedIds.join(',')}';
++  }
+ }
+\ No newline at end of file
+diff --git a/lib/features/cart/data/models/cart_item.freezed.dart b/lib/features/cart/data/models/cart_item.freezed.dart
+index 571e998..bef45c8 100644
+--- a/lib/features/cart/data/models/cart_item.freezed.dart
++++ b/lib/features/cart/data/models/cart_item.freezed.dart
+@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
+ /// @nodoc
+ mixin _$CartItem {
+ 
+- String get menuItemId; String get name; double get unitPrice; int get quantity; String? get image;
++ String get menuItemId; String get name; double get unitPrice; int get quantity; String? get image; List<SauceOption> get selectedSauces;
+ /// Create a copy of CartItem
+ /// with the given fields replaced by the non-null parameter values.
+ @JsonKey(includeFromJson: false, includeToJson: false)
+@@ -25,16 +25,16 @@ $CartItemCopyWith<CartItem> get copyWith => _$CartItemCopyWithImpl<CartItem>(thi
+ 
+ @override
+ bool operator ==(Object other) {
+-  return identical(this, other) || (other.runtimeType == runtimeType&&other is CartItem&&(identical(other.menuItemId, menuItemId) || other.menuItemId == menuItemId)&&(identical(other.name, name) || other.name == name)&&(identical(other.unitPrice, unitPrice) || other.unitPrice == unitPrice)&&(identical(other.quantity, quantity) || other.quantity == quantity)&&(identical(other.image, image) || other.image == image));
++  return identical(this, other) || (other.runtimeType == runtimeType&&other is CartItem&&(identical(other.menuItemId, menuItemId) || other.menuItemId == menuItemId)&&(identical(other.name, name) || other.name == name)&&(identical(other.unitPrice, unitPrice) || other.unitPrice == unitPrice)&&(identical(other.quantity, quantity) || other.quantity == quantity)&&(identical(other.image, image) || other.image == image)&&const DeepCollectionEquality().equals(other.selectedSauces, selectedSauces));
+ }
+ 
+ 
+ @override
+-int get hashCode => Object.hash(runtimeType,menuItemId,name,unitPrice,quantity,image);
++int get hashCode => Object.hash(runtimeType,menuItemId,name,unitPrice,quantity,image,const DeepCollectionEquality().hash(selectedSauces));
+ 
+ @override
+ String toString() {
+-  return 'CartItem(menuItemId: $menuItemId, name: $name, unitPrice: $unitPrice, quantity: $quantity, image: $image)';
++  return 'CartItem(menuItemId: $menuItemId, name: $name, unitPrice: $unitPrice, quantity: $quantity, image: $image, selectedSauces: $selectedSauces)';
+ }
+ 
+ 
+@@ -45,7 +45,7 @@ abstract mixin class $CartItemCopyWith<$Res>  {
+   factory $CartItemCopyWith(CartItem value, $Res Function(CartItem) _then) = _$CartItemCopyWithImpl;
+ @useResult
+ $Res call({
+- String menuItemId, String name, double unitPrice, int quantity, String? image
++ String menuItemId, String name, double unitPrice, int quantity, String? image, List<SauceOption> selectedSauces
+ });
+ 
+ 
+@@ -62,14 +62,15 @@ class _$CartItemCopyWithImpl<$Res>
+ 
+ /// Create a copy of CartItem
+ /// with the given fields replaced by the non-null parameter values.
+-@pragma('vm:prefer-inline') @override $Res call({Object? menuItemId = null,Object? name = null,Object? unitPrice = null,Object? quantity = null,Object? image = freezed,}) {
++@pragma('vm:prefer-inline') @override $Res call({Object? menuItemId = null,Object? name = null,Object? unitPrice = null,Object? quantity = null,Object? image = freezed,Object? selectedSauces = null,}) {
+   return _then(_self.copyWith(
+ menuItemId: null == menuItemId ? _self.menuItemId : menuItemId // ignore: cast_nullable_to_non_nullable
+ as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
+ as String,unitPrice: null == unitPrice ? _self.unitPrice : unitPrice // ignore: cast_nullable_to_non_nullable
+ as double,quantity: null == quantity ? _self.quantity : quantity // ignore: cast_nullable_to_non_nullable
+ as int,image: freezed == image ? _self.image : image // ignore: cast_nullable_to_non_nullable
+-as String?,
++as String?,selectedSauces: null == selectedSauces ? _self.selectedSauces : selectedSauces // ignore: cast_nullable_to_non_nullable
++as List<SauceOption>,
+   ));
+ }
+ 
+@@ -154,10 +155,10 @@ return $default(_that);case _:
+ /// }
+ /// ```
+ 
+-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String menuItemId,  String name,  double unitPrice,  int quantity,  String? image)?  $default,{required TResult orElse(),}) {final _that = this;
++@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String menuItemId,  String name,  double unitPrice,  int quantity,  String? image,  List<SauceOption> selectedSauces)?  $default,{required TResult orElse(),}) {final _that = this;
+ switch (_that) {
+ case _CartItem() when $default != null:
+-return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that.image);case _:
++return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that.image,_that.selectedSauces);case _:
+   return orElse();
+ 
+ }
+@@ -175,10 +176,10 @@ return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that
+ /// }
+ /// ```
+ 
+-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String menuItemId,  String name,  double unitPrice,  int quantity,  String? image)  $default,) {final _that = this;
++@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String menuItemId,  String name,  double unitPrice,  int quantity,  String? image,  List<SauceOption> selectedSauces)  $default,) {final _that = this;
+ switch (_that) {
+ case _CartItem():
+-return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that.image);case _:
++return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that.image,_that.selectedSauces);case _:
+   throw StateError('Unexpected subclass');
+ 
+ }
+@@ -195,10 +196,10 @@ return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that
+ /// }
+ /// ```
+ 
+-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String menuItemId,  String name,  double unitPrice,  int quantity,  String? image)?  $default,) {final _that = this;
++@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String menuItemId,  String name,  double unitPrice,  int quantity,  String? image,  List<SauceOption> selectedSauces)?  $default,) {final _that = this;
+ switch (_that) {
+ case _CartItem() when $default != null:
+-return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that.image);case _:
++return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that.image,_that.selectedSauces);case _:
+   return null;
+ 
+ }
+@@ -210,14 +211,21 @@ return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that
+ 
+ 
+ class _CartItem extends CartItem {
+-  const _CartItem({required this.menuItemId, required this.name, required this.unitPrice, required this.quantity, this.image}): super._();
+-  
++  const _CartItem({required this.menuItemId, required this.name, required this.unitPrice, required this.quantity, this.image, final  List<SauceOption> selectedSauces = const <SauceOption>[]}): _selectedSauces = selectedSauces,super._();
++
+ 
+ @override final  String menuItemId;
+ @override final  String name;
+ @override final  double unitPrice;
+ @override final  int quantity;
+ @override final  String? image;
++ final  List<SauceOption> _selectedSauces;
++@override@JsonKey() List<SauceOption> get selectedSauces {
++  if (_selectedSauces is EqualUnmodifiableListView) return _selectedSauces;
++  // ignore: implicit_dynamic_type
++  return EqualUnmodifiableListView(_selectedSauces);
++}
++
+ 
+ /// Create a copy of CartItem
+ /// with the given fields replaced by the non-null parameter values.
+@@ -229,16 +237,16 @@ _$CartItemCopyWith<_CartItem> get copyWith => __$CartItemCopyWithImpl<_CartItem>
+ 
+ @override
+ bool operator ==(Object other) {
+-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _CartItem&&(identical(other.menuItemId, menuItemId) || other.menuItemId == menuItemId)&&(identical(other.name, name) || other.name == name)&&(identical(other.unitPrice, unitPrice) || other.unitPrice == unitPrice)&&(identical(other.quantity, quantity) || other.quantity == quantity)&&(identical(other.image, image) || other.image == image));
++  return identical(this, other) || (other.runtimeType == runtimeType&&other is _CartItem&&(identical(other.menuItemId, menuItemId) || other.menuItemId == menuItemId)&&(identical(other.name, name) || other.name == name)&&(identical(other.unitPrice, unitPrice) || other.unitPrice == unitPrice)&&(identical(other.quantity, quantity) || other.quantity == quantity)&&(identical(other.image, image) || other.image == image)&&const DeepCollectionEquality().equals(other._selectedSauces, _selectedSauces));
+ }
+ 
+ 
+ @override
+-int get hashCode => Object.hash(runtimeType,menuItemId,name,unitPrice,quantity,image);
++int get hashCode => Object.hash(runtimeType,menuItemId,name,unitPrice,quantity,image,const DeepCollectionEquality().hash(_selectedSauces));
+ 
+ @override
+ String toString() {
+-  return 'CartItem(menuItemId: $menuItemId, name: $name, unitPrice: $unitPrice, quantity: $quantity, image: $image)';
++  return 'CartItem(menuItemId: $menuItemId, name: $name, unitPrice: $unitPrice, quantity: $quantity, image: $image, selectedSauces: $selectedSauces)';
+ }
+ 
+ 
+@@ -249,7 +257,7 @@ abstract mixin class _$CartItemCopyWith<$Res> implements $CartItemCopyWith<$Res>
+   factory _$CartItemCopyWith(_CartItem value, $Res Function(_CartItem) _then) = __$CartItemCopyWithImpl;
+ @override @useResult
+ $Res call({
+- String menuItemId, String name, double unitPrice, int quantity, String? image
++ String menuItemId, String name, double unitPrice, int quantity, String? image, List<SauceOption> selectedSauces
+ });
+ 
+ 
+@@ -266,14 +274,15 @@ class __$CartItemCopyWithImpl<$Res>
+ 
+ /// Create a copy of CartItem
+ /// with the given fields replaced by the non-null parameter values.
+-@override @pragma('vm:prefer-inline') $Res call({Object? menuItemId = null,Object? name = null,Object? unitPrice = null,Object? quantity = null,Object? image = freezed,}) {
++@override @pragma('vm:prefer-inline') $Res call({Object? menuItemId = null,Object? name = null,Object? unitPrice = null,Object? quantity = null,Object? image = freezed,Object? selectedSauces = null,}) {
+   return _then(_CartItem(
+ menuItemId: null == menuItemId ? _self.menuItemId : menuItemId // ignore: cast_nullable_to_non_nullable
+ as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
+ as String,unitPrice: null == unitPrice ? _self.unitPrice : unitPrice // ignore: cast_nullable_to_non_nullable
+ as double,quantity: null == quantity ? _self.quantity : quantity // ignore: cast_nullable_to_non_nullable
+ as int,image: freezed == image ? _self.image : image // ignore: cast_nullable_to_non_nullable
+-as String?,
++as String?,selectedSauces: null == selectedSauces ? _self._selectedSauces : selectedSauces // ignore: cast_nullable_to_non_nullable
++as List<SauceOption>,
+   ));
+ }
+ 
+diff --git a/lib/features/cart/presentation/cart_screen.dart b/lib/features/cart/presentation/cart_screen.dart
+index 59b314e..25771b9 100644
+--- a/lib/features/cart/presentation/cart_screen.dart
++++ b/lib/features/cart/presentation/cart_screen.dart
+@@ -303,6 +303,22 @@ class _CartItemRow extends ConsumerWidget {
+                         color: CeltasColors.cream,
+                       ),
+                 ),
++                // Salsas elegidas (si el producto ofrece y el cliente
++                // seleccionó alguna) — debajo del nombre, arriba del precio,
++                // igual a como lo pidió el mockup del carrito. Sin selección
++                // no se muestra nada (ej. arroz chaufa nunca tiene esta
++                // línea).
++                if (item.selectedSauces.isNotEmpty) ...[
++                  const SizedBox(height: 2),
++                  Text(
++                    'cremas: ${item.selectedSauces.map((s) => s.name).join(', ')}',
++                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
++                          fontSize: 11.5,
++                          color: CeltasColors.textMuted,
++                          fontStyle: FontStyle.italic,
++                        ),
++                  ),
++                ],
+                 const SizedBox(height: 2),
+                 Text(
+                   'S/ ${item.unitPrice.toStringAsFixed(2)} c/u',
+@@ -412,8 +428,8 @@ class _CartStepper extends ConsumerWidget {
+         mainAxisSize: MainAxisSize.min,
+         children: [
+           GestureDetector(
+-            key: ValueKey('cart-minus-${item.menuItemId}'),
+-            onTap: () => notifier.decrement(item.menuItemId),
++            key: ValueKey('cart-minus-${item.lineKey}'),
++            onTap: () => notifier.decrement(item.lineKey),
+             child: const SvgStrokeIcon(
+               path: 'M5 12h14',
+               size: 12,
+@@ -424,7 +440,7 @@ class _CartStepper extends ConsumerWidget {
+           const SizedBox(width: 12),
+           Text(
+             '${item.quantity}',
+-            key: ValueKey('cart-qty-${item.menuItemId}'),
++            key: ValueKey('cart-qty-${item.lineKey}'),
+             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                   fontSize: 13,
+                   fontWeight: FontWeight.w700,
+@@ -433,8 +449,8 @@ class _CartStepper extends ConsumerWidget {
+           ),
+           const SizedBox(width: 12),
+           GestureDetector(
+-            key: ValueKey('cart-plus-${item.menuItemId}'),
+-            onTap: () => notifier.increment(item.menuItemId),
++            key: ValueKey('cart-plus-${item.lineKey}'),
++            onTap: () => notifier.increment(item.lineKey),
+             child: const SvgStrokeIcon(
+               path: 'M12 5v14M5 12h14',
+               size: 12,
+diff --git a/lib/features/checkout/data/order_repository.dart b/lib/features/checkout/data/order_repository.dart
+index 62cdc1a..0e7bc2c 100644
+--- a/lib/features/checkout/data/order_repository.dart
++++ b/lib/features/checkout/data/order_repository.dart
+@@ -35,7 +35,14 @@ class AddressSnapshotInput {
+ ///
+ /// `POST /orders` (contrato verificado contra `celtas-backend/src/modules/
+ /// orders/dto/create-order.dto.ts` + `orders.service.ts`):
+-///   - `items`: `[{ menuItemId, quantity }]`, obligatorio, al menos 1.
++///   - `items`: `[{ menuItemId, quantity, sauceIds? }]`, obligatorio, al
++///     menos 1. `sauceIds` es opcional — se omite por completo si el ítem
++///     no tiene salsas seleccionadas (mismo criterio que el resto del DTO:
++///     nunca se manda una lista vacía donde el backend espera "ausente").
++///     El backend valida cada id contra las salsas que ese producto
++///     realmente ofrece y guarda los NOMBRES como snapshot en
++///     `OrderItem.selectedSauces` — el pedido no se ve afectado si la salsa
++///     se borra del catálogo después.
+ ///   - `addressId` O `addressSnapshot` (JSON string) — nunca ambos, nunca
+ ///     ninguno (el backend responde 400).
+ ///   - `couponCode` opcional: se valida y canjea en la MISMA transacción del
+@@ -65,7 +72,14 @@ class OrderRepository {
+         data: {
+           'items': [
+             for (final item in items)
+-              {'menuItemId': item.menuItemId, 'quantity': item.quantity},
++              {
++                'menuItemId': item.menuItemId,
++                'quantity': item.quantity,
++                if (item.selectedSauces.isNotEmpty)
++                  'sauceIds': [
++                    for (final sauce in item.selectedSauces) sauce.id,
++                  ],
++              },
+           ],
+           'addressId': ?addressId,
+           if (addressSnapshot != null)
+diff --git a/lib/features/home/data/models/public_menu_item.dart b/lib/features/home/data/models/public_menu_item.dart
+index e383c34..24df981 100644
+--- a/lib/features/home/data/models/public_menu_item.dart
++++ b/lib/features/home/data/models/public_menu_item.dart
+@@ -1,3 +1,4 @@
++import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
+ import 'package:freezed_annotation/freezed_annotation.dart';
+ 
+ part 'public_menu_item.freezed.dart';
+@@ -9,6 +10,13 @@ part 'public_menu_item.g.dart';
+ /// (interfaz `PublicMenuCategory['items']`): el endpoint público NO expone
+ /// `available`, `categoryId` ni `createdAt`/`updatedAt` — solo los campos que
+ /// le interesan a la app.
++///
++/// `sauces`: salsas/cremas que el producto ofrece para elegir (Mayonesa,
++/// Mostaza, Ketchup...), ya filtradas a `active: true` y ordenadas por el
++/// backend. Lista vacía = el producto no ofrece selector de salsas en el
++/// detalle (ej. arroz chaufa) — es el mismo criterio que ya usa
++/// `celtas-admin` para decidir si un producto muestra el checklist de
++/// salsas en su formulario.
+ @freezed
+ abstract class PublicMenuItem with _$PublicMenuItem {
+   const factory PublicMenuItem({
+@@ -17,6 +25,7 @@ abstract class PublicMenuItem with _$PublicMenuItem {
+     String? description,
+     required double price,
+     String? image,
++    @Default(<SauceOption>[]) List<SauceOption> sauces,
+   }) = _PublicMenuItem;
+ 
+   factory PublicMenuItem.fromJson(Map<String, dynamic> json) =>
+diff --git a/lib/features/home/data/models/public_menu_item.freezed.dart b/lib/features/home/data/models/public_menu_item.freezed.dart
+index 22f17b2..e518f1c 100644
+--- a/lib/features/home/data/models/public_menu_item.freezed.dart
++++ b/lib/features/home/data/models/public_menu_item.freezed.dart
+@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
+ /// @nodoc
+ mixin _$PublicMenuItem {
+ 
+- String get id; String get name; String? get description; double get price; String? get image;
++ String get id; String get name; String? get description; double get price; String? get image; List<SauceOption> get sauces;
+ /// Create a copy of PublicMenuItem
+ /// with the given fields replaced by the non-null parameter values.
+ @JsonKey(includeFromJson: false, includeToJson: false)
+@@ -28,16 +28,16 @@ $PublicMenuItemCopyWith<PublicMenuItem> get copyWith => _$PublicMenuItemCopyWith
+ 
+ @override
+ bool operator ==(Object other) {
+-  return identical(this, other) || (other.runtimeType == runtimeType&&other is PublicMenuItem&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.description, description) || other.description == description)&&(identical(other.price, price) || other.price == price)&&(identical(other.image, image) || other.image == image));
++  return identical(this, other) || (other.runtimeType == runtimeType&&other is PublicMenuItem&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.description, description) || other.description == description)&&(identical(other.price, price) || other.price == price)&&(identical(other.image, image) || other.image == image)&&const DeepCollectionEquality().equals(other.sauces, sauces));
+ }
+ 
+ @JsonKey(includeFromJson: false, includeToJson: false)
+ @override
+-int get hashCode => Object.hash(runtimeType,id,name,description,price,image);
++int get hashCode => Object.hash(runtimeType,id,name,description,price,image,const DeepCollectionEquality().hash(sauces));
+ 
+ @override
+ String toString() {
+-  return 'PublicMenuItem(id: $id, name: $name, description: $description, price: $price, image: $image)';
++  return 'PublicMenuItem(id: $id, name: $name, description: $description, price: $price, image: $image, sauces: $sauces)';
+ }
+ 
+ 
+@@ -48,7 +48,7 @@ abstract mixin class $PublicMenuItemCopyWith<$Res>  {
+   factory $PublicMenuItemCopyWith(PublicMenuItem value, $Res Function(PublicMenuItem) _then) = _$PublicMenuItemCopyWithImpl;
+ @useResult
+ $Res call({
+- String id, String name, String? description, double price, String? image
++ String id, String name, String? description, double price, String? image, List<SauceOption> sauces
+ });
+ 
+ 
+@@ -65,14 +65,15 @@ class _$PublicMenuItemCopyWithImpl<$Res>
+ 
+ /// Create a copy of PublicMenuItem
+ /// with the given fields replaced by the non-null parameter values.
+-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? price = null,Object? image = freezed,}) {
++@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? price = null,Object? image = freezed,Object? sauces = null,}) {
+   return _then(_self.copyWith(
+ id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
+ as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
+ as String,description: freezed == description ? _self.description : description // ignore: cast_nullable_to_non_nullable
+ as String?,price: null == price ? _self.price : price // ignore: cast_nullable_to_non_nullable
+ as double,image: freezed == image ? _self.image : image // ignore: cast_nullable_to_non_nullable
+-as String?,
++as String?,sauces: null == sauces ? _self.sauces : sauces // ignore: cast_nullable_to_non_nullable
++as List<SauceOption>,
+   ));
+ }
+ 
+@@ -157,10 +158,10 @@ return $default(_that);case _:
+ /// }
+ /// ```
+ 
+-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  double price,  String? image)?  $default,{required TResult orElse(),}) {final _that = this;
++@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  double price,  String? image,  List<SauceOption> sauces)?  $default,{required TResult orElse(),}) {final _that = this;
+ switch (_that) {
+ case _PublicMenuItem() when $default != null:
+-return $default(_that.id,_that.name,_that.description,_that.price,_that.image);case _:
++return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_that.sauces);case _:
+   return orElse();
+ 
+ }
+@@ -178,10 +179,10 @@ return $default(_that.id,_that.name,_that.description,_that.price,_that.image);c
+ /// }
+ /// ```
+ 
+-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  double price,  String? image)  $default,) {final _that = this;
++@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  double price,  String? image,  List<SauceOption> sauces)  $default,) {final _that = this;
+ switch (_that) {
+ case _PublicMenuItem():
+-return $default(_that.id,_that.name,_that.description,_that.price,_that.image);case _:
++return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_that.sauces);case _:
+   throw StateError('Unexpected subclass');
+ 
+ }
+@@ -198,10 +199,10 @@ return $default(_that.id,_that.name,_that.description,_that.price,_that.image);c
+ /// }
+ /// ```
+ 
+-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  String? description,  double price,  String? image)?  $default,) {final _that = this;
++@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  String? description,  double price,  String? image,  List<SauceOption> sauces)?  $default,) {final _that = this;
+ switch (_that) {
+ case _PublicMenuItem() when $default != null:
+-return $default(_that.id,_that.name,_that.description,_that.price,_that.image);case _:
++return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_that.sauces);case _:
+   return null;
+ 
+ }
+@@ -213,7 +214,7 @@ return $default(_that.id,_that.name,_that.description,_that.price,_that.image);c
+ @JsonSerializable()
+ 
+ class _PublicMenuItem implements PublicMenuItem {
+-  const _PublicMenuItem({required this.id, required this.name, this.description, required this.price, this.image});
++  const _PublicMenuItem({required this.id, required this.name, this.description, required this.price, this.image, final  List<SauceOption> sauces = const <SauceOption>[]}): _sauces = sauces;
+   factory _PublicMenuItem.fromJson(Map<String, dynamic> json) => _$PublicMenuItemFromJson(json);
+ 
+ @override final  String id;
+@@ -221,6 +222,13 @@ class _PublicMenuItem implements PublicMenuItem {
+ @override final  String? description;
+ @override final  double price;
+ @override final  String? image;
++ final  List<SauceOption> _sauces;
++@override@JsonKey() List<SauceOption> get sauces {
++  if (_sauces is EqualUnmodifiableListView) return _sauces;
++  // ignore: implicit_dynamic_type
++  return EqualUnmodifiableListView(_sauces);
++}
++
+ 
+ /// Create a copy of PublicMenuItem
+ /// with the given fields replaced by the non-null parameter values.
+@@ -235,16 +243,16 @@ Map<String, dynamic> toJson() {
+ 
+ @override
+ bool operator ==(Object other) {
+-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PublicMenuItem&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.description, description) || other.description == description)&&(identical(other.price, price) || other.price == price)&&(identical(other.image, image) || other.image == image));
++  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PublicMenuItem&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.description, description) || other.description == description)&&(identical(other.price, price) || other.price == price)&&(identical(other.image, image) || other.image == image)&&const DeepCollectionEquality().equals(other._sauces, _sauces));
+ }
+ 
+ @JsonKey(includeFromJson: false, includeToJson: false)
+ @override
+-int get hashCode => Object.hash(runtimeType,id,name,description,price,image);
++int get hashCode => Object.hash(runtimeType,id,name,description,price,image,const DeepCollectionEquality().hash(_sauces));
+ 
+ @override
+ String toString() {
+-  return 'PublicMenuItem(id: $id, name: $name, description: $description, price: $price, image: $image)';
++  return 'PublicMenuItem(id: $id, name: $name, description: $description, price: $price, image: $image, sauces: $sauces)';
+ }
+ 
+ 
+@@ -255,7 +263,7 @@ abstract mixin class _$PublicMenuItemCopyWith<$Res> implements $PublicMenuItemCo
+   factory _$PublicMenuItemCopyWith(_PublicMenuItem value, $Res Function(_PublicMenuItem) _then) = __$PublicMenuItemCopyWithImpl;
+ @override @useResult
+ $Res call({
+- String id, String name, String? description, double price, String? image
++ String id, String name, String? description, double price, String? image, List<SauceOption> sauces
+ });
+ 
+ 
+@@ -272,14 +280,15 @@ class __$PublicMenuItemCopyWithImpl<$Res>
+ 
+ /// Create a copy of PublicMenuItem
+ /// with the given fields replaced by the non-null parameter values.
+-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? price = null,Object? image = freezed,}) {
++@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? price = null,Object? image = freezed,Object? sauces = null,}) {
+   return _then(_PublicMenuItem(
+ id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
+ as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
+ as String,description: freezed == description ? _self.description : description // ignore: cast_nullable_to_non_nullable
+ as String?,price: null == price ? _self.price : price // ignore: cast_nullable_to_non_nullable
+ as double,image: freezed == image ? _self.image : image // ignore: cast_nullable_to_non_nullable
+-as String?,
++as String?,sauces: null == sauces ? _self._sauces : sauces // ignore: cast_nullable_to_non_nullable
++as List<SauceOption>,
+   ));
+ }
+ 
+diff --git a/lib/features/home/data/models/public_menu_item.g.dart b/lib/features/home/data/models/public_menu_item.g.dart
+index cafc1d9..e9f8754 100644
+--- a/lib/features/home/data/models/public_menu_item.g.dart
++++ b/lib/features/home/data/models/public_menu_item.g.dart
+@@ -13,6 +13,11 @@ _PublicMenuItem _$PublicMenuItemFromJson(Map<String, dynamic> json) =>
+       description: json['description'] as String?,
+       price: (json['price'] as num).toDouble(),
+       image: json['image'] as String?,
++      sauces:
++          (json['sauces'] as List<dynamic>?)
++              ?.map((e) => SauceOption.fromJson(e as Map<String, dynamic>))
++              .toList() ??
++          const [],
+     );
+ 
+ Map<String, dynamic> _$PublicMenuItemToJson(_PublicMenuItem instance) =>
+@@ -22,4 +27,5 @@ Map<String, dynamic> _$PublicMenuItemToJson(_PublicMenuItem instance) =>
+       'description': instance.description,
+       'price': instance.price,
+       'image': instance.image,
++      'sauces': instance.sauces,
+     };
+diff --git a/lib/features/home/data/models/sauce_option.dart b/lib/features/home/data/models/sauce_option.dart
+new file mode 100644
+index 0000000..ae82060
+--- /dev/null
++++ b/lib/features/home/data/models/sauce_option.dart
+@@ -0,0 +1,24 @@
++import 'package:freezed_annotation/freezed_annotation.dart';
++
++part 'sauce_option.freezed.dart';
++part 'sauce_option.g.dart';
++
++/// Salsa/crema que un producto ofrece para elegir (ej. Mayonesa, Mostaza,
++/// Ketchup), tal como la devuelve `GET /menu` dentro de cada ítem.
++///
++/// Contrato verificado contra `celtas-backend/src/modules/menu/menu.service.ts`
++/// (`findPublicMenu`): el endpoint público solo expone `id` y `name` de cada
++/// salsa — ya viene filtrado a `active: true` y ordenado por `sortOrder`/
++/// `name`, la app no repite ese criterio.
++///
++/// Se reusa el mismo shape para `CartItem.selectedSauces` (lo que el cliente
++/// eligió en el detalle de producto): ahí no viene de un `fromJson`, se arma
++/// a mano a partir de las opciones ya cargadas en `PublicMenuItem.sauces`.
++@freezed
++abstract class SauceOption with _$SauceOption {
++  const factory SauceOption({required String id, required String name}) =
++      _SauceOption;
++
++  factory SauceOption.fromJson(Map<String, dynamic> json) =>
++      _$SauceOptionFromJson(json);
++}
+diff --git a/lib/features/home/data/models/sauce_option.freezed.dart b/lib/features/home/data/models/sauce_option.freezed.dart
+new file mode 100644
+index 0000000..828e249
+--- /dev/null
++++ b/lib/features/home/data/models/sauce_option.freezed.dart
+@@ -0,0 +1,280 @@
++// GENERATED CODE - DO NOT MODIFY BY HAND
++// coverage:ignore-file
++// ignore_for_file: type=lint
++// ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
++
++part of 'sauce_option.dart';
++
++// **************************************************************************
++// FreezedGenerator
++// **************************************************************************
++
++// dart format off
++T _$identity<T>(T value) => value;
++
++/// @nodoc
++mixin _$SauceOption {
++
++ String get id; String get name;
++/// Create a copy of SauceOption
++/// with the given fields replaced by the non-null parameter values.
++@JsonKey(includeFromJson: false, includeToJson: false)
++@pragma('vm:prefer-inline')
++$SauceOptionCopyWith<SauceOption> get copyWith => _$SauceOptionCopyWithImpl<SauceOption>(this as SauceOption, _$identity);
++
++  /// Serializes this SauceOption to a JSON map.
++  Map<String, dynamic> toJson();
++
++
++@override
++bool operator ==(Object other) {
++  return identical(this, other) || (other.runtimeType == runtimeType&&other is SauceOption&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name));
++}
++
++@JsonKey(includeFromJson: false, includeToJson: false)
++@override
++int get hashCode => Object.hash(runtimeType,id,name);
++
++@override
++String toString() {
++  return 'SauceOption(id: $id, name: $name)';
++}
++
++
++}
++
++/// @nodoc
++abstract mixin class $SauceOptionCopyWith<$Res>  {
++  factory $SauceOptionCopyWith(SauceOption value, $Res Function(SauceOption) _then) = _$SauceOptionCopyWithImpl;
++@useResult
++$Res call({
++ String id, String name
++});
++
++
++
++
++}
++/// @nodoc
++class _$SauceOptionCopyWithImpl<$Res>
++    implements $SauceOptionCopyWith<$Res> {
++  _$SauceOptionCopyWithImpl(this._self, this._then);
++
++  final SauceOption _self;
++  final $Res Function(SauceOption) _then;
++
++/// Create a copy of SauceOption
++/// with the given fields replaced by the non-null parameter values.
++@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,}) {
++  return _then(_self.copyWith(
++id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
++as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
++as String,
++  ));
++}
++
++}
++
++
++/// Adds pattern-matching-related methods to [SauceOption].
++extension SauceOptionPatterns on SauceOption {
++/// A variant of `map` that fallback to returning `orElse`.
++///
++/// It is equivalent to doing:
++/// ```dart
++/// switch (sealedClass) {
++///   case final Subclass value:
++///     return ...;
++///   case _:
++///     return orElse();
++/// }
++/// ```
++
++@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _SauceOption value)?  $default,{required TResult orElse(),}){
++final _that = this;
++switch (_that) {
++case _SauceOption() when $default != null:
++return $default(_that);case _:
++  return orElse();
++
++}
++}
++/// A `switch`-like method, using callbacks.
++///
++/// Callbacks receives the raw object, upcasted.
++/// It is equivalent to doing:
++/// ```dart
++/// switch (sealedClass) {
++///   case final Subclass value:
++///     return ...;
++///   case final Subclass2 value:
++///     return ...;
++/// }
++/// ```
++
++@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _SauceOption value)  $default,){
++final _that = this;
++switch (_that) {
++case _SauceOption():
++return $default(_that);case _:
++  throw StateError('Unexpected subclass');
++
++}
++}
++/// A variant of `map` that fallback to returning `null`.
++///
++/// It is equivalent to doing:
++/// ```dart
++/// switch (sealedClass) {
++///   case final Subclass value:
++///     return ...;
++///   case _:
++///     return null;
++/// }
++/// ```
++
++@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _SauceOption value)?  $default,){
++final _that = this;
++switch (_that) {
++case _SauceOption() when $default != null:
++return $default(_that);case _:
++  return null;
++
++}
++}
++/// A variant of `when` that fallback to an `orElse` callback.
++///
++/// It is equivalent to doing:
++/// ```dart
++/// switch (sealedClass) {
++///   case Subclass(:final field):
++///     return ...;
++///   case _:
++///     return orElse();
++/// }
++/// ```
++
++@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name)?  $default,{required TResult orElse(),}) {final _that = this;
++switch (_that) {
++case _SauceOption() when $default != null:
++return $default(_that.id,_that.name);case _:
++  return orElse();
++
++}
++}
++/// A `switch`-like method, using callbacks.
++///
++/// As opposed to `map`, this offers destructuring.
++/// It is equivalent to doing:
++/// ```dart
++/// switch (sealedClass) {
++///   case Subclass(:final field):
++///     return ...;
++///   case Subclass2(:final field2):
++///     return ...;
++/// }
++/// ```
++
++@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name)  $default,) {final _that = this;
++switch (_that) {
++case _SauceOption():
++return $default(_that.id,_that.name);case _:
++  throw StateError('Unexpected subclass');
++
++}
++}
++/// A variant of `when` that fallback to returning `null`
++///
++/// It is equivalent to doing:
++/// ```dart
++/// switch (sealedClass) {
++///   case Subclass(:final field):
++///     return ...;
++///   case _:
++///     return null;
++/// }
++/// ```
++
++@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name)?  $default,) {final _that = this;
++switch (_that) {
++case _SauceOption() when $default != null:
++return $default(_that.id,_that.name);case _:
++  return null;
++
++}
++}
++
++}
++
++/// @nodoc
++@JsonSerializable()
++
++class _SauceOption implements SauceOption {
++  const _SauceOption({required this.id, required this.name});
++  factory _SauceOption.fromJson(Map<String, dynamic> json) => _$SauceOptionFromJson(json);
++
++@override final  String id;
++@override final  String name;
++
++/// Create a copy of SauceOption
++/// with the given fields replaced by the non-null parameter values.
++@override @JsonKey(includeFromJson: false, includeToJson: false)
++@pragma('vm:prefer-inline')
++_$SauceOptionCopyWith<_SauceOption> get copyWith => __$SauceOptionCopyWithImpl<_SauceOption>(this, _$identity);
++
++@override
++Map<String, dynamic> toJson() {
++  return _$SauceOptionToJson(this, );
++}
++
++@override
++bool operator ==(Object other) {
++  return identical(this, other) || (other.runtimeType == runtimeType&&other is _SauceOption&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name));
++}
++
++@JsonKey(includeFromJson: false, includeToJson: false)
++@override
++int get hashCode => Object.hash(runtimeType,id,name);
++
++@override
++String toString() {
++  return 'SauceOption(id: $id, name: $name)';
++}
++
++
++}
++
++/// @nodoc
++abstract mixin class _$SauceOptionCopyWith<$Res> implements $SauceOptionCopyWith<$Res> {
++  factory _$SauceOptionCopyWith(_SauceOption value, $Res Function(_SauceOption) _then) = __$SauceOptionCopyWithImpl;
++@override @useResult
++$Res call({
++ String id, String name
++});
++
++
++
++
++}
++/// @nodoc
++class __$SauceOptionCopyWithImpl<$Res>
++    implements _$SauceOptionCopyWith<$Res> {
++  __$SauceOptionCopyWithImpl(this._self, this._then);
++
++  final _SauceOption _self;
++  final $Res Function(_SauceOption) _then;
++
++/// Create a copy of SauceOption
++/// with the given fields replaced by the non-null parameter values.
++@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,}) {
++  return _then(_SauceOption(
++id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
++as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
++as String,
++  ));
++}
++
++
++}
++
++// dart format on
+diff --git a/lib/features/home/data/models/sauce_option.g.dart b/lib/features/home/data/models/sauce_option.g.dart
+new file mode 100644
+index 0000000..7e72a78
+--- /dev/null
++++ b/lib/features/home/data/models/sauce_option.g.dart
+@@ -0,0 +1,13 @@
++// GENERATED CODE - DO NOT MODIFY BY HAND
++
++part of 'sauce_option.dart';
++
++// **************************************************************************
++// JsonSerializableGenerator
++// **************************************************************************
++
++_SauceOption _$SauceOptionFromJson(Map<String, dynamic> json) =>
++    _SauceOption(id: json['id'] as String, name: json['name'] as String);
++
++Map<String, dynamic> _$SauceOptionToJson(_SauceOption instance) =>
++    <String, dynamic>{'id': instance.id, 'name': instance.name};
+diff --git a/lib/features/home/presentation/home_screen.dart b/lib/features/home/presentation/home_screen.dart
+index aef5b13..960e332 100644
+--- a/lib/features/home/presentation/home_screen.dart
++++ b/lib/features/home/presentation/home_screen.dart
+@@ -19,9 +19,14 @@ import 'package:url_launcher/url_launcher.dart';
+ ///
+ /// Módulo 3: consume `GET /banners/active` (carrusel con indicador de puntos)
+ /// y `GET /menu` (categorías con tarjetas de producto). El botón "+" de cada
+-/// tarjeta agrega directo al carrito local (`cartProvider`, módulo 4); tocar
+-/// la tarjeta abre el detalle (`/product/:id`). El ícono de carrito del header
+-/// muestra el total de unidades en un badge.
++/// tarjeta agrega directo al carrito local (`cartProvider`, módulo 4) SIN
++/// pasar por el selector de salsas del detalle — decisión deliberada: es el
++/// atajo de "agregar rápido" ya existente y probado, y agregar sin salsas es
++/// un estado válido para el backend (`selectedSauces: null`, ver
++/// `orders.service.ts`). Si un producto ofrece salsas y el cliente quiere
++/// elegirlas, toca la tarjeta para abrir el detalle (`/product/:id`), que sí
++/// muestra el selector. El ícono de carrito del header muestra el total de
++/// unidades en un badge.
+ ///
+ /// Mejora post-cierre: tap sobre cada banner según su `actionType`
+ /// (`Banner.actionType`/`actionValue`, contrato real verificado contra
+diff --git a/lib/features/menu/presentation/product_detail_screen.dart b/lib/features/menu/presentation/product_detail_screen.dart
+index 2579f30..a90a963 100644
+--- a/lib/features/menu/presentation/product_detail_screen.dart
++++ b/lib/features/menu/presentation/product_detail_screen.dart
+@@ -3,6 +3,7 @@ import 'package:celtas_mobile/core/theme/app_theme.dart';
+ import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
+ import 'package:celtas_mobile/features/home/application/home_providers.dart';
+ import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
++import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
+ import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
+ import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
+ import 'package:celtas_mobile/shared/widgets/svg_stroke_icon.dart';
+@@ -21,9 +22,21 @@ import 'package:go_router/go_router.dart';
+ ///     `rgba(13,13,13,.5) 0% → transparent 30% → rgba(13,13,13,.95) 100%` y
+ ///     botones circulares de volver (38px, fondo `rgba(13,13,13,.6)`).
+ ///   - Nombre en Cinzel 24px, descripción 14px muted, precio dorado 22px.
++///   - Selector de salsas/cremas (solo si `item.sauces` no está vacío —
++///     ej. arroz chaufa no lo muestra): sección nueva, no viene del mockup
++///     original (12 pantallas, sin esta funcionalidad todavía) — se sigue el
++///     mismo lenguaje visual del resto de la pantalla (chips con borde
++///     dorado cuando están seleccionados, mismo criterio que "VER MIS
++///     CUPONES" del carrito y el círculo de selección de `_AddressCard` del
++///     checkout).
+ ///   - Selector de cantidad (stepper `#17130F` borde `#2A231C` radio 12).
+ ///   - Barra inferior fija con botón angled "AGREGAR AL CARRITO · S/ X.XX"
+ ///     donde el precio ya viene multiplicado por la cantidad seleccionada.
++///     Al tocarlo se agrega al carrito CON las salsas elegidas y se vuelve
++///     automáticamente a Home (`context.pop()`) para seguir agregando —
++///     `/product/:id` siempre se llega con `push` desde Home (ver
++///     `home_screen.dart`: tarjeta de producto y banner tipo `menuItem`),
++///     así que el pop siempre cae de vuelta ahí.
+ class ProductDetailScreen extends ConsumerWidget {
+   const ProductDetailScreen({super.key, required this.productId});
+ 
+@@ -65,15 +78,40 @@ class _ProductDetailBody extends ConsumerStatefulWidget {
+ 
+ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
+   int _quantity = 1;
++  final Set<String> _selectedSauceIds = {};
++
++  void _toggleSauce(String sauceId) {
++    setState(() {
++      if (!_selectedSauceIds.remove(sauceId)) {
++        _selectedSauceIds.add(sauceId);
++      }
++    });
++  }
+ 
+   void _addToCart() {
+-    ref.read(cartProvider.notifier).addItem(widget.item, quantity: _quantity);
++    final item = widget.item;
++    final selectedSauces = item.sauces
++        .where((sauce) => _selectedSauceIds.contains(sauce.id))
++        .toList();
++    ref.read(cartProvider.notifier).addItem(
++          item,
++          quantity: _quantity,
++          selectedSauces: selectedSauces,
++        );
++    // El SnackBar vive en el ScaffoldMessenger raíz (por encima del
++    // Navigator), así que sigue visible aunque esta pantalla haga `pop()` a
++    // continuación — mismo criterio que ya usa el botón "+" rápido del
++    // Home, que confirma sin bloquear la navegación. Ya no lleva la acción
++    // "VER CARRITO": al volver a Home el usuario ya ve ahí la barra
++    // flotante del carrito (`_CartSummaryBar`), y mantener la acción
++    // apuntando a un `context` que esta pantalla está por descartar es
++    // frágil.
+     ScaffoldMessenger.of(context)
+       ..hideCurrentSnackBar()
+       ..showSnackBar(
+         SnackBar(
+           content: Text(
+-            'Agregado: ${widget.item.name} ×$_quantity',
++            'Agregado: ${item.name} ×$_quantity',
+             style: Theme.of(
+               context,
+             ).textTheme.bodyMedium?.copyWith(color: CeltasColors.cream),
+@@ -81,25 +119,15 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
+           backgroundColor: CeltasColors.surface,
+           behavior: SnackBarBehavior.floating,
+           duration: const Duration(seconds: 2),
+-          // El SnackBar persiste en el ScaffoldMessenger raíz: si el usuario
+-          // vuelve al Home antes de que expire, puede quedar tapado por la
+-          // barra flotante "VER CARRITO" que aparece ahí con el carrito no
+-          // vacío (`_CartSummaryBar`, mismo margen de 88 ya usado en
+-          // `home_screen.dart` para que esa barra no tape el último ítem del
+-          // menú).
++          // Mismo margen ya usado en `home_screen.dart` para que el
++          // SnackBar no quede tapado por `_CartSummaryBar`.
+           margin: const EdgeInsets.fromLTRB(16, 0, 16, 88),
+-          action: SnackBarAction(
+-            label: 'VER CARRITO',
+-            textColor: CeltasColors.gold,
+-            onPressed: () {
+-              // Ocultar el SnackBar antes de navegar: persiste en el
+-              // ScaffoldMessenger raíz y tapa los CTAs del carrito.
+-              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+-              context.push('/cart');
+-            },
+-          ),
+         ),
+       );
++    // Vuelve a Home para seguir agregando productos — el flujo de "captura"
++    // normal de la app (pedido explícito del negocio: agregar no debe
++    // dejarte varado en el detalle).
++    context.pop();
+   }
+ 
+   @override
+@@ -199,6 +227,14 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
+                         color: CeltasColors.gold,
+                       ),
+                     ),
++                    if (item.sauces.isNotEmpty) ...[
++                      const SizedBox(height: 20),
++                      _SauceSelector(
++                        sauces: item.sauces,
++                        selectedIds: _selectedSauceIds,
++                        onToggle: _toggleSauce,
++                      ),
++                    ],
+                     const SizedBox(height: 20),
+                     // Selector de cantidad (mockup: label CANTIDAD + stepper).
+                     Row(
+@@ -389,6 +425,113 @@ class _QuantityStepper extends StatelessWidget {
+   }
+ }
+ 
++/// Selector de salsas/cremas (multi-selección, opcional). Solo se construye
++/// cuando `item.sauces` no está vacío — ver `_ProductDetailBody.build`.
++class _SauceSelector extends StatelessWidget {
++  const _SauceSelector({
++    required this.sauces,
++    required this.selectedIds,
++    required this.onToggle,
++  });
++
++  final List<SauceOption> sauces;
++  final Set<String> selectedIds;
++  final ValueChanged<String> onToggle;
++
++  @override
++  Widget build(BuildContext context) {
++    return Column(
++      crossAxisAlignment: CrossAxisAlignment.start,
++      children: [
++        Text(
++          'SALSAS Y CREMAS',
++          style: Theme.of(context).textTheme.labelSmall?.copyWith(
++            fontSize: 13,
++            fontWeight: FontWeight.w700,
++            letterSpacing: 0.5,
++            color: CeltasColors.textLabel,
++          ),
++        ),
++        const SizedBox(height: 4),
++        Text(
++          'Elegí las que quieras (opcional)',
++          style: Theme.of(context).textTheme.bodySmall?.copyWith(
++            fontSize: 12,
++            color: CeltasColors.textMuted,
++          ),
++        ),
++        const SizedBox(height: 10),
++        Wrap(
++          spacing: 10,
++          runSpacing: 10,
++          children: [
++            for (final sauce in sauces)
++              _SauceChip(
++                key: ValueKey('detail-sauce-${sauce.id}'),
++                sauce: sauce,
++                selected: selectedIds.contains(sauce.id),
++                onTap: () => onToggle(sauce.id),
++              ),
++          ],
++        ),
++      ],
++    );
++  }
++}
++
++/// Chip individual de salsa. Mismo lenguaje visual que el círculo de
++/// selección de `_AddressCard` (checkout_screen.dart) y el chip "VER MIS
++/// CUPONES" del carrito: borde dorado/naranja cuando está activo.
++class _SauceChip extends StatelessWidget {
++  const _SauceChip({
++    super.key,
++    required this.sauce,
++    required this.selected,
++    required this.onTap,
++  });
++
++  final SauceOption sauce;
++  final bool selected;
++  final VoidCallback onTap;
++
++  @override
++  Widget build(BuildContext context) {
++    return GestureDetector(
++      onTap: onTap,
++      child: Container(
++        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
++        decoration: BoxDecoration(
++          color: selected
++              ? CeltasColors.orange.withValues(alpha: 0.15)
++              : CeltasColors.surface,
++          border: Border.all(
++            color: selected ? CeltasColors.orange : CeltasColors.border,
++            width: selected ? 1.5 : 1,
++          ),
++          borderRadius: BorderRadius.circular(CeltasRadii.pill),
++        ),
++        child: Row(
++          mainAxisSize: MainAxisSize.min,
++          children: [
++            if (selected) ...[
++              const Icon(Icons.check, size: 14, color: CeltasColors.orange),
++              const SizedBox(width: 6),
++            ],
++            Text(
++              sauce.name,
++              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
++                fontSize: 13,
++                fontWeight: FontWeight.w700,
++                color: selected ? CeltasColors.orange : CeltasColors.cream,
++              ),
++            ),
++          ],
++        ),
++      ),
++    );
++  }
++}
++
+ // ─── Estados de carga / error / no encontrado ───────────────────────────────
+ 
+ class _DetailLoading extends StatelessWidget {
+diff --git a/test/features/cart/application/cart_provider_test.dart b/test/features/cart/application/cart_provider_test.dart
+index 2bb416a..8282f44 100644
+--- a/test/features/cart/application/cart_provider_test.dart
++++ b/test/features/cart/application/cart_provider_test.dart
+@@ -1,6 +1,7 @@
+ import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
+ import 'package:celtas_mobile/features/coupons/data/models/validated_coupon.dart';
+ import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
++import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
+ import 'package:flutter_riverpod/flutter_riverpod.dart';
+ import 'package:flutter_test/flutter_test.dart';
+ 
+@@ -93,6 +94,109 @@ void main() {
+     });
+   });
+ 
++  group('salsas/cremas (selección por línea del carrito)', () {
++    const mayo = SauceOption(id: 's-1', name: 'Mayonesa');
++    const mostaza = SauceOption(id: 's-2', name: 'Mostaza');
++
++    test('agregar con salsas guarda la selección en la fila', () {
++      final container = createContainer();
++      container
++          .read(cartProvider.notifier)
++          .addItem(burger, selectedSauces: const [mayo]);
++
++      final item = container.read(cartProvider).items.single;
++      expect(item.selectedSauces, [mayo]);
++      expect(item.lineKey, 'i-1::s-1');
++    });
++
++    test(
++      'mismo producto y misma selección de salsas → fusiona en una fila '
++      '(suma cantidad, igual que sin salsas)',
++      () {
++        final container = createContainer();
++        container
++            .read(cartProvider.notifier)
++            .addItem(burger, selectedSauces: const [mayo]);
++        container
++            .read(cartProvider.notifier)
++            .addItem(burger, selectedSauces: const [mayo]);
++
++        final state = container.read(cartProvider);
++        expect(state.items, hasLength(1));
++        expect(state.items.single.quantity, 2);
++      },
++    );
++
++    test(
++      'mismo producto con OTRA selección de salsas → fila aparte, no '
++      'fusiona',
++      () {
++        final container = createContainer();
++        container
++            .read(cartProvider.notifier)
++            .addItem(burger, selectedSauces: const [mayo]);
++        container
++            .read(cartProvider.notifier)
++            .addItem(burger, selectedSauces: const [mostaza]);
++        container.read(cartProvider.notifier).addItem(burger); // sin salsas
++
++        final state = container.read(cartProvider);
++        expect(state.items, hasLength(3));
++        expect(state.totalCount, 3);
++      },
++    );
++
++    test(
++      'el orden en que se eligieron las salsas no crea filas distintas '
++      '(la key se ordena antes de compararse)',
++      () {
++        final container = createContainer();
++        container
++            .read(cartProvider.notifier)
++            .addItem(burger, selectedSauces: const [mayo, mostaza]);
++        container
++            .read(cartProvider.notifier)
++            .addItem(burger, selectedSauces: const [mostaza, mayo]);
++
++        final state = container.read(cartProvider);
++        expect(state.items, hasLength(1));
++        expect(state.items.single.quantity, 2);
++      },
++    );
++
++    test(
++      'increment/decrement/removeItem usan `lineKey`: afectan solo la fila '
++      'correcta cuando el mismo producto tiene varias combinaciones de '
++      'salsas',
++      () {
++        final container = createContainer();
++        final notifier = container.read(cartProvider.notifier);
++        notifier.addItem(burger, selectedSauces: const [mayo]);
++        notifier.addItem(burger); // sin salsas
++
++        final withMayoKey = container
++            .read(cartProvider)
++            .items
++            .firstWhere((i) => i.selectedSauces.isNotEmpty)
++            .lineKey;
++
++        notifier.increment(withMayoKey);
++
++        final state = container.read(cartProvider);
++        final withMayo = state.items.firstWhere((i) => i.lineKey == withMayoKey);
++        final withoutSauces = state.items.firstWhere(
++          (i) => i.lineKey != withMayoKey,
++        );
++        expect(withMayo.quantity, 2);
++        expect(withoutSauces.quantity, 1); // la otra fila no se tocó
++
++        notifier.removeItem(withMayoKey);
++        expect(container.read(cartProvider).items, hasLength(1));
++        expect(container.read(cartProvider).items.single.selectedSauces, isEmpty);
++      },
++    );
++  });
++
+   group('increment / decrement', () {
+     test('increment suma 1 a la cantidad del ítem', () {
+       final container = createContainer();
+diff --git a/test/features/cart/presentation/cart_screen_test.dart b/test/features/cart/presentation/cart_screen_test.dart
+index 1680041..0f8e73a 100644
+--- a/test/features/cart/presentation/cart_screen_test.dart
++++ b/test/features/cart/presentation/cart_screen_test.dart
+@@ -10,6 +10,7 @@ import 'package:celtas_mobile/features/coupons/data/models/coupon_status.dart';
+ import 'package:celtas_mobile/features/coupons/data/models/user_coupon.dart';
+ import 'package:celtas_mobile/features/coupons/data/models/validated_coupon.dart';
+ import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
++import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
+ import 'package:flutter/material.dart';
+ import 'package:flutter_dotenv/flutter_dotenv.dart';
+ import 'package:flutter_riverpod/flutter_riverpod.dart';
+@@ -696,4 +697,51 @@ void main() {
+ 
+     expect(find.text('CHECKOUT'), findsOneWidget);
+   });
++
++  group('salsas/cremas elegidas', () {
++    testWidgets(
++      'ítem con salsas seleccionadas → muestra "cremas: ..." debajo del '
++      'nombre y arriba del precio',
++      (tester) async {
++        final container = ProviderContainer(
++          overrides: [
++            couponRepositoryProvider.overrideWithValue(
++              MockCouponRepository(),
++            ),
++          ],
++        );
++        addTearDown(container.dispose);
++        container.read(cartProvider.notifier).addItem(
++          burger,
++          selectedSauces: const [
++            SauceOption(id: 's-1', name: 'Mayonesa'),
++            SauceOption(id: 's-2', name: 'Mostaza'),
++          ],
++        );
++
++        await tester.pumpWidget(
++          UncontrolledProviderScope(
++            container: container,
++            child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router()),
++          ),
++        );
++        await tester.pumpAndSettle();
++
++        expect(find.text('cremas: Mayonesa, Mostaza'), findsOneWidget);
++      },
++    );
++
++    testWidgets(
++      'ítem sin salsas seleccionadas → no muestra la línea de "cremas"',
++      (tester) async {
++        await pumpCart(
++          tester,
++          couponRepository: MockCouponRepository(),
++          items: [burger],
++        );
++
++        expect(find.textContaining('cremas:'), findsNothing);
++      },
++    );
++  });
+ }
+\ No newline at end of file
+diff --git a/test/features/checkout/data/order_repository_test.dart b/test/features/checkout/data/order_repository_test.dart
+new file mode 100644
+index 0000000..f6847b6
+--- /dev/null
++++ b/test/features/checkout/data/order_repository_test.dart
+@@ -0,0 +1,196 @@
++import 'package:celtas_mobile/core/network/api_client.dart';
++import 'package:celtas_mobile/features/cart/data/models/cart_item.dart';
++import 'package:celtas_mobile/features/checkout/data/order_repository.dart';
++import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
++import 'package:dio/dio.dart';
++import 'package:flutter_dotenv/flutter_dotenv.dart';
++import 'package:flutter_test/flutter_test.dart';
++import 'package:mocktail/mocktail.dart';
++
++class MockDio extends Mock implements Dio {}
++
++/// Contrato de `POST /orders` verificado contra `celtas-backend/src/modules/
++/// orders/dto/create-order.dto.ts` + `orders.service.ts`: cada ítem manda
++/// `menuItemId` + `quantity` obligatorios, y `sauceIds` SOLO si el cliente
++/// eligió alguna salsa para ese ítem (nunca una lista vacía) — el backend
++/// valida cada id contra lo que el producto realmente ofrece y guarda los
++/// nombres como snapshot en `OrderItem.selectedSauces`.
++void main() {
++  late MockDio dio;
++  late OrderRepository repository;
++
++  setUpAll(() {
++    dotenv.loadFromString(
++      envString: 'API_BASE_URL=https://backend-celtas.onrender.com',
++    );
++  });
++
++  setUp(() {
++    dio = MockDio();
++    repository = OrderRepository(dio);
++  });
++
++  const orderJson = {
++    'id': 'order-1',
++    'total': 15.5,
++    'whatsappUrl': 'https://wa.me/51999999999',
++  };
++
++  void mockPostSuccess() {
++    when(
++      () => dio.post<Map<String, dynamic>>(
++        '/orders',
++        data: any(named: 'data'),
++      ),
++    ).thenAnswer(
++      (_) async => Response<Map<String, dynamic>>(
++        requestOptions: RequestOptions(path: '/orders'),
++        data: orderJson,
++      ),
++    );
++  }
++
++  group('createOrder — payload de items con salsas', () {
++    test('ítem sin salsas seleccionadas → no manda la llave "sauceIds"', () async {
++      mockPostSuccess();
++
++      await repository.createOrder(
++        items: const [
++          CartItem(
++            menuItemId: 'i-1',
++            name: 'Berserker Burger',
++            unitPrice: 15.5,
++            quantity: 1,
++          ),
++        ],
++        addressId: 'addr-1',
++      );
++
++      final captured = verify(
++        () => dio.post<Map<String, dynamic>>(
++          '/orders',
++          data: captureAny(named: 'data'),
++        ),
++      ).captured.single as Map<String, dynamic>;
++      final items = captured['items'] as List;
++      final item = items.single as Map<String, dynamic>;
++      expect(item['menuItemId'], 'i-1');
++      expect(item['quantity'], 1);
++      expect(item.containsKey('sauceIds'), isFalse);
++    });
++
++    test(
++      'ítem con salsas seleccionadas → manda "sauceIds" con los ids '
++      '(no los nombres)',
++      () async {
++        mockPostSuccess();
++
++        await repository.createOrder(
++          items: const [
++            CartItem(
++              menuItemId: 'i-1',
++              name: 'Celtas Burguesa Clásica',
++              unitPrice: 20,
++              quantity: 2,
++              selectedSauces: [
++                SauceOption(id: 's-1', name: 'Mayonesa'),
++                SauceOption(id: 's-2', name: 'Mostaza'),
++              ],
++            ),
++          ],
++          addressId: 'addr-1',
++        );
++
++        final captured = verify(
++          () => dio.post<Map<String, dynamic>>(
++            '/orders',
++            data: captureAny(named: 'data'),
++          ),
++        ).captured.single as Map<String, dynamic>;
++        final item = (captured['items'] as List).single as Map<String, dynamic>;
++        expect(item['sauceIds'], ['s-1', 's-2']);
++      },
++    );
++
++    test(
++      'varios ítems: cada uno manda su propia selección de salsas de forma '
++      'independiente',
++      () async {
++        mockPostSuccess();
++
++        await repository.createOrder(
++          items: const [
++            CartItem(
++              menuItemId: 'i-1',
++              name: 'Celtas Burguesa Clásica',
++              unitPrice: 20,
++              quantity: 1,
++              selectedSauces: [SauceOption(id: 's-1', name: 'Mayonesa')],
++            ),
++            CartItem(
++              menuItemId: 'i-2',
++              name: 'Arroz Chaufa',
++              unitPrice: 18,
++              quantity: 1,
++            ),
++          ],
++          addressId: 'addr-1',
++        );
++
++        final captured = verify(
++          () => dio.post<Map<String, dynamic>>(
++            '/orders',
++            data: captureAny(named: 'data'),
++          ),
++        ).captured.single as Map<String, dynamic>;
++        final items = (captured['items'] as List).cast<Map<String, dynamic>>();
++        expect(items[0]['sauceIds'], ['s-1']);
++        expect(items[1].containsKey('sauceIds'), isFalse);
++      },
++    );
++
++    test('el total nunca se manda: lo calcula el backend', () async {
++      mockPostSuccess();
++
++      await repository.createOrder(
++        items: const [
++          CartItem(
++            menuItemId: 'i-1',
++            name: 'Berserker Burger',
++            unitPrice: 15.5,
++            quantity: 1,
++          ),
++        ],
++        addressId: 'addr-1',
++      );
++
++      final captured = verify(
++        () => dio.post<Map<String, dynamic>>(
++          '/orders',
++          data: captureAny(named: 'data'),
++        ),
++      ).captured.single as Map<String, dynamic>;
++      expect(captured.containsKey('total'), isFalse);
++    });
++
++    test('parsea id/total/whatsappUrl de la respuesta', () async {
++      mockPostSuccess();
++
++      final result = await repository.createOrder(
++        items: const [
++          CartItem(
++            menuItemId: 'i-1',
++            name: 'Berserker Burger',
++            unitPrice: 15.5,
++            quantity: 1,
++          ),
++        ],
++        addressId: 'addr-1',
++      );
++
++      expect(result.id, 'order-1');
++      expect(result.total, 15.5);
++      expect(result.whatsappUrl, 'https://wa.me/51999999999');
++    });
++  });
++}
+diff --git a/test/features/menu/presentation/product_detail_screen_test.dart b/test/features/menu/presentation/product_detail_screen_test.dart
+index 221d61c..f7a24b9 100644
+--- a/test/features/menu/presentation/product_detail_screen_test.dart
++++ b/test/features/menu/presentation/product_detail_screen_test.dart
+@@ -3,15 +3,20 @@ import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
+ import 'package:celtas_mobile/features/home/application/home_providers.dart';
+ import 'package:celtas_mobile/features/home/data/models/public_menu_category.dart';
+ import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
++import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
+ import 'package:celtas_mobile/features/menu/presentation/product_detail_screen.dart';
+ import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
+ import 'package:flutter/material.dart';
+ import 'package:flutter_dotenv/flutter_dotenv.dart';
+ import 'package:flutter_riverpod/flutter_riverpod.dart';
+ import 'package:flutter_test/flutter_test.dart';
++import 'package:go_router/go_router.dart';
+ import 'package:google_fonts/google_fonts.dart';
+ 
+ void main() {
++  const mayo = SauceOption(id: 's-1', name: 'Mayonesa');
++  const mostaza = SauceOption(id: 's-2', name: 'Mostaza');
++
+   const category = PublicMenuCategory(
+     id: 'c-1',
+     name: 'Hamburguesa',
+@@ -24,6 +29,14 @@ void main() {
+         price: 15.5,
+       ),
+       PublicMenuItem(id: 'i-2', name: 'Sin foto', price: 9.9),
++      // Único ítem con salsas del set de prueba: los demás cubren el caso
++      // "sin salsas" (arroz chaufa y similares), este cubre el selector.
++      PublicMenuItem(
++        id: 'i-3',
++        name: 'Salsas Burger',
++        price: 12,
++        sauces: [mayo, mostaza],
++      ),
+     ],
+   );
+ 
+@@ -34,7 +47,27 @@ void main() {
+     );
+   });
+ 
+-  Future<ProviderContainer> pumpDetail(
++  /// Router mínimo: /home (destino del `pop()` tras agregar) y
++  /// /product/:id — mismo patrón que `checkout_screen_test.dart` y
++  /// `cart_screen_test.dart` para pantallas que navegan con go_router real
++  /// en vez de un `MaterialApp(home: ...)` suelto.
++  GoRouter router() => GoRouter(
++        initialLocation: '/home',
++        routes: [
++          GoRoute(
++            path: '/home',
++            builder: (_, _) => const Scaffold(body: Text('HOME')),
++          ),
++          GoRoute(
++            path: '/product/:id',
++            builder: (_, state) => ProductDetailScreen(
++              productId: state.pathParameters['id']!,
++            ),
++          ),
++        ],
++      );
++
++  Future<(ProviderContainer, GoRouter)> pumpDetail(
+     WidgetTester tester, {
+     String productId = 'i-1',
+   }) async {
+@@ -50,17 +83,19 @@ void main() {
+       ],
+     );
+     addTearDown(container.dispose);
++    final goRouter = router();
+     await tester.pumpWidget(
+       UncontrolledProviderScope(
+         container: container,
+-        child: MaterialApp(
+-          theme: AppTheme.dark,
+-          home: ProductDetailScreen(productId: productId),
+-        ),
++        child: MaterialApp.router(theme: AppTheme.dark, routerConfig: goRouter),
+       ),
+     );
+     await tester.pumpAndSettle();
+-    return container;
++    // Llega al detalle igual que en producción: `push` desde Home — así el
++    // `pop()` que dispara "Agregar" tiene a dónde volver.
++    goRouter.push('/product/$productId');
++    await tester.pumpAndSettle();
++    return (container, goRouter);
+   }
+ 
+   testWidgets('muestra nombre, descripción y precio del producto', (
+@@ -131,9 +166,10 @@ void main() {
+   });
+ 
+   testWidgets(
+-    'agregar al carrito con cantidad seleccionada actualiza el provider',
++    'agregar al carrito con cantidad seleccionada actualiza el provider y '
++    'vuelve a Home',
+     (tester) async {
+-      final container = await pumpDetail(tester);
++      final (container, _) = await pumpDetail(tester);
+ 
+       await tester.tap(find.byKey(const ValueKey('detail-qty-plus')));
+       await tester.pump();
+@@ -148,26 +184,40 @@ void main() {
+       expect(state.items.single.menuItemId, 'i-1');
+       expect(state.items.single.quantity, 3);
+       expect(state.items.single.unitPrice, 15.5);
++      expect(state.items.single.selectedSauces, isEmpty);
+       expect(state.totalCount, 3);
+ 
+-      // SnackBar de confirmación con opción de ver el carrito.
++      // SnackBar de confirmación — vive en el ScaffoldMessenger raíz, sigue
++      // visible aunque la pantalla ya haya hecho `pop()`.
+       expect(find.text('Agregado: Berserker Burger ×3'), findsOneWidget);
+-      expect(find.text('VER CARRITO'), findsOneWidget);
++      // Volvió a Home para seguir agregando (pedido explícito del flujo de
++      // "captura" normal de la app) — la ruta de detalle ya no está en el
++      // Navigator, así que sus elementos desaparecen del árbol (no basta con
++      // buscar el texto "HOME": `MaterialPage` mantiene la ruta de abajo
++      // montada con `maintainState`, estaría igual de presente sin el pop).
++      expect(find.byKey(const ValueKey('detail-add')), findsNothing);
+     },
+   );
+ 
+-  testWidgets('agregar el mismo producto desde el detalle suma cantidades', (
+-    tester,
+-  ) async {
+-    final container = await pumpDetail(tester);
++  testWidgets(
++    'agregar el mismo producto y misma selección de salsas desde el '
++    'detalle suma cantidades (se vuelve a abrir el detalle cada vez)',
++    (tester) async {
++      final (container, goRouter) = await pumpDetail(tester);
+ 
+-    await tester.tap(find.byKey(const ValueKey('detail-add')));
+-    await tester.pump();
+-    await tester.tap(find.byKey(const ValueKey('detail-add')));
+-    await tester.pump();
++      await tester.tap(find.byKey(const ValueKey('detail-add')));
++      await tester.pumpAndSettle();
+ 
+-    expect(container.read(cartProvider).items.single.quantity, 2);
+-  });
++      // El "Agregar" ya hizo pop a Home — se vuelve a entrar al detalle
++      // para simular al usuario agregando el mismo producto de nuevo.
++      goRouter.push('/product/i-1');
++      await tester.pumpAndSettle();
++      await tester.tap(find.byKey(const ValueKey('detail-add')));
++      await tester.pumpAndSettle();
++
++      expect(container.read(cartProvider).items.single.quantity, 2);
++    },
++  );
+ 
+   testWidgets(
+     'no muestra el ícono de favoritos (fuera de alcance del proyecto)',
+@@ -235,4 +285,94 @@ void main() {
+       findsOneWidget,
+     );
+   });
++
++  group('selector de salsas/cremas', () {
++    testWidgets(
++      'producto sin salsas configuradas → no muestra la sección',
++      (tester) async {
++        await pumpDetail(tester); // i-1, sin sauces
++
++        expect(find.text('SALSAS Y CREMAS'), findsNothing);
++      },
++    );
++
++    testWidgets(
++      'producto con salsas → muestra los chips, ninguno seleccionado '
++      'por defecto',
++      (tester) async {
++        await pumpDetail(tester, productId: 'i-3');
++
++        expect(find.text('SALSAS Y CREMAS'), findsOneWidget);
++        expect(find.byKey(const ValueKey('detail-sauce-s-1')), findsOneWidget);
++        expect(find.byKey(const ValueKey('detail-sauce-s-2')), findsOneWidget);
++        expect(find.text('Mayonesa'), findsOneWidget);
++        expect(find.text('Mostaza'), findsOneWidget);
++      },
++    );
++
++    testWidgets(
++      'tocar un chip lo selecciona/deselecciona (multi-selección '
++      'independiente)',
++      (tester) async {
++        final (container, _) = await pumpDetail(tester, productId: 'i-3');
++
++        await tester.tap(find.byKey(const ValueKey('detail-sauce-s-1')));
++        await tester.pump();
++        await tester.tap(find.byKey(const ValueKey('detail-add')));
++        await tester.pump();
++
++        final selected = container
++            .read(cartProvider)
++            .items
++            .single
++            .selectedSauces
++            .map((s) => s.name)
++            .toList();
++        expect(selected, ['Mayonesa']);
++      },
++    );
++
++    testWidgets(
++      'agregar sin seleccionar ninguna salsa guarda la fila sin salsas '
++      '(selección opcional)',
++      (tester) async {
++        final (container, _) = await pumpDetail(tester, productId: 'i-3');
++
++        await tester.tap(find.byKey(const ValueKey('detail-add')));
++        await tester.pump();
++
++        expect(
++          container.read(cartProvider).items.single.selectedSauces,
++          isEmpty,
++        );
++      },
++    );
++
++    testWidgets(
++      'agregar el mismo producto con distinta selección de salsas crea '
++      'una fila aparte en el carrito (no fusiona)',
++      (tester) async {
++        final (container, goRouter) = await pumpDetail(
++          tester,
++          productId: 'i-3',
++        );
++
++        // Primera pasada: sin salsas.
++        await tester.tap(find.byKey(const ValueKey('detail-add')));
++        await tester.pumpAndSettle();
++
++        // Segunda pasada: con Mayonesa.
++        goRouter.push('/product/i-3');
++        await tester.pumpAndSettle();
++        await tester.tap(find.byKey(const ValueKey('detail-sauce-s-1')));
++        await tester.pump();
++        await tester.tap(find.byKey(const ValueKey('detail-add')));
++        await tester.pumpAndSettle();
++
++        final state = container.read(cartProvider);
++        expect(state.items, hasLength(2));
++        expect(state.totalCount, 2);
++      },
++    );
++  });
+ }
+-- 
+2.43.0
+

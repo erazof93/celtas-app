@@ -1,4 +1,3 @@
-import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/features/cart/data/models/cart_item.dart';
 import 'package:celtas_mobile/features/checkout/data/order_repository.dart';
 import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';

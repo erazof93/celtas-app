@@ -17,7 +17,7 @@ _PublicMenuItem _$PublicMenuItemFromJson(Map<String, dynamic> json) =>
           (json['sauces'] as List<dynamic>?)
               ?.map((e) => SauceOption.fromJson(e as Map<String, dynamic>))
               .toList() ??
-          const [],
+          const <SauceOption>[],
     );
 
 Map<String, dynamic> _$PublicMenuItemToJson(_PublicMenuItem instance) =>
