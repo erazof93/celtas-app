@@ -13,6 +13,11 @@ _PublicMenuItem _$PublicMenuItemFromJson(Map<String, dynamic> json) =>
       description: json['description'] as String?,
       price: (json['price'] as num).toDouble(),
       image: json['image'] as String?,
+      sauces:
+          (json['sauces'] as List<dynamic>?)
+              ?.map((e) => SauceOption.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
     );
 
 Map<String, dynamic> _$PublicMenuItemToJson(_PublicMenuItem instance) =>
@@ -22,4 +27,5 @@ Map<String, dynamic> _$PublicMenuItemToJson(_PublicMenuItem instance) =>
       'description': instance.description,
       'price': instance.price,
       'image': instance.image,
+      'sauces': instance.sauces,
     };

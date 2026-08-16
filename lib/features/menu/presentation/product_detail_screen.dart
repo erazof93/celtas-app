@@ -3,6 +3,7 @@ import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
 import 'package:celtas_mobile/features/home/application/home_providers.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
+import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
 import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
 import 'package:celtas_mobile/shared/widgets/svg_stroke_icon.dart';
@@ -21,9 +22,21 @@ import 'package:go_router/go_router.dart';
 ///     `rgba(13,13,13,.5) 0% → transparent 30% → rgba(13,13,13,.95) 100%` y
 ///     botones circulares de volver (38px, fondo `rgba(13,13,13,.6)`).
 ///   - Nombre en Cinzel 24px, descripción 14px muted, precio dorado 22px.
+///   - Selector de salsas/cremas (solo si `item.sauces` no está vacío —
+///     ej. arroz chaufa no lo muestra): sección nueva, no viene del mockup
+///     original (12 pantallas, sin esta funcionalidad todavía) — se sigue el
+///     mismo lenguaje visual del resto de la pantalla (chips con borde
+///     dorado cuando están seleccionados, mismo criterio que "VER MIS
+///     CUPONES" del carrito y el círculo de selección de `_AddressCard` del
+///     checkout).
 ///   - Selector de cantidad (stepper `#17130F` borde `#2A231C` radio 12).
 ///   - Barra inferior fija con botón angled "AGREGAR AL CARRITO · S/ X.XX"
 ///     donde el precio ya viene multiplicado por la cantidad seleccionada.
+///     Al tocarlo se agrega al carrito CON las salsas elegidas y se vuelve
+///     automáticamente a Home (`context.pop()`) para seguir agregando —
+///     `/product/:id` siempre se llega con `push` desde Home (ver
+///     `home_screen.dart`: tarjeta de producto y banner tipo `menuItem`),
+///     así que el pop siempre cae de vuelta ahí.
 class ProductDetailScreen extends ConsumerWidget {
   const ProductDetailScreen({super.key, required this.productId});
 
@@ -65,15 +78,40 @@ class _ProductDetailBody extends ConsumerStatefulWidget {
 
 class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
   int _quantity = 1;
+  final Set<String> _selectedSauceIds = {};
+
+  void _toggleSauce(String sauceId) {
+    setState(() {
+      if (!_selectedSauceIds.remove(sauceId)) {
+        _selectedSauceIds.add(sauceId);
+      }
+    });
+  }
 
   void _addToCart() {
-    ref.read(cartProvider.notifier).addItem(widget.item, quantity: _quantity);
+    final item = widget.item;
+    final selectedSauces = item.sauces
+        .where((sauce) => _selectedSauceIds.contains(sauce.id))
+        .toList();
+    ref.read(cartProvider.notifier).addItem(
+          item,
+          quantity: _quantity,
+          selectedSauces: selectedSauces,
+        );
+    // El SnackBar vive en el ScaffoldMessenger raíz (por encima del
+    // Navigator), así que sigue visible aunque esta pantalla haga `pop()` a
+    // continuación — mismo criterio que ya usa el botón "+" rápido del
+    // Home, que confirma sin bloquear la navegación. Ya no lleva la acción
+    // "VER CARRITO": al volver a Home el usuario ya ve ahí la barra
+    // flotante del carrito (`_CartSummaryBar`), y mantener la acción
+    // apuntando a un `context` que esta pantalla está por descartar es
+    // frágil.
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
           content: Text(
-            'Agregado: ${widget.item.name} ×$_quantity',
+            'Agregado: ${item.name} ×$_quantity',
             style: Theme.of(
               context,
             ).textTheme.bodyMedium?.copyWith(color: CeltasColors.cream),
@@ -81,25 +119,15 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
           backgroundColor: CeltasColors.surface,
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
-          // El SnackBar persiste en el ScaffoldMessenger raíz: si el usuario
-          // vuelve al Home antes de que expire, puede quedar tapado por la
-          // barra flotante "VER CARRITO" que aparece ahí con el carrito no
-          // vacío (`_CartSummaryBar`, mismo margen de 88 ya usado en
-          // `home_screen.dart` para que esa barra no tape el último ítem del
-          // menú).
+          // Mismo margen ya usado en `home_screen.dart` para que el
+          // SnackBar no quede tapado por `_CartSummaryBar`.
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 88),
-          action: SnackBarAction(
-            label: 'VER CARRITO',
-            textColor: CeltasColors.gold,
-            onPressed: () {
-              // Ocultar el SnackBar antes de navegar: persiste en el
-              // ScaffoldMessenger raíz y tapa los CTAs del carrito.
-              ScaffoldMessenger.of(context).hideCurrentSnackBar();
-              context.push('/cart');
-            },
-          ),
         ),
       );
+    // Vuelve a Home para seguir agregando productos — el flujo de "captura"
+    // normal de la app (pedido explícito del negocio: agregar no debe
+    // dejarte varado en el detalle).
+    context.pop();
   }
 
   @override
@@ -199,6 +227,14 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
                         color: CeltasColors.gold,
                       ),
                     ),
+                    if (item.sauces.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      _SauceSelector(
+                        sauces: item.sauces,
+                        selectedIds: _selectedSauceIds,
+                        onToggle: _toggleSauce,
+                      ),
+                    ],
                     const SizedBox(height: 20),
                     // Selector de cantidad (mockup: label CANTIDAD + stepper).
                     Row(
@@ -384,6 +420,113 @@ class _QuantityStepper extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Selector de salsas/cremas (multi-selección, opcional). Solo se construye
+/// cuando `item.sauces` no está vacío — ver `_ProductDetailBody.build`.
+class _SauceSelector extends StatelessWidget {
+  const _SauceSelector({
+    required this.sauces,
+    required this.selectedIds,
+    required this.onToggle,
+  });
+
+  final List<SauceOption> sauces;
+  final Set<String> selectedIds;
+  final ValueChanged<String> onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'SALSAS Y CREMAS',
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
+            color: CeltasColors.textLabel,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Elegí las que quieras (opcional)',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            fontSize: 12,
+            color: CeltasColors.textMuted,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            for (final sauce in sauces)
+              _SauceChip(
+                key: ValueKey('detail-sauce-${sauce.id}'),
+                sauce: sauce,
+                selected: selectedIds.contains(sauce.id),
+                onTap: () => onToggle(sauce.id),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Chip individual de salsa. Mismo lenguaje visual que el círculo de
+/// selección de `_AddressCard` (checkout_screen.dart) y el chip "VER MIS
+/// CUPONES" del carrito: borde dorado/naranja cuando está activo.
+class _SauceChip extends StatelessWidget {
+  const _SauceChip({
+    super.key,
+    required this.sauce,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final SauceOption sauce;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected
+              ? CeltasColors.orange.withValues(alpha: 0.15)
+              : CeltasColors.surface,
+          border: Border.all(
+            color: selected ? CeltasColors.orange : CeltasColors.border,
+            width: selected ? 1.5 : 1,
+          ),
+          borderRadius: BorderRadius.circular(CeltasRadii.pill),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (selected) ...[
+              const Icon(Icons.check, size: 14, color: CeltasColors.orange),
+              const SizedBox(width: 6),
+            ],
+            Text(
+              sauce.name,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: selected ? CeltasColors.orange : CeltasColors.cream,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

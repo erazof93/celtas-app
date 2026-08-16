@@ -19,9 +19,14 @@ import 'package:url_launcher/url_launcher.dart';
 ///
 /// Módulo 3: consume `GET /banners/active` (carrusel con indicador de puntos)
 /// y `GET /menu` (categorías con tarjetas de producto). El botón "+" de cada
-/// tarjeta agrega directo al carrito local (`cartProvider`, módulo 4); tocar
-/// la tarjeta abre el detalle (`/product/:id`). El ícono de carrito del header
-/// muestra el total de unidades en un badge.
+/// tarjeta agrega directo al carrito local (`cartProvider`, módulo 4) SIN
+/// pasar por el selector de salsas del detalle — decisión deliberada: es el
+/// atajo de "agregar rápido" ya existente y probado, y agregar sin salsas es
+/// un estado válido para el backend (`selectedSauces: null`, ver
+/// `orders.service.ts`). Si un producto ofrece salsas y el cliente quiere
+/// elegirlas, toca la tarjeta para abrir el detalle (`/product/:id`), que sí
+/// muestra el selector. El ícono de carrito del header muestra el total de
+/// unidades en un badge.
 ///
 /// Mejora post-cierre: tap sobre cada banner según su `actionType`
 /// (`Banner.actionType`/`actionValue`, contrato real verificado contra

@@ -10,6 +10,7 @@ import 'package:celtas_mobile/features/coupons/data/models/coupon_status.dart';
 import 'package:celtas_mobile/features/coupons/data/models/user_coupon.dart';
 import 'package:celtas_mobile/features/coupons/data/models/validated_coupon.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
+import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -695,5 +696,52 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('CHECKOUT'), findsOneWidget);
+  });
+
+  group('salsas/cremas elegidas', () {
+    testWidgets(
+      'ítem con salsas seleccionadas → muestra "cremas: ..." debajo del '
+      'nombre y arriba del precio',
+      (tester) async {
+        final container = ProviderContainer(
+          overrides: [
+            couponRepositoryProvider.overrideWithValue(
+              MockCouponRepository(),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+        container.read(cartProvider.notifier).addItem(
+          burger,
+          selectedSauces: const [
+            SauceOption(id: 's-1', name: 'Mayonesa'),
+            SauceOption(id: 's-2', name: 'Mostaza'),
+          ],
+        );
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router()),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('cremas: Mayonesa, Mostaza'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'ítem sin salsas seleccionadas → no muestra la línea de "cremas"',
+      (tester) async {
+        await pumpCart(
+          tester,
+          couponRepository: MockCouponRepository(),
+          items: [burger],
+        );
+
+        expect(find.textContaining('cremas:'), findsNothing);
+      },
+    );
   });
 }

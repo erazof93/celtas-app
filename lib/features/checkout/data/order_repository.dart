@@ -35,7 +35,14 @@ class AddressSnapshotInput {
 ///
 /// `POST /orders` (contrato verificado contra `celtas-backend/src/modules/
 /// orders/dto/create-order.dto.ts` + `orders.service.ts`):
-///   - `items`: `[{ menuItemId, quantity }]`, obligatorio, al menos 1.
+///   - `items`: `[{ menuItemId, quantity, sauceIds? }]`, obligatorio, al
+///     menos 1. `sauceIds` es opcional — se omite por completo si el ítem
+///     no tiene salsas seleccionadas (mismo criterio que el resto del DTO:
+///     nunca se manda una lista vacía donde el backend espera "ausente").
+///     El backend valida cada id contra las salsas que ese producto
+///     realmente ofrece y guarda los NOMBRES como snapshot en
+///     `OrderItem.selectedSauces` — el pedido no se ve afectado si la salsa
+///     se borra del catálogo después.
 ///   - `addressId` O `addressSnapshot` (JSON string) — nunca ambos, nunca
 ///     ninguno (el backend responde 400).
 ///   - `couponCode` opcional: se valida y canjea en la MISMA transacción del
@@ -65,7 +72,14 @@ class OrderRepository {
         data: {
           'items': [
             for (final item in items)
-              {'menuItemId': item.menuItemId, 'quantity': item.quantity},
+              {
+                'menuItemId': item.menuItemId,
+                'quantity': item.quantity,
+                if (item.selectedSauces.isNotEmpty)
+                  'sauceIds': [
+                    for (final sauce in item.selectedSauces) sauce.id,
+                  ],
+              },
           ],
           'addressId': ?addressId,
           if (addressSnapshot != null)

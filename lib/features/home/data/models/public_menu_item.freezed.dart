@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$PublicMenuItem {
 
- String get id; String get name; String? get description; double get price; String? get image;
+ String get id; String get name; String? get description; double get price; String? get image; List<SauceOption> get sauces;
 /// Create a copy of PublicMenuItem
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +28,16 @@ $PublicMenuItemCopyWith<PublicMenuItem> get copyWith => _$PublicMenuItemCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is PublicMenuItem&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.description, description) || other.description == description)&&(identical(other.price, price) || other.price == price)&&(identical(other.image, image) || other.image == image));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is PublicMenuItem&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.description, description) || other.description == description)&&(identical(other.price, price) || other.price == price)&&(identical(other.image, image) || other.image == image)&&const DeepCollectionEquality().equals(other.sauces, sauces));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,name,description,price,image);
+int get hashCode => Object.hash(runtimeType,id,name,description,price,image,const DeepCollectionEquality().hash(sauces));
 
 @override
 String toString() {
-  return 'PublicMenuItem(id: $id, name: $name, description: $description, price: $price, image: $image)';
+  return 'PublicMenuItem(id: $id, name: $name, description: $description, price: $price, image: $image, sauces: $sauces)';
 }
 
 
@@ -48,7 +48,7 @@ abstract mixin class $PublicMenuItemCopyWith<$Res>  {
   factory $PublicMenuItemCopyWith(PublicMenuItem value, $Res Function(PublicMenuItem) _then) = _$PublicMenuItemCopyWithImpl;
 @useResult
 $Res call({
- String id, String name, String? description, double price, String? image
+ String id, String name, String? description, double price, String? image, List<SauceOption> sauces
 });
 
 
@@ -65,14 +65,15 @@ class _$PublicMenuItemCopyWithImpl<$Res>
 
 /// Create a copy of PublicMenuItem
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? price = null,Object? image = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? price = null,Object? image = freezed,Object? sauces = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,description: freezed == description ? _self.description : description // ignore: cast_nullable_to_non_nullable
 as String?,price: null == price ? _self.price : price // ignore: cast_nullable_to_non_nullable
 as double,image: freezed == image ? _self.image : image // ignore: cast_nullable_to_non_nullable
-as String?,
+as String?,sauces: null == sauces ? _self.sauces : sauces // ignore: cast_nullable_to_non_nullable
+as List<SauceOption>,
   ));
 }
 
@@ -157,10 +158,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  double price,  String? image)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  double price,  String? image,  List<SauceOption> sauces)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _PublicMenuItem() when $default != null:
-return $default(_that.id,_that.name,_that.description,_that.price,_that.image);case _:
+return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_that.sauces);case _:
   return orElse();
 
 }
@@ -178,10 +179,10 @@ return $default(_that.id,_that.name,_that.description,_that.price,_that.image);c
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  double price,  String? image)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  double price,  String? image,  List<SauceOption> sauces)  $default,) {final _that = this;
 switch (_that) {
 case _PublicMenuItem():
-return $default(_that.id,_that.name,_that.description,_that.price,_that.image);case _:
+return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_that.sauces);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -198,10 +199,10 @@ return $default(_that.id,_that.name,_that.description,_that.price,_that.image);c
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  String? description,  double price,  String? image)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  String? description,  double price,  String? image,  List<SauceOption> sauces)?  $default,) {final _that = this;
 switch (_that) {
 case _PublicMenuItem() when $default != null:
-return $default(_that.id,_that.name,_that.description,_that.price,_that.image);case _:
+return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_that.sauces);case _:
   return null;
 
 }
@@ -213,7 +214,7 @@ return $default(_that.id,_that.name,_that.description,_that.price,_that.image);c
 @JsonSerializable()
 
 class _PublicMenuItem implements PublicMenuItem {
-  const _PublicMenuItem({required this.id, required this.name, this.description, required this.price, this.image});
+  const _PublicMenuItem({required this.id, required this.name, this.description, required this.price, this.image, final  List<SauceOption> sauces = const <SauceOption>[]}): _sauces = sauces;
   factory _PublicMenuItem.fromJson(Map<String, dynamic> json) => _$PublicMenuItemFromJson(json);
 
 @override final  String id;
@@ -221,6 +222,13 @@ class _PublicMenuItem implements PublicMenuItem {
 @override final  String? description;
 @override final  double price;
 @override final  String? image;
+ final  List<SauceOption> _sauces;
+@override@JsonKey() List<SauceOption> get sauces {
+  if (_sauces is EqualUnmodifiableListView) return _sauces;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_sauces);
+}
+
 
 /// Create a copy of PublicMenuItem
 /// with the given fields replaced by the non-null parameter values.
@@ -235,16 +243,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PublicMenuItem&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.description, description) || other.description == description)&&(identical(other.price, price) || other.price == price)&&(identical(other.image, image) || other.image == image));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PublicMenuItem&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.description, description) || other.description == description)&&(identical(other.price, price) || other.price == price)&&(identical(other.image, image) || other.image == image)&&const DeepCollectionEquality().equals(other._sauces, _sauces));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,name,description,price,image);
+int get hashCode => Object.hash(runtimeType,id,name,description,price,image,const DeepCollectionEquality().hash(_sauces));
 
 @override
 String toString() {
-  return 'PublicMenuItem(id: $id, name: $name, description: $description, price: $price, image: $image)';
+  return 'PublicMenuItem(id: $id, name: $name, description: $description, price: $price, image: $image, sauces: $sauces)';
 }
 
 
@@ -255,7 +263,7 @@ abstract mixin class _$PublicMenuItemCopyWith<$Res> implements $PublicMenuItemCo
   factory _$PublicMenuItemCopyWith(_PublicMenuItem value, $Res Function(_PublicMenuItem) _then) = __$PublicMenuItemCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String name, String? description, double price, String? image
+ String id, String name, String? description, double price, String? image, List<SauceOption> sauces
 });
 
 
@@ -272,14 +280,15 @@ class __$PublicMenuItemCopyWithImpl<$Res>
 
 /// Create a copy of PublicMenuItem
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? price = null,Object? image = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? price = null,Object? image = freezed,Object? sauces = null,}) {
   return _then(_PublicMenuItem(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,description: freezed == description ? _self.description : description // ignore: cast_nullable_to_non_nullable
 as String?,price: null == price ? _self.price : price // ignore: cast_nullable_to_non_nullable
 as double,image: freezed == image ? _self.image : image // ignore: cast_nullable_to_non_nullable
-as String?,
+as String?,sauces: null == sauces ? _self._sauces : sauces // ignore: cast_nullable_to_non_nullable
+as List<SauceOption>,
   ));
 }
 

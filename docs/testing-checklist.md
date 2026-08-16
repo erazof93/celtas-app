@@ -204,6 +204,33 @@ solo cuando pasa lo aplicable de este checklist.
 - [x] Carrito se limpia tras confirmar pedido exitosamente
 - [x] Validación de cupón (`/coupons/validate`) no lo marca como usado antes de confirmar
 
+### Salsas/cremas (selector en el detalle + carrito + payload) — ⚠️ PENDIENTE DE CORRER
+
+Escrito en una sesión sin acceso al toolchain de Flutter (ver `ROADMAP.md`, sección 4, entrada
+"Mejora nueva (en curso)"). Ninguno de los ítems siguientes fue confirmado corriendo
+`flutter analyze`/`flutter test` de verdad — son el checklist a correr antes de la auditoría de
+`@tester`, no un reporte de resultados.
+
+- [ ] `flutter pub get` + `dart run build_runner build --delete-conflicting-outputs` no genera
+      diffs distintos a los `*.freezed.dart`/`*.g.dart` escritos a mano en esta sesión
+      (`sauce_option.*`, `public_menu_item.*`, `cart_item.freezed.dart`)
+- [ ] `flutter analyze` limpio
+- [ ] `flutter test` verde, incluyendo los archivos tocados/nuevos: `product_detail_screen_test.dart`,
+      `cart_provider_test.dart`, `cart_screen_test.dart`, `order_repository_test.dart` (nuevo)
+- [ ] Producto sin salsas configuradas (ej. arroz chaufa) no muestra la sección en el detalle
+- [ ] Producto con salsas: selección múltiple funciona, es opcional (se puede agregar sin elegir
+      ninguna)
+- [ ] "Agregar al carrito" vuelve a Home automáticamente (verificar en dispositivo/emulador real,
+      no solo en el widget test — la transición de `go_router` puede comportarse distinto)
+- [ ] Mismo producto con distinta combinación de salsas → filas separadas en el carrito, cada una
+      con su propio stepper de cantidad; misma combinación → se fusiona (suma cantidad)
+- [ ] Carrito muestra "cremas: ..." debajo del nombre y arriba del precio, solo cuando hay
+      selección
+- [ ] `POST /orders` manda `sauceIds` por ítem solo cuando corresponde (nunca lista vacía)
+- [ ] Mensaje de WhatsApp final incluye las salsas concatenadas (esto lo arma el backend — ver
+      `OrdersService.buildWhatsappUrl` en `celtas-backend`, ya verificado en su propia sesión;
+      acá solo confirmar que el texto que abre `url_launcher` las trae)
+
 ## Perfil / Direcciones
 
 - [ ] DTO de edición de perfil no permite cambiar campos que el backend no acepta

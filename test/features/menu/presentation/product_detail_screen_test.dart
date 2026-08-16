@@ -3,15 +3,20 @@ import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
 import 'package:celtas_mobile/features/home/application/home_providers.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_category.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
+import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
 import 'package:celtas_mobile/features/menu/presentation/product_detail_screen.dart';
 import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 void main() {
+  const mayo = SauceOption(id: 's-1', name: 'Mayonesa');
+  const mostaza = SauceOption(id: 's-2', name: 'Mostaza');
+
   const category = PublicMenuCategory(
     id: 'c-1',
     name: 'Hamburguesa',
@@ -24,6 +29,14 @@ void main() {
         price: 15.5,
       ),
       PublicMenuItem(id: 'i-2', name: 'Sin foto', price: 9.9),
+      // Único ítem con salsas del set de prueba: los demás cubren el caso
+      // "sin salsas" (arroz chaufa y similares), este cubre el selector.
+      PublicMenuItem(
+        id: 'i-3',
+        name: 'Salsas Burger',
+        price: 12,
+        sauces: [mayo, mostaza],
+      ),
     ],
   );
 
@@ -34,7 +47,27 @@ void main() {
     );
   });
 
-  Future<ProviderContainer> pumpDetail(
+  /// Router mínimo: /home (destino del `pop()` tras agregar) y
+  /// /product/:id — mismo patrón que `checkout_screen_test.dart` y
+  /// `cart_screen_test.dart` para pantallas que navegan con go_router real
+  /// en vez de un `MaterialApp(home: ...)` suelto.
+  GoRouter router() => GoRouter(
+        initialLocation: '/home',
+        routes: [
+          GoRoute(
+            path: '/home',
+            builder: (_, _) => const Scaffold(body: Text('HOME')),
+          ),
+          GoRoute(
+            path: '/product/:id',
+            builder: (_, state) => ProductDetailScreen(
+              productId: state.pathParameters['id']!,
+            ),
+          ),
+        ],
+      );
+
+  Future<(ProviderContainer, GoRouter)> pumpDetail(
     WidgetTester tester, {
     String productId = 'i-1',
   }) async {
@@ -50,17 +83,19 @@ void main() {
       ],
     );
     addTearDown(container.dispose);
+    final goRouter = router();
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: MaterialApp(
-          theme: AppTheme.dark,
-          home: ProductDetailScreen(productId: productId),
-        ),
+        child: MaterialApp.router(theme: AppTheme.dark, routerConfig: goRouter),
       ),
     );
     await tester.pumpAndSettle();
-    return container;
+    // Llega al detalle igual que en producción: `push` desde Home — así el
+    // `pop()` que dispara "Agregar" tiene a dónde volver.
+    goRouter.push('/product/$productId');
+    await tester.pumpAndSettle();
+    return (container, goRouter);
   }
 
   testWidgets('muestra nombre, descripción y precio del producto', (
@@ -131,9 +166,10 @@ void main() {
   });
 
   testWidgets(
-    'agregar al carrito con cantidad seleccionada actualiza el provider',
+    'agregar al carrito con cantidad seleccionada actualiza el provider y '
+    'vuelve a Home',
     (tester) async {
-      final container = await pumpDetail(tester);
+      final (container, _) = await pumpDetail(tester);
 
       await tester.tap(find.byKey(const ValueKey('detail-qty-plus')));
       await tester.pump();
@@ -148,26 +184,40 @@ void main() {
       expect(state.items.single.menuItemId, 'i-1');
       expect(state.items.single.quantity, 3);
       expect(state.items.single.unitPrice, 15.5);
+      expect(state.items.single.selectedSauces, isEmpty);
       expect(state.totalCount, 3);
 
-      // SnackBar de confirmación con opción de ver el carrito.
+      // SnackBar de confirmación — vive en el ScaffoldMessenger raíz, sigue
+      // visible aunque la pantalla ya haya hecho `pop()`.
       expect(find.text('Agregado: Berserker Burger ×3'), findsOneWidget);
-      expect(find.text('VER CARRITO'), findsOneWidget);
+      // Volvió a Home para seguir agregando (pedido explícito del flujo de
+      // "captura" normal de la app) — la ruta de detalle ya no está en el
+      // Navigator, así que sus elementos desaparecen del árbol (no basta con
+      // buscar el texto "HOME": `MaterialPage` mantiene la ruta de abajo
+      // montada con `maintainState`, estaría igual de presente sin el pop).
+      expect(find.byKey(const ValueKey('detail-add')), findsNothing);
     },
   );
 
-  testWidgets('agregar el mismo producto desde el detalle suma cantidades', (
-    tester,
-  ) async {
-    final container = await pumpDetail(tester);
+  testWidgets(
+    'agregar el mismo producto y misma selección de salsas desde el '
+    'detalle suma cantidades (se vuelve a abrir el detalle cada vez)',
+    (tester) async {
+      final (container, goRouter) = await pumpDetail(tester);
 
-    await tester.tap(find.byKey(const ValueKey('detail-add')));
-    await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('detail-add')));
-    await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('detail-add')));
+      await tester.pumpAndSettle();
 
-    expect(container.read(cartProvider).items.single.quantity, 2);
-  });
+      // El "Agregar" ya hizo pop a Home — se vuelve a entrar al detalle
+      // para simular al usuario agregando el mismo producto de nuevo.
+      goRouter.push('/product/i-1');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('detail-add')));
+      await tester.pumpAndSettle();
+
+      expect(container.read(cartProvider).items.single.quantity, 2);
+    },
+  );
 
   testWidgets(
     'no muestra el ícono de favoritos (fuera de alcance del proyecto)',
@@ -233,6 +283,96 @@ void main() {
     expect(
       find.text('El servidor está despertando, puede tardar unos segundos…'),
       findsOneWidget,
+    );
+  });
+
+  group('selector de salsas/cremas', () {
+    testWidgets(
+      'producto sin salsas configuradas → no muestra la sección',
+      (tester) async {
+        await pumpDetail(tester); // i-1, sin sauces
+
+        expect(find.text('SALSAS Y CREMAS'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'producto con salsas → muestra los chips, ninguno seleccionado '
+      'por defecto',
+      (tester) async {
+        await pumpDetail(tester, productId: 'i-3');
+
+        expect(find.text('SALSAS Y CREMAS'), findsOneWidget);
+        expect(find.byKey(const ValueKey('detail-sauce-s-1')), findsOneWidget);
+        expect(find.byKey(const ValueKey('detail-sauce-s-2')), findsOneWidget);
+        expect(find.text('Mayonesa'), findsOneWidget);
+        expect(find.text('Mostaza'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'tocar un chip lo selecciona/deselecciona (multi-selección '
+      'independiente)',
+      (tester) async {
+        final (container, _) = await pumpDetail(tester, productId: 'i-3');
+
+        await tester.tap(find.byKey(const ValueKey('detail-sauce-s-1')));
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pump();
+
+        final selected = container
+            .read(cartProvider)
+            .items
+            .single
+            .selectedSauces
+            .map((s) => s.name)
+            .toList();
+        expect(selected, ['Mayonesa']);
+      },
+    );
+
+    testWidgets(
+      'agregar sin seleccionar ninguna salsa guarda la fila sin salsas '
+      '(selección opcional)',
+      (tester) async {
+        final (container, _) = await pumpDetail(tester, productId: 'i-3');
+
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pump();
+
+        expect(
+          container.read(cartProvider).items.single.selectedSauces,
+          isEmpty,
+        );
+      },
+    );
+
+    testWidgets(
+      'agregar el mismo producto con distinta selección de salsas crea '
+      'una fila aparte en el carrito (no fusiona)',
+      (tester) async {
+        final (container, goRouter) = await pumpDetail(
+          tester,
+          productId: 'i-3',
+        );
+
+        // Primera pasada: sin salsas.
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
+
+        // Segunda pasada: con Mayonesa.
+        goRouter.push('/product/i-3');
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('detail-sauce-s-1')));
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
+
+        final state = container.read(cartProvider);
+        expect(state.items, hasLength(2));
+        expect(state.totalCount, 2);
+      },
     );
   });
 }

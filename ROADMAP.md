@@ -441,6 +441,82 @@ celtas-mobile/
       tapado por `_CartSummaryBar` cuando el carrito ya tiene ítems. Auditado por `@tester`: sin
       bugs, veredicto LISTO — detalle completo en `docs/testing-checklist.md`, sección
       Notificaciones (auditoría conjunta de esta ronda).
+- [ ] **Mejora nueva (en curso): selección de salsas/cremas en el detalle de producto.**
+      Feature cross-repo pedida por el dueño del negocio (backend y `celtas-admin` ya cerrados y
+      verificados en sesiones previas contra Postgres/servidor reales — ver `ROADMAP.md` de esos
+      dos repos, sección Menu/Orders). Cambios en este repo, hechos en una sesión **sin acceso al
+      toolchain de Flutter** (sandbox sin `flutter`/`dart` instalado ni acceso de red para
+      instalarlo) — todo el código, incluido el código generado de `freezed`/`json_serializable`
+      (`*.freezed.dart`, `*.g.dart`), se escribió a mano replicando exactamente el patrón de
+      salida real de `build_runner` ya presente en el resto del repo (mismos comentarios
+      `GENERATED CODE`, mismo uso de `DeepCollectionEquality`/`EqualUnmodifiableListView` para
+      campos `List`, mismo formato de `@JsonKey()` en campos `@Default`). **Esto NO reemplaza
+      correr `flutter pub get && dart run build_runner build --delete-conflicting-outputs`,
+      `flutter analyze` y `flutter test` de verdad** — es un paso obligatorio antes de dar esta
+      mejora por completa, y antes de la auditoría de `@tester`.
+      - `SauceOption` (`features/home/data/models/sauce_option.dart`, nuevo): `{id, name}`,
+        mismo shape que ya expone `GET /menu` para las salsas de cada producto
+        (`MenuService.findPublicMenu` en el backend, ya filtrado a `active: true` y ordenado).
+        Se reusa para `CartItem.selectedSauces` (ahí no viene de un `fromJson`, se arma a mano en
+        el detalle a partir de las opciones ya cargadas).
+      - `PublicMenuItem.sauces` (nuevo campo, `@Default(<SauceOption>[])`): lista vacía = el
+        producto no ofrece selector de salsas (ej. arroz chaufa) — mismo criterio que ya usa
+        `celtas-admin` para decidir si el checklist de salsas aparece en el formulario de un
+        producto.
+      - `product_detail_screen.dart`: nueva sección "SALSAS Y CREMAS" (chips multi-selección,
+        solo si `item.sauces` no está vacío) entre el precio y el selector de cantidad — no
+        estaba en el mockup original de 12 pantallas, se siguió el lenguaje visual ya establecido
+        (borde dorado/naranja en seleccionado, mismo criterio que el círculo de selección de
+        `_AddressCard` en checkout y el chip "VER MIS CUPONES" del carrito). Selección 100%
+        opcional (el backend acepta `sauceIds` ausente o vacío sin problema).
+        **Cambio de comportamiento pedido explícitamente por el dueño del negocio:** al tocar
+        "AGREGAR AL CARRITO" ahora se hace `context.pop()` después de agregar (antes se quedaba
+        en el detalle con un `SnackBarAction` "VER CARRITO"), para volver a Home y seguir
+        agregando productos sin fricción — el flujo de "captura" normal de la app. Se quitó la
+        acción "VER CARRITO" del `SnackBar` (ya no tiene sentido: el usuario ya vuelve a Home,
+        que muestra su propia barra flotante de carrito) y se evitó dejar un callback capturando
+        el `context` de una pantalla que está por hacer `pop()`.
+      - `CartItem.selectedSauces` (nuevo campo) + `CartItem.lineKey` (getter nuevo): identifica
+        una fila única del carrito por `menuItemId` + salsas seleccionadas (ordenadas antes de
+        comparar, para que el orden de selección no importe). Sin salsas, `lineKey == menuItemId`
+        — mismo valor que ya usaban `increment`/`decrement`/`removeItem`/los `ValueKey` del
+        carrito antes de este cambio, así ningún producto sin salsas cambia de comportamiento.
+        **Decisión de producto:** el mismo producto agregado con distinta combinación de salsas
+        queda en una fila aparte del carrito (no se fusiona) — una Celtas Burguesa con mayonesa y
+        otra sin nada son dos líneas con su propio stepper de cantidad. `CartNotifier.addItem`
+        ahora recibe `selectedSauces` opcional (default `[]`, no rompe ningún caller existente);
+        `increment`/`decrement`/`removeItem` cambiaron su parámetro de `menuItemId` a `lineKey`
+        (mismo tipo `String`, mismos valores para cualquier producto sin salsas — no rompe los
+        tests existentes que ya llamaban a estos métodos con el id plano del producto).
+      - `cart_screen.dart`: línea nueva "cremas: mayonesa, mostaza..." debajo del nombre y arriba
+        del precio unitario de cada ítem (solo si `selectedSauces` no está vacío) — pedido
+        explícito del dueño del negocio, mismo lugar que marcó en su captura de referencia. Los
+        `ValueKey`/llamadas al notifier de los steppers pasaron de `item.menuItemId` a
+        `item.lineKey`.
+      - `order_repository.dart`: cada ítem del payload de `POST /orders` manda `sauceIds` (los
+        ids de `selectedSauces`) SOLO si el ítem tiene salsas seleccionadas — nunca una lista
+        vacía, mismo criterio que el resto del DTO (`addressSnapshot`/`couponCode` también se
+        omiten cuando no aplican). El mensaje de WhatsApp con las salsas concatenadas ya lo arma
+        el backend (`OrdersService.buildWhatsappUrl`, verificado y cerrado en la sesión de ese
+        repo) — este repo no necesita tocar nada para eso.
+      - El botón "+" rápido del Home (`_AddButton` en `home_screen.dart`) se dejó **sin cambios a
+        propósito**: sigue agregando sin pasar por el selector de salsas (decisión documentada en
+        el doc del propio `HomeScreen` — agregar sin salsas es un estado válido para el backend,
+        y es el atajo de "agregar rápido" ya probado). Si un producto ofrece salsas y el cliente
+        quiere elegirlas, toca la tarjeta para abrir el detalle.
+      - Tests actualizados/agregados a mano (no corridos — ver advertencia arriba):
+        `product_detail_screen_test.dart` (reescrito para navegar con `GoRouter` real en vez de
+        `MaterialApp(home: ...)` suelto, necesario porque ahora `_addToCart` llama a
+        `context.pop()`; casos nuevos de selector de salsas y de fusión/no-fusión de filas),
+        `cart_provider_test.dart` (grupo nuevo "salsas/cremas"), `cart_screen_test.dart` (línea
+        "cremas: ..." visible/ausente), `order_repository_test.dart` (nuevo — no existía; cubre
+        el contrato de `sauceIds` en el payload).
+      - **Pendiente antes de poder marcar esto LISTO:** correr `flutter pub get`, regenerar
+        código con `build_runner` y comparar contra lo escrito a mano acá, `flutter analyze`,
+        `flutter test`, y una verificación visual real (emulador o dispositivo) del flujo
+        completo Home → detalle con salsas → Agregar (vuelve a Home) → VER CARRITO → "cremas:
+        ..." visible → Checkout → WhatsApp con las salsas concatenadas. Auditoría de `@tester`
+        pendiente.
 
 ### 5. Checkout — ✅ COMPLETO (5/5)
 - [x] Selector de dirección guardada (o agregar nueva): `GET /users/me/addresses` con

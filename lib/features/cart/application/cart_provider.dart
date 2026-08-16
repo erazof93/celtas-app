@@ -1,6 +1,7 @@
 import 'package:celtas_mobile/features/cart/data/models/cart_item.dart';
 import 'package:celtas_mobile/features/coupons/data/models/validated_coupon.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
+import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
@@ -54,19 +55,42 @@ abstract class CartState with _$CartState {
 
 /// Notifier del carrito local.
 ///
-/// Métodos: `addItem` (desde Home "+" o desde el detalle con cantidad),
-/// `increment`/`decrement` (steppers del carrito), `removeItem`, `clear`
-/// (tras confirmar el pedido), `applyCoupon`/`removeCoupon`.
+/// Métodos: `addItem` (desde Home "+" o desde el detalle con cantidad y
+/// salsas), `increment`/`decrement` (steppers del carrito), `removeItem`,
+/// `clear` (tras confirmar el pedido), `applyCoupon`/`removeCoupon`.
+///
+/// `increment`/`decrement`/`removeItem` identifican la fila por
+/// `CartItem.lineKey` (no por `menuItemId` puro): un mismo producto puede
+/// tener varias filas si el cliente lo agregó con distintas combinaciones
+/// de salsas — ver el doc de `lineKey` en `cart_item.dart`. Sin salsas,
+/// `lineKey == menuItemId`, así que todo lo que ya llamaba a estos métodos
+/// con un `menuItemId` sigue funcionando igual.
 class CartNotifier extends Notifier<CartState> {
   @override
   CartState build() => const CartState();
 
-  /// Agrega `quantity` unidades de un producto del menú. Si el ítem ya está
-  /// en el carrito, suma a la cantidad existente (no duplica la fila).
-  void addItem(PublicMenuItem item, {int quantity = 1}) {
+  /// Agrega `quantity` unidades de un producto del menú, con la selección
+  /// de salsas hecha en el detalle (vacía si el producto no ofrece salsas
+  /// o el cliente no eligió ninguna). Si ya existe una fila con el mismo
+  /// producto Y la misma combinación de salsas, suma a la cantidad
+  /// existente (no duplica la fila); si las salsas son distintas, se agrega
+  /// como una fila nueva.
+  void addItem(
+    PublicMenuItem item, {
+    int quantity = 1,
+    List<SauceOption> selectedSauces = const [],
+  }) {
     if (quantity <= 0) return;
+    final newLine = CartItem(
+      menuItemId: item.id,
+      name: item.name,
+      unitPrice: item.price,
+      quantity: quantity,
+      image: item.image,
+      selectedSauces: selectedSauces,
+    );
     final items = state.items;
-    final index = items.indexWhere((i) => i.menuItemId == item.id);
+    final index = items.indexWhere((i) => i.lineKey == newLine.lineKey);
     if (index >= 0) {
       state = state.copyWith(
         items: [
@@ -78,27 +102,16 @@ class CartNotifier extends Notifier<CartState> {
         ],
       );
     } else {
-      state = state.copyWith(
-        items: [
-          ...items,
-          CartItem(
-            menuItemId: item.id,
-            name: item.name,
-            unitPrice: item.price,
-            quantity: quantity,
-            image: item.image,
-          ),
-        ],
-      );
+      state = state.copyWith(items: [...items, newLine]);
     }
   }
 
-  /// Suma 1 unidad. Si el ítem no existe, no hace nada.
-  void increment(String menuItemId) {
+  /// Suma 1 unidad. Si la fila no existe, no hace nada.
+  void increment(String lineKey) {
     state = state.copyWith(
       items: [
         for (final item in state.items)
-          if (item.menuItemId == menuItemId)
+          if (item.lineKey == lineKey)
             item.copyWith(quantity: item.quantity + 1)
           else
             item,
@@ -106,14 +119,14 @@ class CartNotifier extends Notifier<CartState> {
     );
   }
 
-  /// Resta 1 unidad. Al llegar a 0 el ítem se elimina del carrito.
-  void decrement(String menuItemId) {
+  /// Resta 1 unidad. Al llegar a 0 la fila se elimina del carrito.
+  void decrement(String lineKey) {
     state = state.copyWith(
       items: [
         for (final item in state.items)
-          if (item.menuItemId == menuItemId && item.quantity > 1)
+          if (item.lineKey == lineKey && item.quantity > 1)
             item.copyWith(quantity: item.quantity - 1)
-          else if (item.menuItemId == menuItemId)
+          else if (item.lineKey == lineKey)
             // quantity == 1 → se elimina (filtrado abajo).
             item.copyWith(quantity: 0)
           else
@@ -123,12 +136,10 @@ class CartNotifier extends Notifier<CartState> {
     _clearCouponIfInvalid();
   }
 
-  /// Elimina el ítem del carrito.
-  void removeItem(String menuItemId) {
+  /// Elimina la fila del carrito.
+  void removeItem(String lineKey) {
     state = state.copyWith(
-      items: state.items
-          .where((item) => item.menuItemId != menuItemId)
-          .toList(),
+      items: state.items.where((item) => item.lineKey != lineKey).toList(),
     );
     _clearCouponIfInvalid();
   }

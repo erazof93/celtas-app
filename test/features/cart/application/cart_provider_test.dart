@@ -1,6 +1,7 @@
 import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
 import 'package:celtas_mobile/features/coupons/data/models/validated_coupon.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
+import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -91,6 +92,109 @@ void main() {
       expect(state.items, hasLength(2));
       expect(state.totalCount, 2);
     });
+  });
+
+  group('salsas/cremas (selección por línea del carrito)', () {
+    const mayo = SauceOption(id: 's-1', name: 'Mayonesa');
+    const mostaza = SauceOption(id: 's-2', name: 'Mostaza');
+
+    test('agregar con salsas guarda la selección en la fila', () {
+      final container = createContainer();
+      container
+          .read(cartProvider.notifier)
+          .addItem(burger, selectedSauces: const [mayo]);
+
+      final item = container.read(cartProvider).items.single;
+      expect(item.selectedSauces, [mayo]);
+      expect(item.lineKey, 'i-1::s-1');
+    });
+
+    test(
+      'mismo producto y misma selección de salsas → fusiona en una fila '
+      '(suma cantidad, igual que sin salsas)',
+      () {
+        final container = createContainer();
+        container
+            .read(cartProvider.notifier)
+            .addItem(burger, selectedSauces: const [mayo]);
+        container
+            .read(cartProvider.notifier)
+            .addItem(burger, selectedSauces: const [mayo]);
+
+        final state = container.read(cartProvider);
+        expect(state.items, hasLength(1));
+        expect(state.items.single.quantity, 2);
+      },
+    );
+
+    test(
+      'mismo producto con OTRA selección de salsas → fila aparte, no '
+      'fusiona',
+      () {
+        final container = createContainer();
+        container
+            .read(cartProvider.notifier)
+            .addItem(burger, selectedSauces: const [mayo]);
+        container
+            .read(cartProvider.notifier)
+            .addItem(burger, selectedSauces: const [mostaza]);
+        container.read(cartProvider.notifier).addItem(burger); // sin salsas
+
+        final state = container.read(cartProvider);
+        expect(state.items, hasLength(3));
+        expect(state.totalCount, 3);
+      },
+    );
+
+    test(
+      'el orden en que se eligieron las salsas no crea filas distintas '
+      '(la key se ordena antes de compararse)',
+      () {
+        final container = createContainer();
+        container
+            .read(cartProvider.notifier)
+            .addItem(burger, selectedSauces: const [mayo, mostaza]);
+        container
+            .read(cartProvider.notifier)
+            .addItem(burger, selectedSauces: const [mostaza, mayo]);
+
+        final state = container.read(cartProvider);
+        expect(state.items, hasLength(1));
+        expect(state.items.single.quantity, 2);
+      },
+    );
+
+    test(
+      'increment/decrement/removeItem usan `lineKey`: afectan solo la fila '
+      'correcta cuando el mismo producto tiene varias combinaciones de '
+      'salsas',
+      () {
+        final container = createContainer();
+        final notifier = container.read(cartProvider.notifier);
+        notifier.addItem(burger, selectedSauces: const [mayo]);
+        notifier.addItem(burger); // sin salsas
+
+        final withMayoKey = container
+            .read(cartProvider)
+            .items
+            .firstWhere((i) => i.selectedSauces.isNotEmpty)
+            .lineKey;
+
+        notifier.increment(withMayoKey);
+
+        final state = container.read(cartProvider);
+        final withMayo = state.items.firstWhere((i) => i.lineKey == withMayoKey);
+        final withoutSauces = state.items.firstWhere(
+          (i) => i.lineKey != withMayoKey,
+        );
+        expect(withMayo.quantity, 2);
+        expect(withoutSauces.quantity, 1); // la otra fila no se tocó
+
+        notifier.removeItem(withMayoKey);
+        expect(container.read(cartProvider).items, hasLength(1));
+        expect(container.read(cartProvider).items.single.selectedSauces, isEmpty);
+      },
+    );
   });
 
   group('increment / decrement', () {

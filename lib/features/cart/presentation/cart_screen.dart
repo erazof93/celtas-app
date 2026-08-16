@@ -303,6 +303,22 @@ class _CartItemRow extends ConsumerWidget {
                         color: CeltasColors.cream,
                       ),
                 ),
+                // Salsas elegidas (si el producto ofrece y el cliente
+                // seleccionó alguna) — debajo del nombre, arriba del precio,
+                // igual a como lo pidió el mockup del carrito. Sin selección
+                // no se muestra nada (ej. arroz chaufa nunca tiene esta
+                // línea).
+                if (item.selectedSauces.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'cremas: ${item.selectedSauces.map((s) => s.name).join(', ')}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontSize: 11.5,
+                          color: CeltasColors.textMuted,
+                          fontStyle: FontStyle.italic,
+                        ),
+                  ),
+                ],
                 const SizedBox(height: 2),
                 Text(
                   'S/ ${item.unitPrice.toStringAsFixed(2)} c/u',
@@ -412,8 +428,8 @@ class _CartStepper extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           GestureDetector(
-            key: ValueKey('cart-minus-${item.menuItemId}'),
-            onTap: () => notifier.decrement(item.menuItemId),
+            key: ValueKey('cart-minus-${item.lineKey}'),
+            onTap: () => notifier.decrement(item.lineKey),
             child: const SvgStrokeIcon(
               path: 'M5 12h14',
               size: 12,
@@ -424,7 +440,7 @@ class _CartStepper extends ConsumerWidget {
           const SizedBox(width: 12),
           Text(
             '${item.quantity}',
-            key: ValueKey('cart-qty-${item.menuItemId}'),
+            key: ValueKey('cart-qty-${item.lineKey}'),
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
@@ -433,8 +449,8 @@ class _CartStepper extends ConsumerWidget {
           ),
           const SizedBox(width: 12),
           GestureDetector(
-            key: ValueKey('cart-plus-${item.menuItemId}'),
-            onTap: () => notifier.increment(item.menuItemId),
+            key: ValueKey('cart-plus-${item.lineKey}'),
+            onTap: () => notifier.increment(item.lineKey),
             child: const SvgStrokeIcon(
               path: 'M12 5v14M5 12h14',
               size: 12,
