@@ -195,6 +195,37 @@ void main() {
         expect(container.read(cartProvider).items.single.selectedSauces, isEmpty);
       },
     );
+
+    test(
+      'addItem con explicitlyNoSauces=true guarda el campo en la fila '
+      'nueva',
+      () {
+        final container = createContainer();
+        container
+            .read(cartProvider.notifier)
+            .addItem(burger, explicitlyNoSauces: true);
+
+        final item = container.read(cartProvider).items.single;
+        expect(item.selectedSauces, isEmpty);
+        expect(item.explicitlyNoSauces, isTrue);
+      },
+    );
+
+    test(
+      'agregar dos veces el mismo producto con explicitlyNoSauces=true '
+      'fusiona en una sola fila con el campo en true',
+      () {
+        final container = createContainer();
+        final notifier = container.read(cartProvider.notifier);
+        notifier.addItem(burger, explicitlyNoSauces: true);
+        notifier.addItem(burger, explicitlyNoSauces: true);
+
+        final state = container.read(cartProvider);
+        expect(state.items, hasLength(1));
+        expect(state.items.single.quantity, 2);
+        expect(state.items.single.explicitlyNoSauces, isTrue);
+      },
+    );
   });
 
   group('updateLine (edición desde el carrito)', () {
@@ -334,6 +365,52 @@ void main() {
 
       expect(container.read(cartProvider).items.single.quantity, 3);
     });
+
+    test(
+      'updateLine con explicitlyNoSauces=true guarda el campo en la fila '
+      'editada',
+      () {
+        final container = createContainer();
+        container
+            .read(cartProvider.notifier)
+            .addItem(burger, selectedSauces: const [mayo]);
+
+        container.read(cartProvider.notifier).updateLine(
+              'i-1::s-1',
+              quantity: 1,
+              selectedSauces: const [],
+              explicitlyNoSauces: true,
+            );
+
+        final item = container.read(cartProvider).items.single;
+        expect(item.selectedSauces, isEmpty);
+        expect(item.explicitlyNoSauces, isTrue);
+      },
+    );
+
+    test(
+      'si la edición con explicitlyNoSauces=true fusiona con otra fila '
+      '"sin salsas" ya existente, la fila resultante conserva el campo en '
+      'true',
+      () {
+        final container = createContainer();
+        final notifier = container.read(cartProvider.notifier);
+        notifier.addItem(burger, explicitlyNoSauces: true); // 'i-1'
+        notifier.addItem(burger, quantity: 2, selectedSauces: const [mayo]);
+
+        notifier.updateLine(
+          'i-1::s-1',
+          quantity: 2,
+          selectedSauces: const [],
+        );
+
+        final state = container.read(cartProvider);
+        expect(state.items, hasLength(1));
+        expect(state.items.single.lineKey, 'i-1');
+        expect(state.items.single.quantity, 3);
+        expect(state.items.single.explicitlyNoSauces, isTrue);
+      },
+    );
   });
 
   group('increment / decrement', () {

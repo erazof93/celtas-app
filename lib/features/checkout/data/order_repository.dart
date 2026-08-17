@@ -36,13 +36,19 @@ class AddressSnapshotInput {
 /// `POST /orders` (contrato verificado contra `celtas-backend/src/modules/
 /// orders/dto/create-order.dto.ts` + `orders.service.ts`):
 ///   - `items`: `[{ menuItemId, quantity, sauceIds? }]`, obligatorio, al
-///     menos 1. `sauceIds` es opcional — se omite por completo si el ítem
-///     no tiene salsas seleccionadas (mismo criterio que el resto del DTO:
-///     nunca se manda una lista vacía donde el backend espera "ausente").
-///     El backend valida cada id contra las salsas que ese producto
-///     realmente ofrece y guarda los NOMBRES como snapshot en
-///     `OrderItem.selectedSauces` — el pedido no se ve afectado si la salsa
-///     se borra del catálogo después.
+///     menos 1. `sauceIds` es tri-state real (`resolveSelectedSauces` en el
+///     backend distingue los tres casos, no colapsa `undefined` y `[]`):
+///     la llave se OMITE por completo si el ítem no tiene catálogo de
+///     salsas o el cliente nunca eligió (`CartItem.selectedSauces` vacío y
+///     `explicitlyNoSauces == false`) → el backend guarda
+///     `selectedSauces: null` ("no aplica"); se manda `sauceIds: []`
+///     EXPLÍCITO si el cliente tocó "Sin salsas" a propósito
+///     (`explicitlyNoSauces == true`) → el backend guarda
+///     `selectedSauces: []` y esto se muestra literal como "Sin salsas" en
+///     WhatsApp/admin; con salsas elegidas, se mandan sus ids. El backend
+///     valida cada id contra las salsas que ese producto realmente ofrece y
+///     guarda los NOMBRES como snapshot en `OrderItem.selectedSauces` — el
+///     pedido no se ve afectado si la salsa se borra del catálogo después.
 ///   - `addressId` O `addressSnapshot` (JSON string) — nunca ambos, nunca
 ///     ninguno (el backend responde 400).
 ///   - `couponCode` opcional: se valida y canjea en la MISMA transacción del
@@ -78,7 +84,9 @@ class OrderRepository {
                 if (item.selectedSauces.isNotEmpty)
                   'sauceIds': [
                     for (final sauce in item.selectedSauces) sauce.id,
-                  ],
+                  ]
+                else if (item.explicitlyNoSauces)
+                  'sauceIds': const <String>[],
               },
           ],
           'addressId': ?addressId,

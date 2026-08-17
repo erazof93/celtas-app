@@ -10,10 +10,14 @@ class MockDio extends Mock implements Dio {}
 
 /// Contrato de `POST /orders` verificado contra `celtas-backend/src/modules/
 /// orders/dto/create-order.dto.ts` + `orders.service.ts`: cada ítem manda
-/// `menuItemId` + `quantity` obligatorios, y `sauceIds` SOLO si el cliente
-/// eligió alguna salsa para ese ítem (nunca una lista vacía) — el backend
-/// valida cada id contra lo que el producto realmente ofrece y guarda los
-/// nombres como snapshot en `OrderItem.selectedSauces`.
+/// `menuItemId` + `quantity` obligatorios, y `sauceIds` es tri-state real
+/// (`resolveSelectedSauces` en el backend distingue los tres casos, no
+/// colapsa `undefined` y `[]`): se OMITE por completo si el ítem no tiene
+/// catálogo de salsas o el cliente nunca eligió, se manda `[]` EXPLÍCITO si
+/// el cliente tocó "Sin salsas" a propósito (`CartItem.explicitlyNoSauces`),
+/// y con salsas elegidas se mandan sus ids — el backend valida cada id
+/// contra lo que el producto realmente ofrece y guarda los nombres como
+/// snapshot en `OrderItem.selectedSauces`.
 void main() {
   late MockDio dio;
   late OrderRepository repository;
@@ -77,6 +81,37 @@ void main() {
       expect(item['quantity'], 1);
       expect(item.containsKey('sauceIds'), isFalse);
     });
+
+    test(
+      'ítem con explicitlyNoSauces=true y selectedSauces vacío → manda '
+      '"sauceIds": [] explícito (no ausente)',
+      () async {
+        mockPostSuccess();
+
+        await repository.createOrder(
+          items: const [
+            CartItem(
+              menuItemId: 'i-1',
+              name: 'Salsas Burger',
+              unitPrice: 12,
+              quantity: 1,
+              explicitlyNoSauces: true,
+            ),
+          ],
+          addressId: 'addr-1',
+        );
+
+        final captured = verify(
+          () => dio.post<Map<String, dynamic>>(
+            '/orders',
+            data: captureAny(named: 'data'),
+          ),
+        ).captured.single as Map<String, dynamic>;
+        final item = (captured['items'] as List).single as Map<String, dynamic>;
+        expect(item.containsKey('sauceIds'), isTrue);
+        expect(item['sauceIds'], <String>[]);
+      },
+    );
 
     test(
       'ítem con salsas seleccionadas → manda "sauceIds" con los ids '

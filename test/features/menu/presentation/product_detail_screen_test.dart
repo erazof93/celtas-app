@@ -7,6 +7,7 @@ import 'package:celtas_mobile/features/home/data/models/public_menu_category.dar
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
 import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
 import 'package:celtas_mobile/features/menu/presentation/product_detail_screen.dart';
+import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
 import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -337,18 +338,19 @@ void main() {
     );
 
     testWidgets(
-      'agregar sin seleccionar ninguna salsa guarda la fila sin salsas '
-      '(selección opcional)',
+      'sin elegir ninguna opción, tocar el botón deshabilitado no agrega '
+      'nada al carrito — el producto exige una elección real (salsa o '
+      '"Sin salsas")',
       (tester) async {
         final (container, _) = await pumpDetail(tester, productId: 'i-3');
 
-        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.tap(
+          find.byKey(const ValueKey('detail-add')),
+          warnIfMissed: false,
+        );
         await tester.pump();
 
-        expect(
-          container.read(cartProvider).items.single.selectedSauces,
-          isEmpty,
-        );
+        expect(container.read(cartProvider).items, isEmpty);
       },
     );
 
@@ -361,7 +363,10 @@ void main() {
           productId: 'i-3',
         );
 
-        // Primera pasada: sin salsas.
+        // Primera pasada: "Sin salsas" explícito (ya no hay forma de
+        // agregar sin elegir con el producto ofreciendo salsas).
+        await tester.tap(find.byKey(const ValueKey('detail-sauce-none')));
+        await tester.pump();
         await tester.tap(find.byKey(const ValueKey('detail-add')));
         await tester.pumpAndSettle();
 
@@ -376,6 +381,129 @@ void main() {
         final state = container.read(cartProvider);
         expect(state.items, hasLength(2));
         expect(state.totalCount, 2);
+      },
+    );
+
+    testWidgets(
+      'producto con salsas: el botón de agregar arranca deshabilitado y '
+      'muestra el aviso de elección pendiente',
+      (tester) async {
+        await pumpDetail(tester, productId: 'i-3');
+
+        final button = tester.widget<CeltasButton>(
+          find.byKey(const ValueKey('detail-add')),
+        );
+        expect(button.onPressed, isNull);
+        expect(
+          find.byKey(const ValueKey('detail-sauce-choice-notice')),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'tocar una salsa real habilita el botón y hace desaparecer el aviso',
+      (tester) async {
+        await pumpDetail(tester, productId: 'i-3');
+
+        await tester.tap(find.byKey(const ValueKey('detail-sauce-s-1')));
+        await tester.pump();
+
+        final button = tester.widget<CeltasButton>(
+          find.byKey(const ValueKey('detail-add')),
+        );
+        expect(button.onPressed, isNotNull);
+        expect(
+          find.byKey(const ValueKey('detail-sauce-choice-notice')),
+          findsNothing,
+        );
+      },
+    );
+
+    testWidgets(
+      'tocar "Sin salsas" habilita el botón, hace desaparecer el aviso, y '
+      'agrega la fila con explicitlyNoSauces=true y selectedSauces vacío',
+      (tester) async {
+        final (container, _) = await pumpDetail(tester, productId: 'i-3');
+
+        await tester.tap(find.byKey(const ValueKey('detail-sauce-none')));
+        await tester.pump();
+
+        final button = tester.widget<CeltasButton>(
+          find.byKey(const ValueKey('detail-add')),
+        );
+        expect(button.onPressed, isNotNull);
+        expect(
+          find.byKey(const ValueKey('detail-sauce-choice-notice')),
+          findsNothing,
+        );
+
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
+
+        final item = container.read(cartProvider).items.single;
+        expect(item.selectedSauces, isEmpty);
+        expect(item.explicitlyNoSauces, isTrue);
+      },
+    );
+
+    testWidgets(
+      '"Sin salsas" y los chips de salsas reales son mutuamente '
+      'excluyentes en ambos sentidos',
+      (tester) async {
+        final (container, _) = await pumpDetail(tester, productId: 'i-3');
+
+        // "Sin salsas" → Mayonesa: desmarca "Sin salsas" (un solo check
+        // visible, el de Mayonesa) y al agregar viaja explicitlyNoSauces
+        // en false con la salsa real seleccionada.
+        await tester.tap(find.byKey(const ValueKey('detail-sauce-none')));
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('detail-sauce-s-1')));
+        await tester.pump();
+        expect(find.byIcon(Icons.check), findsOneWidget);
+
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
+        final firstItem = container.read(cartProvider).items.single;
+        expect(firstItem.explicitlyNoSauces, isFalse);
+        expect(firstItem.selectedSauces, [mayo]);
+      },
+    );
+
+    testWidgets(
+      'Mayonesa → "Sin salsas" limpia la selección real (un solo check '
+      'visible, el de "Sin salsas")',
+      (tester) async {
+        final (container, _) = await pumpDetail(tester, productId: 'i-3');
+
+        await tester.tap(find.byKey(const ValueKey('detail-sauce-s-1')));
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('detail-sauce-none')));
+        await tester.pump();
+        expect(find.byIcon(Icons.check), findsOneWidget);
+
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
+        final item = container.read(cartProvider).items.single;
+        expect(item.explicitlyNoSauces, isTrue);
+        expect(item.selectedSauces, isEmpty);
+      },
+    );
+
+    testWidgets(
+      'producto sin catálogo de salsas: el botón sigue habilitado sin '
+      'elección (validación no aplica)',
+      (tester) async {
+        await pumpDetail(tester); // i-1, sin sauces
+
+        final button = tester.widget<CeltasButton>(
+          find.byKey(const ValueKey('detail-add')),
+        );
+        expect(button.onPressed, isNotNull);
+        expect(
+          find.byKey(const ValueKey('detail-sauce-choice-notice')),
+          findsNothing,
+        );
       },
     );
   });
@@ -468,6 +596,59 @@ void main() {
         // Mayonesa (única salsa de la fila editada) aparece seleccionada —
         // el chip seleccionado es el único que muestra el ícono de check.
         expect(find.byIcon(Icons.check), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'fila editada con explicitlyNoSauces=true precarga el chip "Sin '
+      'salsas" como seleccionado (no solo dejar todo vacío)',
+      (tester) async {
+        await pumpEdit(
+          tester,
+          seed: (notifier) => notifier.addItem(
+            category.items.firstWhere((i) => i.id == 'i-3'),
+            quantity: 2,
+            explicitlyNoSauces: true,
+          ),
+          pickEditingLineKey: (state) => state.items.single.lineKey,
+          productId: 'i-3',
+        );
+
+        // Botón habilitado de entrada (la precarga ya cuenta como
+        // elección real) y el único check visible es el de "Sin salsas".
+        final button = tester.widget<CeltasButton>(
+          find.byKey(const ValueKey('detail-add')),
+        );
+        expect(button.onPressed, isNotNull);
+        expect(find.byIcon(Icons.check), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('detail-sauce-choice-notice')),
+          findsNothing,
+        );
+      },
+    );
+
+    testWidgets(
+      'GUARDAR CAMBIOS sin tocar ningún chip preserva explicitlyNoSauces='
+      'true de la fila precargada (no se pierde al no interactuar)',
+      (tester) async {
+        final (container, _) = await pumpEdit(
+          tester,
+          seed: (notifier) => notifier.addItem(
+            category.items.firstWhere((i) => i.id == 'i-3'),
+            quantity: 2,
+            explicitlyNoSauces: true,
+          ),
+          pickEditingLineKey: (state) => state.items.single.lineKey,
+          productId: 'i-3',
+        );
+
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
+
+        final item = container.read(cartProvider).items.single;
+        expect(item.selectedSauces, isEmpty);
+        expect(item.explicitlyNoSauces, isTrue);
       },
     );
 

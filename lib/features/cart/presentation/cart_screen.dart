@@ -361,15 +361,21 @@ class _CartItemRow extends ConsumerWidget {
                       ),
                   ],
                 ),
-                // Salsas elegidas (si el producto ofrece y el cliente
-                // seleccionó alguna) — debajo del nombre, arriba del precio,
-                // igual a como lo pidió el mockup del carrito. Sin selección
-                // no se muestra nada (ej. arroz chaufa nunca tiene esta
-                // línea).
-                if (item.selectedSauces.isNotEmpty) ...[
+                // Tri-state real, debajo del nombre y arriba del precio,
+                // igual a como lo pidió el mockup del carrito: salsas
+                // elegidas → lista de nombres; sin salsas seleccionadas pero
+                // el cliente tocó "Sin salsas" explícitamente
+                // (`explicitlyNoSauces`) → texto literal "Sin salsas";
+                // ninguno de los dos (producto sin catálogo de salsas) → no
+                // muestra nada (ej. arroz chaufa nunca tiene esta línea).
+                if (item.selectedSauces.isNotEmpty ||
+                    item.explicitlyNoSauces) ...[
                   const SizedBox(height: 2),
                   Text(
-                    'cremas: ${item.selectedSauces.map((s) => s.name).join(', ')}',
+                    item.selectedSauces.isNotEmpty
+                        ? 'cremas: '
+                              '${item.selectedSauces.map((s) => s.name).join(', ')}'
+                        : 'Sin salsas',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           fontSize: 11.5,
                           color: CeltasColors.textMuted,

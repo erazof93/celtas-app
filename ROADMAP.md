@@ -551,12 +551,57 @@ celtas-mobile/
         carrito → modo edición con precarga; guardar cambios → vuelve al Carrito (no a Home) con
         la fila actualizada sin duplicar. Auditado por `@tester`: veredicto **LISTO** para estos
         dos hallazgos — detalle en `docs/testing-checklist.md`, sección Salsas/cremas.
-      - **Pendiente antes de poder marcar esto LISTO:** correr `flutter pub get`, regenerar
-        código con `build_runner` y comparar contra lo escrito a mano acá, y una verificación
-        visual real (emulador o dispositivo) del flujo completo Home → detalle con salsas →
-        Agregar (vuelve a Home) → VER CARRITO → "cremas: ..." visible → Checkout → WhatsApp con
-        las salsas concatenadas. Auditoría de `@tester` sobre el resto del módulo (más allá de
-        los hallazgos puntuales ya auditados) pendiente.
+      - **Pendiente antes de poder marcar esto LISTO:** una verificación visual real (emulador o
+        dispositivo) del flujo completo Home → detalle con salsas → Agregar (vuelve a Home) →
+        VER CARRITO → "cremas: ..."/"Sin salsas" visible → Checkout → WhatsApp con las salsas (o
+        "Sin salsas") concatenadas — sin dispositivo conectado en ninguna de las sesiones hasta
+        ahora. `flutter pub get` + `build_runner` sí se corrieron de verdad (ver mejora de
+        tri-state justo abajo, que corrió todo el toolchain real por primera vez sobre este
+        módulo) y no generaron diffs distintos a lo escrito a mano.
+      - **Mejora nueva: tri-state real de salsas (no aplica / "Sin salsas" explícito / con
+        salsas), pedida por el dueño del negocio.** Hasta acá, un producto con catálogo de salsas
+        donde el cliente no tocaba ningún chip quedaba indistinguible de un producto sin catálogo
+        — ambos casos guardaban `selectedSauces: []` y el backend nunca recibía `sauceIds`. El
+        backend (`backend-celtas`, ya cerrado en su propia sesión) implementa el tri-state real en
+        `POST /orders` (`resolveSelectedSauces` en `orders.service.ts`): `sauceIds` OMITIDO →
+        `selectedSauces: null` ("no aplica"); `sauceIds: []` MANDADO explícito → `selectedSauces:
+        []` ("Sin salsas" real, mostrado literal en WhatsApp/admin); con ids → como siempre.
+        - `CartItem` (`cart_item.dart`) gana `@Default(false) bool explicitlyNoSauces` — solo
+          puede ser `true` cuando el producto ofrece salsas Y el cliente tocó explícitamente el
+          chip "Sin salsas" del selector. `lineKey` no cambia (sigue dependiendo solo de
+          `selectedSauces`), así que la fusión/no-fusión de filas del carrito no se ve afectada.
+        - `CartNotifier.addItem`/`updateLine` (`cart_provider.dart`) propagan el campo nuevo hasta
+          la fila construida/fusionada (en fusión, `OR` entre el valor existente y el nuevo).
+        - `product_detail_screen.dart`: `_SauceSelector` gana un chip "Sin salsas"
+          (`detail-sauce-none`), mutuamente excluyente con los chips de salsas reales — elegir
+          cualquier salsa real desmarca "Sin salsas" y viceversa. Cuando el producto ofrece
+          salsas, "AGREGAR AL CARRITO"/"GUARDAR CAMBIOS" queda deshabilitado (`onPressed: null`,
+          deshabilitación real vía `CeltasButton`, no solo visual) hasta que haya una elección
+          real, con un aviso (`_SauceChoiceNotice`, mismo patrón visual que
+          `_MissingAddressNotice` de `checkout_screen.dart`) mientras tanto. Productos sin
+          catálogo de salsas no se ven afectados por esta validación. Modo edición precarga el
+          chip "Sin salsas" cuando `editingItem.explicitlyNoSauces == true`.
+        - `cart_screen.dart`: la línea de salsas por ítem ahora es tri-state: salsas elegidas →
+          "cremas: ..."; vacío pero `explicitlyNoSauces == true` → texto "Sin salsas"; ninguno de
+          los dos (sin catálogo) → no muestra nada.
+        - `order_repository.dart`: `POST /orders` manda `sauceIds: []` EXPLÍCITO cuando
+          `selectedSauces` está vacío pero `explicitlyNoSauces == true` (antes esto se omitía
+          siempre); sigue mandando los ids con salsas elegidas; sigue omitiendo la llave cuando
+          ninguno de los dos aplica.
+        - Tests nuevos/actualizados en los 4 archivos (`order_repository_test.dart`,
+          `product_detail_screen_test.dart`, `cart_provider_test.dart`, `cart_screen_test.dart`),
+          incluida la reescritura de un test viejo que asumía que elegir salsas era opcional (ya
+          no lo es para productos con catálogo). 330/330 tests, `flutter analyze` limpio.
+          Auditado por `@tester` con mutación real sobre los dos puntos críticos del cambio: (a)
+          revertir la exclusión mutua de los chips hizo fallar 2 tests reales (`Found 2 widgets
+          with icon` en vez de 1), (b) revertir la condición nueva de `order_repository.dart` hizo
+          fallar exactamente el test de `sauceIds: []` — ambas mutaciones revertidas después de
+          confirmar el fallo, `git diff` verificado idéntico byte a byte al estado previo.
+          Veredicto: **LISTO** para este cambio puntual (contrato del backend re-verificado por
+          lectura directa de `orders.service.ts`/`create-order.dto.ts`, no por el resumen del
+          encargo). Riesgo no bloqueante documentado en `docs/testing-checklist.md`: el mensaje de
+          WhatsApp con "Sin salsas" literal y el flujo visual completo siguen sin verificarse en
+          dispositivo real (mismo pendiente que el resto de este módulo, ver arriba).
 
 ### 5. Checkout — ✅ COMPLETO (5/5)
 - [x] Selector de dirección guardada (o agregar nueva): `GET /users/me/addresses` con

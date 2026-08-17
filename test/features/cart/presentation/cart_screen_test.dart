@@ -772,6 +772,35 @@ void main() {
         expect(find.textContaining('cremas:'), findsNothing);
       },
     );
+
+    testWidgets(
+      'ítem con explicitlyNoSauces=true y sin salsas seleccionadas → '
+      'muestra "Sin salsas" (distinto de no mostrar nada)',
+      (tester) async {
+        final container = ProviderContainer(
+          overrides: [
+            couponRepositoryProvider.overrideWithValue(
+              MockCouponRepository(),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+        container
+            .read(cartProvider.notifier)
+            .addItem(burger, explicitlyNoSauces: true);
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router()),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Sin salsas'), findsOneWidget);
+        expect(find.textContaining('cremas:'), findsNothing);
+      },
+    );
   });
 
   group('editar salsas desde el carrito (ícono de lápiz)', () {

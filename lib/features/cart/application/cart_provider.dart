@@ -81,6 +81,7 @@ class CartNotifier extends Notifier<CartState> {
     PublicMenuItem item, {
     int quantity = 1,
     List<SauceOption> selectedSauces = const [],
+    bool explicitlyNoSauces = false,
   }) {
     if (quantity <= 0) return;
     final newLine = CartItem(
@@ -90,6 +91,7 @@ class CartNotifier extends Notifier<CartState> {
       quantity: quantity,
       image: item.image,
       selectedSauces: selectedSauces,
+      explicitlyNoSauces: explicitlyNoSauces,
     );
     final items = state.items;
     final index = items.indexWhere((i) => i.lineKey == newLine.lineKey);
@@ -98,7 +100,11 @@ class CartNotifier extends Notifier<CartState> {
         items: [
           for (var i = 0; i < items.length; i++)
             if (i == index)
-              items[i].copyWith(quantity: items[i].quantity + quantity)
+              items[i].copyWith(
+                quantity: items[i].quantity + quantity,
+                explicitlyNoSauces:
+                    items[i].explicitlyNoSauces || explicitlyNoSauces,
+              )
             else
               items[i],
         ],
@@ -125,6 +131,7 @@ class CartNotifier extends Notifier<CartState> {
     String oldLineKey, {
     required int quantity,
     required List<SauceOption> selectedSauces,
+    bool explicitlyNoSauces = false,
   }) {
     if (quantity <= 0) return;
     final items = state.items;
@@ -133,6 +140,7 @@ class CartNotifier extends Notifier<CartState> {
     final updated = items[oldIndex].copyWith(
       quantity: quantity,
       selectedSauces: selectedSauces,
+      explicitlyNoSauces: explicitlyNoSauces,
     );
     final mergeIndex = items.indexWhere((i) => i.lineKey == updated.lineKey);
     if (mergeIndex >= 0 && mergeIndex != oldIndex) {
@@ -140,7 +148,11 @@ class CartNotifier extends Notifier<CartState> {
         items: [
           for (var i = 0; i < items.length; i++)
             if (i == mergeIndex)
-              items[i].copyWith(quantity: items[i].quantity + quantity)
+              items[i].copyWith(
+                quantity: items[i].quantity + quantity,
+                explicitlyNoSauces:
+                    items[i].explicitlyNoSauces || explicitlyNoSauces,
+              )
             else if (i != oldIndex)
               items[i],
         ],

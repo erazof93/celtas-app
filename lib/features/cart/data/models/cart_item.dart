@@ -24,6 +24,14 @@ abstract class CartItem with _$CartItem {
     required int quantity,
     String? image,
     @Default(<SauceOption>[]) List<SauceOption> selectedSauces,
+    // Tri-state real junto con `selectedSauces`: SOLO puede ser `true`
+    // cuando el producto ofrece salsas (`PublicMenuItem.sauces.isNotEmpty`)
+    // Y el cliente tocó explícitamente el chip "Sin salsas" del selector —
+    // distingue "no aplica" (producto sin catálogo, este campo se queda en
+    // `false` siempre) de "el cliente eligió deliberadamente ninguna". Ver
+    // `order_repository.dart`: con `selectedSauces` vacío, este campo decide
+    // si `sauceIds` se manda como `[]` explícito o se omite del todo.
+    @Default(false) bool explicitlyNoSauces,
   }) = _CartItem;
 
   const CartItem._();

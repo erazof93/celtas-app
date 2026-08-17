@@ -97,25 +97,52 @@ class _ProductDetailBody extends ConsumerStatefulWidget {
 class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
   late int _quantity;
   late final Set<String> _selectedSauceIds;
+  late bool _explicitlyNoSauces;
 
   @override
   void initState() {
     super.initState();
     // Modo edición: precarga cantidad y salsas de la fila que se está
     // editando en vez de arrancar en 1/vacío — ver doc de `editingItem` en
-    // `ProductDetailScreen`.
+    // `ProductDetailScreen`. Si la fila editada tenía "Sin salsas" marcado
+    // explícitamente, precarga ese chip en vez de dejar todo vacío.
     final editingItem = widget.editingItem;
     _quantity = editingItem?.quantity ?? 1;
     _selectedSauceIds = {
       for (final sauce in editingItem?.selectedSauces ?? const [])
         sauce.id,
     };
+    _explicitlyNoSauces = editingItem?.explicitlyNoSauces ?? false;
   }
+
+  /// El producto exige una elección real (al menos una salsa, o "Sin
+  /// salsas") solo cuando ofrece catálogo de salsas — productos sin
+  /// catálogo (`item.sauces.isEmpty`) nunca quedan bloqueados por esto.
+  bool get _hasRequiredSauceChoice =>
+      widget.item.sauces.isEmpty ||
+      _selectedSauceIds.isNotEmpty ||
+      _explicitlyNoSauces;
 
   void _toggleSauce(String sauceId) {
     setState(() {
       if (!_selectedSauceIds.remove(sauceId)) {
         _selectedSauceIds.add(sauceId);
+      }
+      // Mutuamente excluyente con "Sin salsas": elegir cualquier salsa real
+      // desmarca esa opción si estaba activa.
+      _explicitlyNoSauces = false;
+    });
+  }
+
+  void _toggleNoSauces() {
+    setState(() {
+      if (_explicitlyNoSauces) {
+        _explicitlyNoSauces = false;
+      } else {
+        _explicitlyNoSauces = true;
+        // Mutuamente excluyente con las salsas reales: limpia cualquier
+        // selección previa.
+        _selectedSauceIds.clear();
       }
     });
   }
@@ -131,12 +158,14 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
             editingItem.lineKey,
             quantity: _quantity,
             selectedSauces: selectedSauces,
+            explicitlyNoSauces: _explicitlyNoSauces,
           );
     } else {
       ref.read(cartProvider.notifier).addItem(
             item,
             quantity: _quantity,
             selectedSauces: selectedSauces,
+            explicitlyNoSauces: _explicitlyNoSauces,
           );
     }
     // El SnackBar vive en el ScaffoldMessenger raíz (por encima del
@@ -283,8 +312,14 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
                       _SauceSelector(
                         sauces: item.sauces,
                         selectedIds: _selectedSauceIds,
+                        explicitlyNoSauces: _explicitlyNoSauces,
                         onToggle: _toggleSauce,
+                        onToggleNoSauces: _toggleNoSauces,
                       ),
+                      if (!_hasRequiredSauceChoice) ...[
+                        const SizedBox(height: 10),
+                        const _SauceChoiceNotice(),
+                      ],
                     ],
                     const SizedBox(height: 20),
                     // Selector de cantidad (mockup: label CANTIDAD + stepper).
@@ -331,7 +366,7 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
                     ? 'GUARDAR CAMBIOS'
                     : 'AGREGAR AL CARRITO · '
                           'S/ ${totalPrice.toStringAsFixed(2)}',
-                onPressed: _addToCart,
+                onPressed: _hasRequiredSauceChoice ? _addToCart : null,
               ),
             ),
           ],
@@ -478,18 +513,26 @@ class _QuantityStepper extends StatelessWidget {
   }
 }
 
-/// Selector de salsas/cremas (multi-selección, opcional). Solo se construye
-/// cuando `item.sauces` no está vacío — ver `_ProductDetailBody.build`.
+/// Selector de salsas/cremas. Solo se construye cuando `item.sauces` no está
+/// vacío — ver `_ProductDetailBody.build`. Multi-selección entre las salsas
+/// reales, más un chip adicional "Sin salsas" mutuamente excluyente con
+/// ellas (ver `_ProductDetailBodyState._toggleSauce`/`_toggleNoSauces`): el
+/// producto exige una elección real (al menos una salsa, o "Sin salsas")
+/// antes de poder agregar/guardar.
 class _SauceSelector extends StatelessWidget {
   const _SauceSelector({
     required this.sauces,
     required this.selectedIds,
+    required this.explicitlyNoSauces,
     required this.onToggle,
+    required this.onToggleNoSauces,
   });
 
   final List<SauceOption> sauces;
   final Set<String> selectedIds;
+  final bool explicitlyNoSauces;
   final ValueChanged<String> onToggle;
+  final VoidCallback onToggleNoSauces;
 
   @override
   Widget build(BuildContext context) {
@@ -507,7 +550,7 @@ class _SauceSelector extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Elegí las que quieras (opcional)',
+          'Elegí las que quieras, o "Sin salsas"',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
             fontSize: 12,
             color: CeltasColors.textMuted,
@@ -521,10 +564,16 @@ class _SauceSelector extends StatelessWidget {
             for (final sauce in sauces)
               _SauceChip(
                 key: ValueKey('detail-sauce-${sauce.id}'),
-                sauce: sauce,
+                label: sauce.name,
                 selected: selectedIds.contains(sauce.id),
                 onTap: () => onToggle(sauce.id),
               ),
+            _SauceChip(
+              key: const ValueKey('detail-sauce-none'),
+              label: 'Sin salsas',
+              selected: explicitlyNoSauces,
+              onTap: onToggleNoSauces,
+            ),
           ],
         ),
       ],
@@ -532,18 +581,19 @@ class _SauceSelector extends StatelessWidget {
   }
 }
 
-/// Chip individual de salsa. Mismo lenguaje visual que el círculo de
-/// selección de `_AddressCard` (checkout_screen.dart) y el chip "VER MIS
-/// CUPONES" del carrito: borde dorado/naranja cuando está activo.
+/// Chip individual de salsa (o del chip especial "Sin salsas", mismo
+/// lenguaje visual). Mismo criterio que el círculo de selección de
+/// `_AddressCard` (checkout_screen.dart) y el chip "VER MIS CUPONES" del
+/// carrito: borde dorado/naranja cuando está activo.
 class _SauceChip extends StatelessWidget {
   const _SauceChip({
     super.key,
-    required this.sauce,
+    required this.label,
     required this.selected,
     required this.onTap,
   });
 
-  final SauceOption sauce;
+  final String label;
   final bool selected;
   final VoidCallback onTap;
 
@@ -571,7 +621,7 @@ class _SauceChip extends StatelessWidget {
               const SizedBox(width: 6),
             ],
             Text(
-              sauce.name,
+              label,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
@@ -580,6 +630,46 @@ class _SauceChip extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Aviso de que falta elegir salsas antes de poder agregar/guardar — mismo
+/// patrón visual (card + ícono + texto, tono gold de advertencia) que
+/// `_MissingAddressNotice` en `checkout_screen.dart`.
+class _SauceChoiceNotice extends StatelessWidget {
+  const _SauceChoiceNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('detail-sauce-choice-notice'),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: CeltasColors.gold.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(CeltasRadii.input),
+        border: Border.all(color: CeltasColors.gold, width: 1.2),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            size: 18,
+            color: CeltasColors.gold,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Elegí tus salsas o toca "Sin salsas" para continuar',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: CeltasColors.gold,
+                fontWeight: FontWeight.w700,
+                fontSize: 12.5,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

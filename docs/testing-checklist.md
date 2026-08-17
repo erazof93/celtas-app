@@ -204,32 +204,59 @@ solo cuando pasa lo aplicable de este checklist.
 - [x] Carrito se limpia tras confirmar pedido exitosamente
 - [x] Validación de cupón (`/coupons/validate`) no lo marca como usado antes de confirmar
 
-### Salsas/cremas (selector en el detalle + carrito + payload) — ⚠️ PENDIENTE DE CORRER
+### Salsas/cremas (selector en el detalle + carrito + payload) — ⚠️ PENDIENTE (parcial)
 
-Escrito en una sesión sin acceso al toolchain de Flutter (ver `ROADMAP.md`, sección 4, entrada
-"Mejora nueva (en curso)"). Ninguno de los ítems siguientes fue confirmado corriendo
-`flutter analyze`/`flutter test` de verdad — son el checklist a correr antes de la auditoría de
-`@tester`, no un reporte de resultados.
+Escrito originalmente en una sesión sin acceso al toolchain de Flutter (ver `ROADMAP.md`, sección
+4, entrada "Mejora nueva (en curso)"). Los primeros 3 ítems y los de fusión/línea de carrito ya se
+confirmaron corriendo el toolchain de verdad (ver auditorías puntuales de esta sección + la de
+tri-state más abajo); los de verificación en dispositivo/emulador real siguen sin correr en esta
+sesión.
 
-- [ ] `flutter pub get` + `dart run build_runner build --delete-conflicting-outputs` no genera
-      diffs distintos a los `*.freezed.dart`/`*.g.dart` escritos a mano en esta sesión
-      (`sauce_option.*`, `public_menu_item.*`, `cart_item.freezed.dart`)
-- [ ] `flutter analyze` limpio
-- [ ] `flutter test` verde, incluyendo los archivos tocados/nuevos: `product_detail_screen_test.dart`,
-      `cart_provider_test.dart`, `cart_screen_test.dart`, `order_repository_test.dart` (nuevo)
-- [ ] Producto sin salsas configuradas (ej. arroz chaufa) no muestra la sección en el detalle
-- [ ] Producto con salsas: selección múltiple funciona, es opcional (se puede agregar sin elegir
-      ninguna)
+- [x] `flutter pub get` + `dart run build_runner build --delete-conflicting-outputs` no genera
+      diffs distintos a los `*.freezed.dart`/`*.g.dart` ya escritos (`sauce_option.*`,
+      `public_menu_item.*`, `cart_item.freezed.dart`) — confirmado de nuevo en la auditoría de
+      tri-state más abajo: `build_runner` corrido de verdad, salida cruda `Built with
+      build_runner/aot in 8s; wrote 0 outputs.` (sin drift)
+- [x] `flutter analyze` limpio (confirmado repetidamente en varias auditorías puntuales de esta
+      sección, la más reciente con salida cruda propia: `No issues found!`)
+- [x] `flutter test` verde, incluyendo los archivos tocados/nuevos: `product_detail_screen_test.dart`,
+      `cart_provider_test.dart`, `cart_screen_test.dart`, `order_repository_test.dart` — 329/329
+      confirmado con salida cruda propia en la auditoría de tri-state
+- [x] Producto sin salsas configuradas (ej. arroz chaufa) no muestra la sección en el detalle —
+      confirmado por lectura de código (`if (item.sauces.isNotEmpty) ... _SauceSelector` en
+      `product_detail_screen.dart`) y por el test `'producto sin catálogo de salsas: el botón
+      sigue habilitado sin elección (validación no aplica)'`
+- [ ] ~~Producto con salsas: selección múltiple funciona, es opcional (se puede agregar sin elegir
+      ninguna)~~ **DESACTUALIZADO por decisión de negocio explícita (ver auditoría de tri-state
+      abajo)**: desde el tri-state real, un producto CON catálogo de salsas ya NO es opcional —
+      exige una elección real (al menos una salsa, o el chip "Sin salsas") antes de habilitar
+      "AGREGAR AL CARRITO"/"GUARDAR CAMBIOS". La selección múltiple entre salsas reales sigue
+      funcionando igual (eso sí sigue siendo cierto), pero "se puede agregar sin elegir ninguna" ya
+      no es correcto tal como está escrito — corregir la redacción de este ítem si se retoma esta
+      sección, o quitarlo a favor del checklist de tri-state de abajo.
 - [ ] "Agregar al carrito" vuelve a Home automáticamente (verificar en dispositivo/emulador real,
-      no solo en el widget test — la transición de `go_router` puede comportarse distinto)
-- [ ] Mismo producto con distinta combinación de salsas → filas separadas en el carrito, cada una
-      con su propio stepper de cantidad; misma combinación → se fusiona (suma cantidad)
-- [ ] Carrito muestra "cremas: ..." debajo del nombre y arriba del precio, solo cuando hay
-      selección
-- [ ] `POST /orders` manda `sauceIds` por ítem solo cuando corresponde (nunca lista vacía)
-- [ ] Mensaje de WhatsApp final incluye las salsas concatenadas (esto lo arma el backend — ver
-      `OrdersService.buildWhatsappUrl` en `celtas-backend`, ya verificado en su propia sesión;
-      acá solo confirmar que el texto que abre `url_launcher` las trae)
+      no solo en el widget test — la transición de `go_router` puede comportarse distinto). Sigue
+      sin verificarse en dispositivo real en esta sesión (sin dispositivo conectado)
+- [x] Mismo producto con distinta combinación de salsas → filas separadas en el carrito, cada una
+      con su propio stepper de cantidad; misma combinación → se fusiona (suma cantidad) —
+      confirmado con tests reales de `cart_provider_test.dart`/`product_detail_screen_test.dart`
+      (fusión y no-fusión), incluida la variante con `explicitlyNoSauces` (ver auditoría de
+      tri-state abajo)
+- [x] Carrito muestra "cremas: ..." debajo del nombre y arriba del precio, solo cuando hay
+      selección — confirmado; ver también la variante tri-state ("Sin salsas") en la auditoría de
+      abajo
+- [ ] ~~`POST /orders` manda `sauceIds` por ítem solo cuando corresponde (nunca lista vacía)~~
+      **DESACTUALIZADO por el tri-state real (ver auditoría abajo)**: desde el tri-state, el
+      payload SÍ manda `sauceIds: []` explícito a propósito cuando el cliente tocó "Sin salsas" —
+      "nunca lista vacía" ya no es la regla real. Regla vigente: se omite la llave SOLO cuando el
+      producto no ofrece catálogo de salsas o el cliente nunca llegó a elegir; se manda `[]`
+      explícito cuando el cliente eligió "Sin salsas" a propósito; se mandan los ids cuando hay
+      salsas elegidas. Verificado con test + mutación real (ver abajo).
+- [ ] Mensaje de WhatsApp final incluye las salsas concatenadas, incluido el caso "Sin salsas"
+      literal del tri-state (esto lo arma el backend — ver `OrdersService.buildWhatsappUrl` en
+      `backend-celtas`, ya verificado en su propia sesión; acá solo falta confirmar en
+      dispositivo/emulador real que el texto que abre `url_launcher` las trae, incluida la palabra
+      "Sin salsas" cuando corresponda — no verificado en esta sesión, sin dispositivo conectado)
 
 #### Auditoría puntual: fix de la carrera SnackBar/`pop()` en `_addToCart()`
 
@@ -441,6 +468,145 @@ deliberada + reversión confirmada byte a byte para el caso de fusión, y `git s
 confirmada para el botón "+" del Home. Único hallazgo nuevo (no bloqueante): tap target chico del
 ícono de lápiz, inconsistente con el precedente ya corregido en el mismo archivo para el ícono de
 papelera.
+
+#### Auditoría puntual: tri-state real de salsas (no aplica / sin salsas explícito / con salsas)
+
+Alcance de esta auditoría: SOLO la mejora de tri-state descrita en el encargo (`CartItem
+.explicitlyNoSauces` + propagación en `cart_provider.dart` + chip "Sin salsas" mutuamente
+excluyente en `product_detail_screen.dart` + línea "Sin salsas" en `cart_screen.dart` +
+`sauceIds: []` explícito en `order_repository.dart`), no el resto de la sección "Salsas/cremas" de
+arriba. Contrato del backend verificado independientemente por lectura directa de
+`../backend-celtas/src/modules/orders/orders.service.ts` (`resolveSelectedSauces`, líneas
+355-379) y `dto/create-order.dto.ts` (`sauceIds?: string[]`, `@IsOptional()` + `@IsArray()` +
+`@IsUUID('4', {each:true})`) — coincide exactamente con lo descrito en el encargo: `undefined` →
+`null` ("no aplica"), `[]` explícito → `[]` ("sin salsas" real, mostrado literal), con ids →
+nombres validados y snapshot.
+
+`flutter analyze`: `No issues found!` (salida cruda propia). `flutter test` (suite completa):
+`329: All tests passed!` (salida cruda propia, no solo confianza en el reporte de la sesión
+principal). `dart run build_runner build --delete-conflicting-outputs` corrido de verdad: `Built
+with build_runner/aot in 8s; wrote 0 outputs.` — confirma que `cart_item.freezed.dart` ya
+commiteado es byte-idéntico al que generaría el toolchain real, sin drift a mano.
+
+✅ Pasó:
+- **`CartItem.explicitlyNoSauces`** (`cart_item.dart`): campo `@Default(false) bool`, confirmado
+  presente en el `.freezed.dart` real (no solo en el modelo fuente) — `copyWith`, `==`,
+  `hashCode`, `toString()` y el constructor de `_CartItem` lo incluyen correctamente.
+- **`CartNotifier.addItem`/`updateLine`** (`cart_provider.dart`): ambos reciben
+  `explicitlyNoSauces` y lo propagan a la fila nueva; en fusión (mismo `lineKey`), lo combinan con
+  `OR` (`items[i].explicitlyNoSauces || explicitlyNoSauces`) contra la fila objetivo. Verificado
+  que en la práctica el `OR` es una red de seguridad, no una necesidad activa: `lineKey` se calcula
+  solo a partir de `selectedSauces` (ignora `explicitlyNoSauces`), pero un producto CON catálogo
+  de salsas nunca puede llegar a `selectedSauces: [] && explicitlyNoSauces: false` desde la UI real
+  (el botón de agregar/guardar queda deshabilitado hasta que haya una elección real — ver abajo),
+  así que las dos filas que comparten `lineKey` con `selectedSauces` vacío SIEMPRE tienen
+  `explicitlyNoSauces: true` de origen; el `OR` no cambia el resultado en ningún camino alcanzable
+  hoy, pero tampoco es incorrecto tenerlo.
+- **Exclusión mutua real en `product_detail_screen.dart`** (`_toggleSauce`/`_toggleNoSauces`):
+  verificada con MUTACIÓN REAL, no solo lectura — revertí ambos métodos a una versión sin la
+  exclusión (`_toggleSauce` ya no pone `_explicitlyNoSauces = false`; `_toggleNoSauces` ya no
+  limpia `_selectedSauceIds`) y corrí `product_detail_screen_test.dart`: exactamente 2 tests
+  fallan (`'"Sin salsas" y los chips de salsas reales son mutuamente excluyentes en ambos
+  sentidos'` y `'Mayonesa → "Sin salsas" limpia la selección real...'`), ambos con el mismo patrón
+  de evidencia cruda (`Expected: exactly one matching candidate / Actual: Found 2 widgets with
+  icon...`, dos chips marcados a la vez) — confirma que el fix ejercita código real, no un test que
+  pasaría igual sin él. Reverti la mutación y confirmé `git diff` idéntico byte a byte al estado
+  previo + `flutter analyze`/`flutter test` limpios de nuevo (329/329).
+- **Botón deshabilitado hasta elección real** (`_hasRequiredSauceChoice`): confirmado que
+  `onPressed: null` es una deshabilitación REAL, no solo visual — `CeltasButton` calcula `enabled =
+  onPressed != null && !loading` y usa `onTap: enabled ? onPressed : null` (mismo patrón ya
+  auditado en `checkout_screen.dart`/`cart_screen.dart` para otros botones deshabilitados). Test
+  `'sin elegir ninguna opción, tocar el botón deshabilitado no agrega nada al carrito'` usa
+  `warnIfMissed: false` correctamente (el tap no puede "acertar" un `GestureDetector` con `onTap:
+  null`) y confirma `cartProvider` sigue vacío tras el tap.
+- **`order_repository.dart` — condición nueva verificada con MUTACIÓN REAL**: revertí `else if
+  (item.explicitlyNoSauces) 'sauceIds': const <String>[]` a la condición vieja (solo `if
+  (item.selectedSauces.isNotEmpty) 'sauceIds': [...]`, sin el `else if`) y corrí
+  `order_repository_test.dart`: falla exactamente el test nuevo (`'ítem con explicitlyNoSauces=true
+  y selectedSauces vacío → manda "sauceIds": [] explícito (no ausente)'`, `Expected: true / Actual:
+  <false>` sobre `item.containsKey('sauceIds')`), los otros 5 tests del archivo siguen pasando —
+  confirma que el test ejercita la rama nueva real. Reverti la mutación, confirmé `git diff`
+  idéntico byte a byte y `flutter analyze`/`flutter test` limpios de nuevo.
+- **Prioridad correcta si ambos campos coincidieran (estado contradictorio hipotético)**: la
+  condición es `if (selectedSauces.isNotEmpty) ... else if (explicitlyNoSauces) ...` — si por algún
+  bug futuro ambos campos quedaran `true`/no-vacíos a la vez, gana `selectedSauces` (manda los ids
+  reales, ignora la bandera "sin salsas"), que es el comportamiento más seguro de los dos. Hoy este
+  caso no es alcanzable desde la UI real (mutua exclusión ya verificada arriba), documentado como
+  riesgo teórico no bloqueante más abajo.
+- **Botón "+" rápido del Home** (`home_screen.dart:828-836`): confirmado por lectura que sigue sin
+  tocar — para productos CON catálogo de salsas ya navega al detalle en vez de agregar directo
+  (fix de una auditoría anterior, sin relación con este cambio); para productos SIN catálogo llama
+  `addItem(item)` sin pasar `explicitlyNoSauces` (default `false`), consistente con el caso "no
+  aplica" del backend (la llave se omite). No hay forma hoy de que este botón dispare
+  `explicitlyNoSauces: true` — correcto, ese chip solo existe en el detalle.
+- **`lineKey` no se ve afectado por el campo nuevo**: confirmado por lectura de `cart_item.dart` —
+  el getter sigue calculándose solo a partir de `selectedSauces`, sin incluir
+  `explicitlyNoSauces`; la fusión de filas del carrito sigue funcionando exactamente igual que
+  antes de este cambio (mismos tests de fusión/no-fusión ya existentes siguen en verde).
+- **Modo edición preserva el campo al guardar sin tocar nada**: confirmado por lectura de código
+  (`_explicitlyNoSauces` se inicializa desde `editingItem?.explicitlyNoSauces ?? false` en
+  `initState`, y `_addToCart` pasa ese mismo valor a `updateLine` sin transformarlo) — si el
+  usuario abre el modo edición de una fila con "Sin salsas" ya marcado y toca "GUARDAR CAMBIOS" sin
+  interactuar con los chips, el valor viaja intacto. Hay cobertura PARCIAL de esto: el test
+  `'fila editada con explicitlyNoSauces=true precarga el chip "Sin salsas"...'` confirma el estado
+  de la UI ANTES de tocar el botón (chip marcado, botón habilitado), pero ningún test tapea
+  realmente "GUARDAR CAMBIOS" sin cambios y verifica el `CartItem` resultante en `cartProvider` —
+  ver hueco de cobertura abajo (no bloqueante, la lógica se verificó por lectura directa del
+  camino de datos, que es lineal y sin ramas condicionales que puedan perder el valor).
+- **`checkout_screen.dart`**: `_confirmOrder` pasa `items: cart.items` (la lista completa de
+  `CartItem`, sin transformar) a `createOrder` — `explicitlyNoSauces` viaja intacto de punta a
+  punta desde el carrito hasta el payload de `POST /orders`, confirmado por lectura directa (no
+  hay ningún mapeo intermedio que pudiera perder el campo).
+- **Cobertura general**: 3 grupos de tests nuevos/ampliados revisados línea por línea, no solo
+  ejecutados — `order_repository_test.dart` (contrato completo de `sauceIds` con los 3 casos + caso
+  multi-ítem con selección independiente por ítem), `cart_provider_test.dart` (`addItem`/
+  `updateLine` con `explicitlyNoSauces`, incluida la fusión que preserva el campo vía `OR`),
+  `cart_screen_test.dart` ("Sin salsas" visible tri-state), `product_detail_screen_test.dart`
+  (exclusión mutua en ambos sentidos + precarga en modo edición).
+- Sin `Color(0xFF...)` sueltos ni desviación de fidelidad visual: el chip "Sin salsas" reutiliza
+  `_SauceChip` (mismo widget que los chips de salsas reales, ya auditado en una ronda anterior),
+  sin estilos nuevos.
+
+❌ Falló:
+- Ninguno.
+
+⚠️ Riesgos / casos borde no cubiertos, no bloqueantes:
+- **Hueco de cobertura real**: no hay un test que tapee "GUARDAR CAMBIOS" en modo edición sobre una
+  fila con `explicitlyNoSauces: true` sin tocar ningún chip, y verifique que el `CartItem`
+  resultante en `cartProvider` sigue con `explicitlyNoSauces: true` (solo se verifica el estado
+  previo de la UI, no el resultado post-guardado para este caso puntual — sí existe ese patrón
+  completo para el caso de salsas reales, `'GUARDAR CAMBIOS actualiza la fila correcta...'`).
+  Verificado por lectura de código que el camino de datos es lineal (sin condicionales que puedan
+  perder el valor), así que el riesgo real de que esto falle en producción es bajo, pero no está
+  confirmado con un test de regresión explícito.
+- **Estado contradictorio teórico sin invariante a nivel de tipo**: `CartItem` no impide en tiempo
+  de compilación que `selectedSauces` no vacío y `explicitlyNoSauces: true` coexistan — hoy la UI
+  garantiza mutua exclusión (verificado con mutación real arriba) y `order_repository.dart` tiene
+  una prioridad segura si igual coexistieran, pero no hay una aserción explícita en el modelo ni un
+  test que documente qué pasa si algún código futuro (fuera de `product_detail_screen.dart`)
+  construye un `CartItem` con ambos campos "activos" a la vez. Riesgo bajo, no bloqueante.
+- **No verificado en dispositivo/emulador real** en esta sesión (sin dispositivo conectado): que
+  "Sin salsas" aparezca correctamente en el mensaje de WhatsApp real generado por el backend, ni el
+  flujo visual completo Home → detalle con "Sin salsas" → carrito → checkout → WhatsApp. La
+  lógica del lado del backend para este caso ya fue verificada en su propia sesión (según el
+  encargo), y el payload que la app manda está confirmado con test + mutación real, pero la cadena
+  end-to-end visual no se ejercitó en esta auditoría.
+- Sigue pendiente, fuera del alcance de esta auditoría puntual, el resto de la sección
+  "Salsas/cremas" de arriba que depende de dispositivo real (verificación visual de "vuelve a
+  Home", texto de WhatsApp).
+
+**Veredicto de este fix puntual: LISTO.** Los dos puntos de mutación activa pedidos explícitamente
+en el encargo (exclusión mutua de chips en `product_detail_screen.dart`, condición nueva de
+`order_repository.dart`) se verificaron con reversión real del código y confirmación de que el
+test correspondiente falla — no es una confianza ciega en el diff. Contrato de `sauceIds`
+verificado por lectura directa del backend real (`resolveSelectedSauces` + DTO), no por el
+resumen del encargo. `flutter analyze`/`flutter test`/`build_runner` corridos de verdad con salida
+cruda propia. Único hueco de cobertura real (no bloqueante): falta un test de regresión explícito
+para "guardar cambios sin tocar nada preserva `explicitlyNoSauces` en modo edición" — la lógica se
+verificó por lectura de código, camino lineal sin ramas de riesgo. No se marca el checkbox de
+`ROADMAP.md` de la mejora completa de "selección de salsas/cremas" (sigue teniendo verificación de
+dispositivo real pendiente, fuera del alcance de este encargo puntual) — solo se actualizaron los
+ítems específicos de esta sección de arriba que ya quedaron confirmados por el toolchain real.
 
 ## Perfil / Direcciones
 
