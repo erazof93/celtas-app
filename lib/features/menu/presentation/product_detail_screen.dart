@@ -6,6 +6,7 @@ import 'package:celtas_mobile/features/home/application/home_providers.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
 import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
+import 'package:celtas_mobile/shared/widgets/celtas_snackbar.dart';
 import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
 import 'package:celtas_mobile/shared/widgets/svg_stroke_icon.dart';
 import 'package:flutter/material.dart';
@@ -18,10 +19,17 @@ import 'package:go_router/go_router.dart';
 /// Home (`publicMenuProvider`) — no hay endpoint de detalle propio en el
 /// backend público, el menú trae todo.
 ///
-/// Layout exacto del mockup:
-///   - Hero de 400px con gradiente vertical
+/// Layout exacto del mockup, con un ajuste de UX real post-mockup (ver abajo):
+///   - Hero con gradiente vertical
 ///     `rgba(13,13,13,.5) 0% → transparent 30% → rgba(13,13,13,.95) 100%` y
-///     botones circulares de volver (38px, fondo `rgba(13,13,13,.6)`).
+///     botones circulares de volver (38px, fondo `rgba(13,13,13,.6)`). El
+///     mockup original pedía 400px, pero eso empujaba el selector de salsas
+///     (agregado post-mockup, ver más abajo) y su aviso de elección
+///     pendiente fuera de la pantalla visible sin deslizar en celulares
+///     comunes (hallazgo de UX real en dispositivo, no del mockup) — se
+///     redujo a 270px, que sí deja selector + aviso visibles sin deslizar en
+///     un producto con salsas en un celular de ~6.1", y sigue siendo un
+///     hero grande y reconocible.
 ///   - Nombre en Cinzel 24px, descripción 14px muted, precio dorado 22px.
 ///   - Selector de salsas/cremas (solo si `item.sauces` no está vacío —
 ///     ej. arroz chaufa no lo muestra): sección nueva, no viene del mockup
@@ -176,26 +184,15 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
     // flotante del carrito (`_CartSummaryBar`), y mantener la acción
     // apuntando a un `context` que esta pantalla está por descartar es
     // frágil.
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(
-            editingItem != null
-                ? 'Cambios guardados: ${item.name}'
-                : 'Agregado: ${item.name} ×$_quantity',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: CeltasColors.cream),
-          ),
-          backgroundColor: CeltasColors.surface,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 2),
-          // Mismo margen ya usado en `home_screen.dart` para que el
-          // SnackBar no quede tapado por `_CartSummaryBar`.
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 88),
-        ),
-      );
+    showCeltasSnackBar(
+      context,
+      editingItem != null
+          ? 'Cambios guardados: ${item.name}'
+          : 'Agregado: ${item.name} ×$_quantity',
+      // Mismo margen ya usado en `home_screen.dart` para que el SnackBar no
+      // quede tapado por `_CartSummaryBar`.
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 88),
+    );
     // Vuelve a la pantalla desde la que se llegó acá — Home en el flujo
     // normal de "agregar" (pedido explícito del negocio: agregar no debe
     // dejarte varado en el detalle), o /cart en modo edición, porque
@@ -227,9 +224,10 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
         top: false,
         child: Column(
           children: [
-            // Hero 400px con gradiente y botones superpuestos.
+            // Hero con gradiente y botones superpuestos — 270px, ver doc de
+            // la clase (ajuste de UX real, no del mockup original).
             SizedBox(
-              height: 400,
+              height: 270,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -366,7 +364,26 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
                     ? 'GUARDAR CAMBIOS'
                     : 'AGREGAR AL CARRITO · '
                           'S/ ${totalPrice.toStringAsFixed(2)}',
-                onPressed: _hasRequiredSauceChoice ? _addToCart : null,
+                // `enabled` solo controla el estilo gris — el toque SIEMPRE
+                // se procesa (`onPressed` real) para poder darle feedback al
+                // usuario cuando falta elegir salsas, en vez de ignorar el
+                // toque en silencio (`onPressed: null` no dispara el
+                // `InkWell` en absoluto). Ver doc de `CeltasButton.enabled`.
+                enabled: _hasRequiredSauceChoice,
+                onPressed: () {
+                  if (!_hasRequiredSauceChoice) {
+                    // Mismo texto que el aviso inline bajo el selector
+                    // (`_SauceChoiceNotice`) y mismo estilo/comportamiento
+                    // que el resto de SnackBars de esta pantalla — mismo
+                    // criterio que el aviso de cupón de `cart_screen.dart`.
+                    showCeltasSnackBar(
+                      context,
+                      'Elegí tus salsas o toca "Sin salsas" para continuar',
+                    );
+                    return;
+                  }
+                  _addToCart();
+                },
               ),
             ),
           ],

@@ -7,6 +7,7 @@ import 'package:celtas_mobile/features/home/data/models/public_menu_category.dar
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
 import 'package:celtas_mobile/features/notifications/application/notification_providers.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
+import 'package:celtas_mobile/shared/widgets/celtas_snackbar.dart';
 import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
 import 'package:celtas_mobile/shared/widgets/svg_stroke_icon.dart';
 import 'package:flutter/material.dart' hide Banner;
@@ -508,21 +509,7 @@ class _BannerCard extends ConsumerWidget {
       }
     }
     if (opened || !context.mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(
-            'No se pudo abrir el enlace del banner.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: CeltasColors.cream),
-          ),
-          backgroundColor: CeltasColors.surface,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+    showCeltasSnackBar(context, 'No se pudo abrir el enlace del banner.');
   }
 
   @override
@@ -834,24 +821,15 @@ class _ProductCard extends ConsumerWidget {
                   return;
                 }
                 ref.read(cartProvider.notifier).addItem(item);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Agregado: ${item.name}',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: CeltasColors.cream,
-                      ),
-                    ),
-                    backgroundColor: CeltasColors.surface,
-                    behavior: SnackBarBehavior.floating,
-                    duration: const Duration(seconds: 2),
-                    // Este agregado deja el carrito no vacío, así que
-                    // `_CartSummaryBar` va a estar visible en este mismo
-                    // Home — sin este margen el SnackBar queda tapado por
-                    // esa barra. Mismo valor de 88 ya usado más arriba
-                    // (padding del `ListView`) para la misma barra.
-                    margin: const EdgeInsets.fromLTRB(16, 0, 16, 88),
-                  ),
+                showCeltasSnackBar(
+                  context,
+                  'Agregado: ${item.name}',
+                  // Este agregado deja el carrito no vacío, así que
+                  // `_CartSummaryBar` va a estar visible en este mismo
+                  // Home — sin este margen el SnackBar queda tapado por
+                  // esa barra. Mismo valor de 88 ya usado más arriba
+                  // (padding del `ListView`) para la misma barra.
+                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 88),
                 );
               },
             ),

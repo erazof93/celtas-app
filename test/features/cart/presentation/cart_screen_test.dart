@@ -445,10 +445,16 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Cupón GRANDE50 aplicado'), findsNothing);
+      // Dentro de un SnackBar real (no solo el texto en algún otro lugar del
+      // árbol) — mismo criterio que el aviso de salsas de
+      // `product_detail_screen_test.dart`.
       expect(
-        find.text(
-          'El cupón GRANDE50 se quitó: el pedido ya no alcanza el mínimo '
-          'de S/ 50.00',
+        find.descendant(
+          of: find.byType(SnackBar),
+          matching: find.text(
+            'El cupón GRANDE50 se quitó: el pedido ya no alcanza el mínimo '
+            'de S/ 50.00',
+          ),
         ),
         findsOneWidget,
       );

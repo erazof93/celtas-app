@@ -14,6 +14,7 @@ class CeltasButton extends StatelessWidget {
     required this.onPressed,
     this.angled = false,
     this.loading = false,
+    this.enabled = true,
     this.icon,
   });
 
@@ -22,13 +23,23 @@ class CeltasButton extends StatelessWidget {
   final bool angled;
   final bool loading;
 
+  /// Controla SOLO el estilo visual (naranja vs. gris) — no si el botón
+  /// responde al toque. Existe para poder mostrar feedback (ej. un
+  /// SnackBar) cuando el usuario toca un botón que se ve deshabilitado por
+  /// una validación pendiente, en vez de que el toque no haga nada: con
+  /// `onPressed: null` el `InkWell` ni siquiera recibe el gesto. El toque
+  /// real siempre depende solo de `onPressed != null && !loading` (ver
+  /// `InkWell.onTap` abajo), nunca de este flag.
+  final bool enabled;
+
   /// Ícono opcional a la izquierda del label (ej. WhatsApp en checkout,
   /// `gap: 10` como en el CSS real del mockup).
   final Widget? icon;
 
   @override
   Widget build(BuildContext context) {
-    final enabled = onPressed != null && !loading;
+    final canTap = onPressed != null && !loading;
+    final looksEnabled = enabled && canTap;
     final textTheme = Theme.of(context).textTheme;
 
     // Botones con ícono (ej. CTA de WhatsApp) usan 14px — el CSS real del
@@ -45,7 +56,7 @@ class CeltasButton extends StatelessWidget {
       style: textTheme.labelLarge?.copyWith(
         fontSize: icon == null ? 16 : 14,
         fontWeight: FontWeight.w800,
-        color: enabled ? CeltasColors.black : CeltasColors.textSubtle,
+        color: looksEnabled ? CeltasColors.black : CeltasColors.textSubtle,
       ),
     );
 
@@ -70,11 +81,11 @@ class CeltasButton extends StatelessWidget {
               );
 
     final button = Material(
-      color: enabled ? CeltasColors.orange : CeltasColors.border,
+      color: looksEnabled ? CeltasColors.orange : CeltasColors.border,
       borderRadius: angled ? null : BorderRadius.circular(CeltasRadii.input),
       clipBehavior: angled ? Clip.antiAlias : Clip.none,
       child: InkWell(
-        onTap: enabled ? onPressed : null,
+        onTap: canTap ? onPressed : null,
         child: Container(
           height: 52,
           alignment: Alignment.center,

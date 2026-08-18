@@ -1,4 +1,3 @@
-import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/addresses/presentation/addresses_screen.dart';
 import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
 import 'package:celtas_mobile/features/auth/application/auth_state.dart';
@@ -16,6 +15,7 @@ import 'package:celtas_mobile/features/orders/presentation/order_detail_screen.d
 import 'package:celtas_mobile/features/orders/presentation/orders_screen.dart';
 import 'package:celtas_mobile/features/profile/presentation/profile_screen.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_bottom_nav.dart';
+import 'package:celtas_mobile/shared/widgets/celtas_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -217,21 +217,16 @@ class _ShellScaffoldState extends State<_ShellScaffold> {
       return;
     }
     _lastBackPressAt = now;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(
-            'Presiona de nuevo para salir',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: CeltasColors.cream,
-                ),
-          ),
-          backgroundColor: CeltasColors.surface,
-          behavior: SnackBarBehavior.floating,
-          duration: _confirmWindow,
-        ),
-      );
+    showCeltasSnackBar(
+      context,
+      'Presiona de nuevo para salir',
+      // Coincide con el default del helper, pero se pasa explícito a
+      // propósito: liga la duración del SnackBar a `_confirmWindow`, la
+      // misma ventana que usa la comparación de arriba, para que no puedan
+      // desincronizarse si alguna cambia por separado en el futuro.
+      // ignore: avoid_redundant_argument_values
+      duration: _confirmWindow,
+    );
   }
 
   @override

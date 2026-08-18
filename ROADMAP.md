@@ -602,6 +602,96 @@ celtas-mobile/
           encargo). Riesgo no bloqueante documentado en `docs/testing-checklist.md`: el mensaje de
           WhatsApp con "Sin salsas" literal y el flujo visual completo siguen sin verificarse en
           dispositivo real (mismo pendiente que el resto de este módulo, ver arriba).
+      - **Ajustes de UX tras feedback real de uso en dispositivo (capturas del dueño del
+        negocio): hero reducido a 270px + `CeltasButton.enabled` separado de `onPressed`.** Dos
+        cambios puntuales sobre lo ya cerrado arriba:
+        - `product_detail_screen.dart`: el hero de la imagen del producto (400px, valor del
+          mockup original) empujaba el selector de salsas y su aviso de elección pendiente fuera
+          de la pantalla visible sin deslizar en la mayoría de celulares — reducido a 270px.
+        - `celtas_button.dart` (`CeltasButton`): antes, `onPressed: null` controlaba a la vez el
+          estilo visual (gris) y si el `InkWell` recibía el toque — un botón deshabilitado no daba
+          NINGÚN feedback al tocarlo. Se agregó `bool enabled = true` que controla SOLO el
+          estilo; el toque sigue dependiendo únicamente de `onPressed != null && !loading`. El
+          botón "AGREGAR AL CARRITO"/"GUARDAR CAMBIOS" de `product_detail_screen.dart` ahora usa
+          `enabled: _hasRequiredSauceChoice` con un `onPressed` real que muestra un `SnackBar`
+          (mismo texto que `_SauceChoiceNotice`) cuando falta elegir salsas, en vez de ignorar el
+          toque en silencio.
+        - Auditado por `@tester` con mutación real sobre los 3 puntos críticos: (a) revertir
+          `onTap: canTap ? onPressed : null` a `onTap: looksEnabled ? onPressed : null` en
+          `celtas_button.dart` hizo fallar exactamente el test nuevo de `enabled: false` +
+          `onPressed` no nulo; (b) revertir el botón de `product_detail_screen.dart` a
+          `onPressed: _hasRequiredSauceChoice ? _addToCart : null` (patrón viejo) hizo fallar el
+          test del `SnackBar` de aviso; (c) revertir el hero a 400px con el test nuevo de bounds
+          del aviso (`tester.getBottomRight` del `_SauceChoiceNotice` contra el alto lógico del
+          viewport) **NO hizo fallar el test** — con el fixture de prueba existente (`i-3`, sin
+          `description`) el aviso ya cabía dentro del viewport de 390×844 lógicos incluso con el
+          hero de 400px (`noticeBottom≈751.4` vs. `logicalHeight=844.0`, margen de ~93px); ver
+          hallazgo no bloqueante en `docs/testing-checklist.md`. Las 3 mutaciones se revirtieron
+          después de confirmar el resultado, `git diff` verificado idéntico byte a byte al estado
+          previo. `flutter analyze` limpio, `flutter test` 334/334 (333 + 1 test nuevo de bounds
+          agregado por `@tester`). Confirmado por lectura que ninguno de los ~13 usos existentes de
+          `CeltasButton` en `lib/` pasa `enabled` explícitamente — el default `enabled: true` no
+          cambia su comportamiento.
+        - Este cambio agrega una 5ª ocurrencia del bloque `ScaffoldMessenger..hideCurrentSnackBar()
+          ..showSnackBar(...)` duplicado byte a byte (2 dentro del mismo `product_detail_screen.dart`
+          ahora, más `cart_screen.dart`/`home_screen.dart`/`app_router.dart`) — mismo riesgo de
+          mantenimiento ya documentado en la sección de Navegación, sin agravarse de forma nueva
+          (**consolidado en la siguiente mejora, ver abajo**).
+        - Veredicto: **LISTO**. Sin verificación en dispositivo/emulador real en esta sesión — había
+          un dispositivo Android conectado (`flutter devices`), pero llegar a `/product/:id`
+          requiere sesión autenticada contra el backend real y esta auditoría no contaba con
+          credenciales de prueba; no se intentó crear una cuenta nueva en el backend de producción
+          solo para esta verificación visual puntual. Detalle completo en
+          `docs/testing-checklist.md`.
+- [x] **Refactor de limpieza: helper compartido `showCeltasSnackBar`** (deuda técnica detectada
+      en la auditoría anterior — el bloque `ScaffoldMessenger.of(context)..hideCurrentSnackBar()
+      ..showSnackBar(...)` llevaba 3 auditorías señalado como riesgo de mantenimiento sin
+      corregirse). Extraído a `lib/shared/widgets/celtas_snackbar.dart` →
+      `showCeltasSnackBar(context, message, {backgroundColor, duration, margin})`, con
+      `backgroundColor: CeltasColors.surface` y `duration: Duration(seconds: 2)` por default
+      (iguales en los 6 sitios reales) y `margin: null` por default (solo 2 de los 6 sitios
+      necesitaban el margen de 88px por `_CartSummaryBar`/`CeltasBottomNav`; el resto dependía del
+      cálculo default de `SnackBar`).
+
+      **6 sitios migrados, no 5**: además de los 5 con la cascada literal `..hideCurrentSnackBar()
+      ..showSnackBar()` (`app_router.dart` — doble-atrás —, `home_screen.dart` — error de banner
+      —, `product_detail_screen.dart` ×2 — agregar/guardar y aviso de salsas —,
+      `cart_screen.dart` — cupón quitado por mínimo —), `@tester` encontró un 6º sitio
+      funcionalmente idéntico pero con `hideCurrentSnackBar()`/`showSnackBar()` como dos sentencias
+      separadas (`home_screen.dart`, botón "+" rápido de agregar), que el `grep` inicial no había
+      capturado por buscar solo la cascada literal — también migrado.
+
+      **Auditado por `@tester` en dos pasadas.** La primera encontró 4 problemas reales, los 4
+      corregidos antes de la segunda:
+      1. El test nuevo (`celtas_snackbar_test.dart`) era tautológico para `backgroundColor`/
+         `duration` — su propio `wrap()` reproducía los defaults reales con `?? default` antes de
+         llamar al helper, así que nunca ejercitaba el default de verdad (confirmado con mutación:
+         cambiar los defaults en `celtas_snackbar.dart` no hacía fallar ningún test). Corregido
+         separando `wrapDefault()` (sin argumentos opcionales) de `wrapCustom()` (para el caso de
+         overrides); re-verificado con la misma mutación, ahora sí falla el test correspondiente.
+      2. El 6º sitio (arriba) no estaba migrado — corregido.
+      3. El sitio del aviso de salsas ("Elegí tus salsas...") no es una relocalización pura de
+         código preexistente en `git log`: se agregó en la mejora inmediatamente anterior de este
+         módulo (tri-state de salsas / `CeltasButton.enabled`), todavía sin commitear cuando
+         arrancó este refactor — por eso cuenta como uno de los sitios a consolidar aunque no
+         aparezca en el `HEAD` de git al momento de auditar. Aclarado en
+         `docs/testing-checklist.md` para que no se lea como comportamiento nuevo introducido por
+         el refactor.
+      4. El test existente del sitio de `cart_screen.dart` (cupón quitado por mínimo) solo
+         verificaba el texto (`find.text(...)`) sin confirmar que vivía dentro de un `SnackBar` —
+         reforzado con `find.descendant(of: find.byType(SnackBar), ...)`, mismo patrón que ya usa
+         `product_detail_screen_test.dart` para el aviso de salsas.
+      **Segunda pasada de `@tester`** (verificación independiente de las 4 correcciones, no solo
+      lectura del diff): repitió la mutación de defaults sobre `celtas_snackbar.dart` y confirmó
+      que ahora sí falla el test correspondiente (antes de la corrección no fallaba ninguno),
+      revirtió y confirmó el archivo byte a byte idéntico al original; confirmó por lectura del
+      código actual que el 6º sitio quedó migrado con el margen de 88 preservado y su test
+      existente intacto; confirmó que la aclaración sobre el sitio del aviso de salsas es honesta,
+      no un intento de esconder el hallazgo; confirmó el cambio de aserción del sitio de
+      `cart_screen.dart`. `flutter analyze` limpio, `flutter test` 338/338 (salida cruda propia).
+      **Veredicto final: LISTO.** Ver detalle completo (comparación sitio por sitio, salida cruda
+      de ambas pasadas de mutación) en `docs/testing-checklist.md`, sección "Refactor:
+      `showCeltasSnackBar` compartido".
 
 ### 5. Checkout — ✅ COMPLETO (5/5)
 - [x] Selector de dirección guardada (o agregar nueva): `GET /users/me/addresses` con

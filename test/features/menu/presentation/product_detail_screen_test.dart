@@ -302,6 +302,37 @@ void main() {
     );
 
     testWidgets(
+      'hero de 270px deja el selector de salsas y su aviso de elección '
+      'pendiente dentro del viewport visible SIN deslizar, en un producto '
+      'con salsas (mismo viewport 390×844 lógicos que usa `pumpDetail`, '
+      'hallazgo de UX real en dispositivo — ver doc-comment de '
+      '`_ProductDetailBody`)',
+      (tester) async {
+        await pumpDetail(tester, productId: 'i-3');
+
+        // Viewport lógico real (physicalSize / devicePixelRatio) — sin
+        // scrollear nada tras el pump inicial.
+        final logicalHeight =
+            tester.view.physicalSize.height / tester.view.devicePixelRatio;
+
+        final noticeBottom = tester
+            .getBottomRight(
+              find.byKey(const ValueKey('detail-sauce-choice-notice')),
+            )
+            .dy;
+
+        expect(
+          noticeBottom,
+          lessThanOrEqualTo(logicalHeight),
+          reason:
+              'El aviso de elección pendiente debe quedar visible sin '
+              'deslizar en un celular de ~6.1" (viewport de prueba: '
+              '390×844 lógicos)',
+        );
+      },
+    );
+
+    testWidgets(
       'producto con salsas → muestra los chips, ninguno seleccionado '
       'por defecto',
       (tester) async {
@@ -338,19 +369,29 @@ void main() {
     );
 
     testWidgets(
-      'sin elegir ninguna opción, tocar el botón deshabilitado no agrega '
-      'nada al carrito — el producto exige una elección real (salsa o '
-      '"Sin salsas")',
+      'sin elegir ninguna opción, tocar el botón (visualmente gris) '
+      'muestra el SnackBar de aviso y no agrega nada al carrito — el '
+      'producto exige una elección real (salsa o "Sin salsas")',
       (tester) async {
         final (container, _) = await pumpDetail(tester, productId: 'i-3');
 
-        await tester.tap(
-          find.byKey(const ValueKey('detail-add')),
-          warnIfMissed: false,
-        );
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
         await tester.pump();
 
         expect(container.read(cartProvider).items, isEmpty);
+        // El mismo texto aparece dos veces: el aviso inline bajo el
+        // selector (sigue visible, la elección sigue pendiente) y el nuevo
+        // SnackBar de feedback del toque — se busca específicamente dentro
+        // del SnackBar para no depender de cuál de los dos textos matchea.
+        expect(
+          find.descendant(
+            of: find.byType(SnackBar),
+            matching: find.text(
+              'Elegí tus salsas o toca "Sin salsas" para continuar',
+            ),
+          ),
+          findsOneWidget,
+        );
       },
     );
 
@@ -385,15 +426,17 @@ void main() {
     );
 
     testWidgets(
-      'producto con salsas: el botón de agregar arranca deshabilitado y '
-      'muestra el aviso de elección pendiente',
+      'producto con salsas: el botón de agregar arranca visualmente '
+      'deshabilitado (enabled: false) y muestra el aviso de elección '
+      'pendiente — pero sigue recibiendo el toque (onPressed no nulo)',
       (tester) async {
         await pumpDetail(tester, productId: 'i-3');
 
         final button = tester.widget<CeltasButton>(
           find.byKey(const ValueKey('detail-add')),
         );
-        expect(button.onPressed, isNull);
+        expect(button.enabled, isFalse);
+        expect(button.onPressed, isNotNull);
         expect(
           find.byKey(const ValueKey('detail-sauce-choice-notice')),
           findsOneWidget,
@@ -402,7 +445,8 @@ void main() {
     );
 
     testWidgets(
-      'tocar una salsa real habilita el botón y hace desaparecer el aviso',
+      'tocar una salsa real habilita visualmente el botón y hace '
+      'desaparecer el aviso',
       (tester) async {
         await pumpDetail(tester, productId: 'i-3');
 
@@ -412,6 +456,7 @@ void main() {
         final button = tester.widget<CeltasButton>(
           find.byKey(const ValueKey('detail-add')),
         );
+        expect(button.enabled, isTrue);
         expect(button.onPressed, isNotNull);
         expect(
           find.byKey(const ValueKey('detail-sauce-choice-notice')),
@@ -499,6 +544,7 @@ void main() {
         final button = tester.widget<CeltasButton>(
           find.byKey(const ValueKey('detail-add')),
         );
+        expect(button.enabled, isTrue);
         expect(button.onPressed, isNotNull);
         expect(
           find.byKey(const ValueKey('detail-sauce-choice-notice')),
@@ -619,6 +665,7 @@ void main() {
         final button = tester.widget<CeltasButton>(
           find.byKey(const ValueKey('detail-add')),
         );
+        expect(button.enabled, isTrue);
         expect(button.onPressed, isNotNull);
         expect(find.byIcon(Icons.check), findsOneWidget);
         expect(

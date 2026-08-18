@@ -142,6 +142,84 @@ void main() {
     });
   });
 
+  group('CeltasButton — enabled separado de onPressed', () {
+    testWidgets(
+      'enabled: false con onPressed no nulo: se ve gris (textSubtle + '
+      'border) pero el toque SÍ dispara el callback',
+      (tester) async {
+        var tapped = false;
+        await tester.pumpWidget(
+          _wrap(
+            CeltasButton(
+              label: 'AGREGAR',
+              enabled: false,
+              onPressed: () => tapped = true,
+            ),
+          ),
+        );
+
+        final text = tester.widget<Text>(find.text('AGREGAR'));
+        expect(text.style?.color, CeltasColors.textSubtle);
+        final material = tester.widget<Material>(
+          find
+              .descendant(
+                of: find.byType(CeltasButton),
+                matching: find.byType(Material),
+              )
+              .first,
+        );
+        expect(material.color, CeltasColors.border);
+
+        await tester.tap(find.byType(CeltasButton));
+        await tester.pump();
+        expect(tapped, isTrue);
+      },
+    );
+
+    testWidgets(
+      'enabled: true (o sin pasarlo) se comporta igual que hoy: naranja y '
+      'toque dispara el callback',
+      (tester) async {
+        var tapped = false;
+        await tester.pumpWidget(
+          _wrap(
+            CeltasButton(label: 'AGREGAR', onPressed: () => tapped = true),
+          ),
+        );
+
+        final text = tester.widget<Text>(find.text('AGREGAR'));
+        expect(text.style?.color, CeltasColors.black);
+        final material = tester.widget<Material>(
+          find
+              .descendant(
+                of: find.byType(CeltasButton),
+                matching: find.byType(Material),
+              )
+              .first,
+        );
+        expect(material.color, CeltasColors.orange);
+
+        await tester.tap(find.byType(CeltasButton));
+        await tester.pump();
+        expect(tapped, isTrue);
+      },
+    );
+
+    testWidgets(
+      'onPressed: null sigue sin recibir el toque, sin importar enabled',
+      (tester) async {
+        await tester.pumpWidget(
+          _wrap(const CeltasButton(label: 'AGREGAR', onPressed: null)),
+        );
+
+        expect(tester.takeException(), isNull);
+        await tester.tap(find.byType(CeltasButton), warnIfMissed: false);
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+      },
+    );
+  });
+
   // NOTA (riesgo documentado, no un bug): no existe una aserción
   // automatizada de que el texto NO se corte con ellipsis en un ancho de
   // pantalla real (`RenderParagraph.didExceedMaxLines`). Se intentó durante

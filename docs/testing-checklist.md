@@ -50,11 +50,10 @@ solo cuando pasa lo aplicable de este checklist.
         siguiente: el shell se desmonta por completo al redirigir a `/login` (fuera del
         `StatefulShellRoute`), así que `_ShellScaffoldState` se destruye — confirmado con test
         explícito de logout + login de nuevo dentro del mismo árbol de widgets.
-      Riesgo de mantenimiento (no bloqueante): este es ya el 4º lugar del proyecto con el mismo
-      bloque `ScaffoldMessenger..hideCurrentSnackBar()..showSnackBar(SnackBar(...))` duplicado
-      byte a byte (`cart_screen.dart`, `product_detail_screen.dart`, `home_screen.dart`, y ahora
-      `app_router.dart`) — candidato a un helper compartido (`showCeltasSnackBar(context, text)`)
-      cuando se toque de nuevo cualquiera de estos archivos.
+      Riesgo de mantenimiento — **RESUELTO**, ver sección "Refactor: `showCeltasSnackBar`
+      compartido" más abajo (bajo Producto + Carrito): el bloque duplicado en este archivo y en
+      `cart_screen.dart`/`product_detail_screen.dart`/`home_screen.dart` se consolidó en
+      `lib/shared/widgets/celtas_snackbar.dart`.
 
 ## Home / Menú
 
@@ -608,7 +607,225 @@ verificó por lectura de código, camino lineal sin ramas de riesgo. No se marca
 dispositivo real pendiente, fuera del alcance de este encargo puntual) — solo se actualizaron los
 ítems específicos de esta sección de arriba que ya quedaron confirmados por el toolchain real.
 
-## Perfil / Direcciones
+#### Auditoría puntual: hero a 270px + `CeltasButton.enabled` separado de `onPressed`
+
+Alcance: 2 ajustes de UX pedidos tras feedback real de uso en dispositivo (capturas del dueño del
+negocio) sobre `product_detail_screen.dart` y `celtas_button.dart` — no el resto de la sección de
+arriba. Archivos tocados: `lib/shared/widgets/celtas_button.dart`,
+`lib/features/menu/presentation/product_detail_screen.dart`,
+`test/shared/widgets/celtas_button_test.dart`,
+`test/features/menu/presentation/product_detail_screen_test.dart`.
+
+`flutter analyze`: `No issues found!` (salida cruda propia). `flutter test` (suite completa):
+`334: All tests passed!` (salida cruda propia — 333 previos + 1 test nuevo agregado por
+`@tester`, ver abajo). Confirmado por `grep -rn "CeltasButton("  lib/` que hay 13 usos del widget
+en `lib/`, ninguno pasa `enabled` explícitamente — el nuevo default `enabled: true` no cambia el
+comportamiento de ninguno.
+
+**Cambio 1 — `CeltasButton.enabled`:** ahora `looksEnabled = enabled && onPressed != null &&
+!loading` controla SOLO el color/texto (naranja/negro vs. gris/`textSubtle`); `canTap = onPressed
+!= null && !loading` controla SOLO `InkWell.onTap`, sin depender de `enabled`. Verificado con
+MUTACIÓN REAL: revertí `onTap: canTap ? onPressed : null` a `onTap: looksEnabled ? onPressed :
+null` (el comportamiento viejo, donde `enabled: false` también bloqueaba el toque) y corrí
+`celtas_button_test.dart` — falla exactamente el test nuevo (`'enabled: false con onPressed no
+nulo: se ve gris (textSubtle + border) pero el toque SÍ dispara el callback'`), evidencia cruda:
+`Expected: true / Actual: <false>` sobre `tapped` tras el `tester.tap`. Los otros 2 tests del
+grupo nuevo (`enabled: true` sin regresión, `onPressed: null` sigue sin recibir el toque) no se
+ven afectados por esta mutación puntual. Reverti la mutación y confirmé `git diff` idéntico byte
+a byte al estado previo.
+
+**Cambio 2 — botón de agregar/guardar en `product_detail_screen.dart`:** ahora usa `enabled:
+_hasRequiredSauceChoice` + un `onPressed` real (nunca `null`) que muestra un `SnackBar` con el
+mismo texto que `_SauceChoiceNotice` cuando falta elegir salsas, en vez de llamar `_addToCart`.
+Verificado con MUTACIÓN REAL: revertí a `onPressed: _hasRequiredSauceChoice ? _addToCart : null`
+(el patrón viejo, sin el `enabled` separado) y corrí `product_detail_screen_test.dart` — falla
+exactamente el test objetivo (`'sin elegir ninguna opción, tocar el botón (visualmente gris)
+muestra el SnackBar de aviso...'`), evidencia cruda: `Expected: exactly one matching candidate /
+Actual: Found 0 widgets with text "Elegí tus salsas..." descending from widgets with type
+"SnackBar"`. Como efecto colateral esperado (el revert también vuelve a poner `onPressed: null`
+cuando falta elegir), también falla `'producto con salsas: el botón de agregar arranca
+visualmente deshabilitado... pero sigue recibiendo el toque (onPressed no nulo)'`
+(`Expected: false / Actual: <true>` sobre `button.onPressed == null`) — consistente, no un
+hallazgo nuevo. El texto del `SnackBar` es el MISMO que usa `_SauceChoiceNotice`, y el test
+existente (`'sin elegir ninguna opción...'`) ya buscaba el texto específicamente dentro de
+`find.byType(SnackBar)` para no depender de cuál de los 2 matches en pantalla (aviso inline +
+SnackBar) resuelve el finder — confirmado correcto, no un falso positivo. Reverti la mutación y
+confirmé `git diff` idéntico byte a byte al estado previo.
+
+**Cambio 3 — hero de 400px a 270px:** agregué un test nuevo (`'hero de 270px deja el selector de
+salsas y su aviso de elección pendiente dentro del viewport visible SIN deslizar...'`) que arma
+el árbol con el mismo viewport que ya usa `pumpDetail` (390×844 lógicos) sobre `productId: 'i-3'`
+(el único producto con salsas del fixture) y compara `tester.getBottomRight(...).dy` del
+`_SauceChoiceNotice` contra el alto lógico del viewport, sin scrollear. Con el hero real (270px)
+pasa: `noticeBottom≈621.4` (dato de referencia, ver el delta de 130px con la mutación abajo).
+**Verifiqué con MUTACIÓN REAL, tal como pide el protocolo del proyecto, y encontré un resultado
+distinto al esperado**: revertí el hero a 400px y corrí el test — **NO falló**. Evidencia cruda
+(con un `print` temporal, removido antes de dejar el test final):
+`PROBE noticeBottom=751.4 logicalHeight=844.0`. Es decir, con el fixture de prueba actual (`i-3`,
+`price: 12`, **sin `description`**) el aviso ya cabía completo dentro del viewport de 390×844
+lógicos incluso con el hero de 400px, con ~93px de margen de sobra — el test que agregué NO
+distingue entre el estado "con bug" (400px) y el estado "arreglado" (270px) bajo este fixture
+puntual, así que no es una guarda de regresión fuerte para el problema real reportado en
+dispositivo. Posibles explicaciones, no confirmadas: el producto real que motivó el reporte del
+dueño del negocio probablemente SÍ tiene `description` (la mayoría de productos del menú real la
+tienen; el fixture i-3 de este archivo de test es el único con salsas y deliberadamente no tiene
+descripción), lo que agregaría ~56px más de altura (2 líneas × 14px × 1.5 line-height + 14px de
+spacing) y probablemente sí haría fallar el test con 400px; también es posible que el entorno de
+`flutter_test` no simule el `viewPadding` del sistema (status bar/nav bar) que sí consume espacio
+real en un dispositivo físico, aunque analicé el layout (`SafeArea(top: false)` envuelve toda la
+`Column`, así que un inset real del sistema desplazaría el borde inferior del `Container` de la
+barra "AGREGAR AL CARRITO", no la posición del aviso dentro del `SingleChildScrollView`, que se
+calcula igual sin importar el tamaño del `Viewport` visible). Dejé el test en el suite porque sí
+verifica correctamente el estado ACTUAL (con el fix), pero no lo cuento como una mutación
+"confirmada" en el sentido estricto del protocolo — lo documento como hallazgo, no lo oculto.
+Reverti la mutación (`height: 270`) y confirmé `git diff` idéntico byte a byte al estado previo.
+
+`flutter devices` mostró un dispositivo Android real conectado (`24117RN76L`, Android 15,
+API 35) — intenté evaluar una verificación visual real, pero `/product/:id` está detrás de
+`_isProtectedPath` en `app_router.dart` (requiere sesión autenticada contra el backend real de
+producción) y esta auditoría no contaba con credenciales de prueba. Decidí no crear una cuenta
+nueva en el backend de producción solo para esta verificación visual puntual — documentado como
+no verificado en dispositivo real, igual que auditorías anteriores de este mismo archivo cuando
+no había dispositivo disponible en absoluto.
+
+✅ Pasó:
+- `flutter analyze`/`flutter test` limpios (334/334, salida cruda propia).
+- `CeltasButton.enabled` verificado con mutación real: el toque sigue disparando `onPressed`
+  incluso con `enabled: false`, mientras el estilo sigue gris — comportamiento exactamente como
+  lo describe el doc-comment del campo.
+- Default `enabled: true` no rompe ningún uso existente del widget (13 usos en `lib/`, ninguno
+  pasa el parámetro).
+- Botón de `product_detail_screen.dart` verificado con mutación real: el `SnackBar` de aviso
+  aparece al tocar sin elección y `cartProvider` sigue vacío; el texto coincide con
+  `_SauceChoiceNotice`.
+- Botón de volver (`detail-back`, `Positioned(top: 44, ...)`, ícono 38px) sigue dentro de los
+  270px del hero (44+38=82 < 270) — confirmado por lectura de código, no hay solape aritmético
+  posible.
+- 5ª ocurrencia del bloque `ScaffoldMessenger..hideCurrentSnackBar()..showSnackBar(...)` duplicado
+  byte a byte, ahora 2 dentro del mismo `product_detail_screen.dart` (además de
+  `cart_screen.dart`/`home_screen.dart`/`app_router.dart`) — **RESUELTO**, ver sección "Refactor:
+  `showCeltasSnackBar` compartido" más abajo.
+
+❌ Falló:
+- Ninguno de los tests del suite. La mutación del hero (Cambio 3) no reprodujo el "estado con
+  bug" bajo el fixture de prueba actual — ver detalle arriba, no es un fallo de test, es una
+  limitación de cobertura documentada.
+
+⚠️ Riesgos / casos borde no cubiertos, no bloqueantes:
+- **Test de bounds del hero no es una guarda de regresión fuerte** (ver Cambio 3 arriba): no
+  falla si alguien revierte el hero a 400px, porque el único fixture con salsas del archivo
+  (`i-3`) no tiene `description`. Si se retoma este archivo, valdría la pena agregar un segundo
+  producto con salsas Y descripción al fixture compartido (o uno dedicado a este test) para que
+  el test discrimine de verdad entre 270px y 400px.
+- **No verificado en dispositivo/emulador real**: el layout completo con la nueva altura del
+  hero (gradiente, texto superpuesto, que "nada luzca roto") y el comportamiento táctil real del
+  botón gris con feedback — había un dispositivo conectado, pero alcanzar la pantalla requiere
+  login real y esta auditoría no tenía credenciales de prueba disponibles.
+- El resto de riesgos ya documentados en la auditoría de tri-state de arriba (mensaje de
+  WhatsApp con "Sin salsas", flujo visual completo Home→detalle→carrito→checkout→WhatsApp) siguen
+  igual de pendientes, sin relación con este cambio puntual.
+
+**Veredicto de este fix puntual: LISTO.** Los 2 puntos de mutación pedidos explícitamente en el
+encargo (`CeltasButton.enabled` vs. `onPressed`, y el botón de `product_detail_screen.dart`) se
+verificaron con reversión real del código y confirmación de que el test correspondiente falla. El
+3er punto de mutación (hero 400px→270px) se verificó también con reversión real, pero el
+resultado fue que el test NO detecta la regresión bajo el fixture actual — reportado como
+hallazgo honesto, no como éxito. Esto no bloquea el veredicto porque: (1) el ajuste en sí (270px
+< 400px, mismo contenido) es una mejora de margen matemáticamente inequívoca, sin necesidad de un
+test para confirmarla; (2) el test agregado sí verifica correctamente que el estado ACTUAL (con
+el fix) deja el aviso visible sin scroll bajo un viewport realista; (3) no se pidió corregir el
+fixture de prueba como parte de este encargo. No se marca ningún checkbox nuevo de la sección
+"Salsas/cremas" de arriba por esta auditoría puntual (sigue igual de incompleta, sin relación con
+estos 2 ajustes) — se documentó la entrada correspondiente en `ROADMAP.md`.
+
+### Refactor: `showCeltasSnackBar` compartido (limpieza de deuda técnica)
+
+Consolida el bloque `ScaffoldMessenger.of(context)..hideCurrentSnackBar()..showSnackBar(...)`,
+duplicado repetidas veces en `lib/` (ver riesgos de mantenimiento ya flaggeados arriba, en
+Navegación y en esta misma sección), en un helper nuevo:
+`lib/shared/widgets/celtas_snackbar.dart` → `showCeltasSnackBar(context, message,
+{backgroundColor, duration, margin})`.
+
+**6 sitios migrados** (no 5 — ver hallazgo de `@tester` abajo):
+
+| # | Archivo | Mensaje | margin explícito |
+|---|---|---|---|
+| 1 | `home_screen.dart` (`_BannerCard._openExternalUrl`) | "No se pudo abrir el enlace del banner." | no |
+| 2 | `home_screen.dart` (`_AddButton.onTap`, "+" rápido) | "Agregado: ${item.name}" | sí, 88 (`_CartSummaryBar`) |
+| 3 | `product_detail_screen.dart` (`_addToCart`) | "Agregado: X ×N" / "Cambios guardados: X" | sí, 88 |
+| 4 | `product_detail_screen.dart` (botón agregar, elección pendiente) | 'Elegí tus salsas o toca "Sin salsas"...' | no |
+| 5 | `cart_screen.dart` (`ref.listen` de `couponRemovedNotice`) | mensaje variable del cupón quitado | no |
+| 6 | `app_router.dart` (`_handleBackPress`) | "Presiona de nuevo para salir" | no (pasa `duration: _confirmWindow` explícito, ligado a la constante de la ventana de doble-back) |
+
+El sitio 4 (aviso de salsas) **no es una relocalización pura**: es una 4ª ocurrencia del patrón
+agregada en la mejora inmediatamente anterior de este mismo módulo ("tri-state de salsas" /
+`CeltasButton.enabled`, ver más arriba) — ya estaba presente en el árbol de trabajo (sin commitear
+todavía) cuando arrancó este refactor, y por eso cuenta como uno de los sitios "preexistentes" a
+consolidar, aunque no exista en el `HEAD` de git al momento de auditar. Se aclara para que una
+comparación contra `git show HEAD:...` no se lea como que este refactor introdujo comportamiento
+nuevo — no lo hizo, solo relocalizó código ya presente en el working tree.
+
+`margin` default `null` (no un `EdgeInsets` fijo): solo 2 de los 6 sitios (los de "Agregado al
+carrito") necesitan el margen de 88px por `_CartSummaryBar`/`CeltasBottomNav`; el resto dependía
+del cálculo default de `SnackBar`, que se pierde si el helper impone un margen no nulo por
+default.
+
+**Auditoría por `@tester` (dos pasadas):**
+
+*Primera pasada* — encontró 4 problemas reales, todos corregidos antes de este veredicto:
+1. **Bug real en el test nuevo**: `celtas_snackbar_test.dart` armaba su propio `wrap()` con
+   `backgroundColor: backgroundColor ?? CeltasColors.surface` / `duration: duration ?? const
+   Duration(seconds: 2)` — el caso "usa el estilo por default" terminaba pasando esos valores
+   explícitos al helper, así que el test era tautológico para `backgroundColor`/`duration` (nunca
+   ejercitaba el default real de la función). Confirmado con mutación: cambiar el default de
+   `duration` a `Duration(seconds: 9)` y el de `margin` a `EdgeInsets.zero` en
+   `celtas_snackbar.dart` **no hizo fallar ningún test**. Corregido separando `wrapDefault()`
+   (llama a `showCeltasSnackBar(context, message)` sin argumentos opcionales) de `wrapCustom()`
+   (para el caso de overrides) — re-verificado con la misma mutación
+   (`backgroundColor: CeltasColors.gold`, `duration: Duration(seconds: 9)`, `margin:
+   EdgeInsets.zero`): ahora falla exactamente el test "usa el estilo por default"
+   (`Expected: Color(...0.09,0.07,0.06...) Actual: Color(...1.0,0.72,0.0...)`), revertido después
+   y confirmado que vuelve a pasar.
+2. **6º sitio no migrado**: `home_screen.dart` (`_AddButton.onTap`, "+" rápido) tiene el mismo
+   bloque duplicado pero como dos sentencias (`hideCurrentSnackBar()` y `showSnackBar()` por
+   separado, sin la cascada `..`), por eso el `grep "\.\.hideCurrentSnackBar()"` usado para ubicar
+   los sitios no lo encontró. Migrado a `showCeltasSnackBar` (ver sitio 2 de la tabla).
+3. Aclarar que el sitio 4 no es extracción pura — ver párrafo de arriba.
+4. `cart_screen_test.dart` no confirmaba explícitamente que el mensaje de `couponRemovedNotice`
+   vivía dentro de un `SnackBar` (solo `find.text(...)`, sin `find.byType(SnackBar)`) — reforzado
+   con `find.descendant(of: find.byType(SnackBar), matching: find.text(...))`, mismo patrón que
+   ya usa `product_detail_screen_test.dart` para el aviso de salsas.
+
+✅ Confirmado por `@tester` en la primera pasada (sin cambios necesarios):
+- Paridad de comportamiento visible en los 5 sitios originales (mensaje, `backgroundColor`,
+  `duration`, `margin`, `behavior`, estilo de texto) — comparado call site por call site contra
+  el `HEAD` anterior al refactor.
+- `flutter analyze` (`No issues found!`) y `flutter test` (338/338) limpios.
+- Tests preexistentes de los 5 sitios (`cart_screen_test.dart`, `home_screen_test.dart`,
+  `app_router_test.dart`) sin diff — pasan intactos, sin haberse debilitado ninguna aserción.
+
+*Segunda pasada (verificación independiente de los 4 puntos corregidos arriba)* — **LISTO**, los
+4 se confirmaron reales y suficientes:
+1. Repetida la mutación original (`backgroundColor: CeltasColors.gold`, `duration:
+   Duration(seconds: 9)`, `margin: EdgeInsets.zero` en `celtas_snackbar.dart`) de forma
+   independiente: ahora sí falla `usa el estilo por default...` (antes de la corrección no fallaba
+   ningún test). Revertido y confirmado con `diff` contra una copia del archivo tomada antes de
+   mutar que `celtas_snackbar.dart` quedó byte a byte igual al original (no hay diff de git para
+   comparar porque el archivo es nuevo/untracked). El test vuelve a pasar tras revertir.
+2. Confirmado leyendo `home_screen.dart` (`_AddButton.onTap`, líneas ~817-834): usa
+   `showCeltasSnackBar(context, 'Agregado: ${item.name}', margin: const
+   EdgeInsets.fromLTRB(16, 0, 16, 88))` — mismo margen de 88 que ya usaba antes. El test
+   `'el SnackBar de "Agregado" desde el "+" rápido tiene margen para no quedar tapado por la barra
+   flotante del carrito'` (`home_screen_test.dart`) sigue intacto y verifica exactamente ese
+   margen.
+3. La nota sobre el sitio 4 (aviso de salsas) es una aclaración honesta, no un intento de esconder
+   el hallazgo: explica con precisión por qué no aparece en `git show HEAD:...` sin minimizar que
+   sigue siendo uno de los 6 sitios reales consolidados.
+4. Confirmado en `cart_screen_test.dart` (línea ~451): el assert ahora usa `find.descendant(of:
+   find.byType(SnackBar), matching: find.text(...))` en vez de `find.text(...)` suelto.
+
+`flutter analyze` (`No issues found!`) y `flutter test` (338/338) limpios tras revertir la
+mutación.
 
 - [ ] DTO de edición de perfil no permite cambiar campos que el backend no acepta
 - [ ] CRUD de direcciones con verificación de que pertenecen al usuario (aunque esto lo

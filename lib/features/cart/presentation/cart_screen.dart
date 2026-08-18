@@ -8,6 +8,7 @@ import 'package:celtas_mobile/features/coupons/application/coupon_providers.dart
 import 'package:celtas_mobile/features/coupons/data/models/validated_coupon.dart';
 import 'package:celtas_mobile/features/home/application/home_providers.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
+import 'package:celtas_mobile/shared/widgets/celtas_snackbar.dart';
 import 'package:celtas_mobile/shared/widgets/svg_stroke_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -138,21 +139,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     ref.listen<CartState>(cartProvider, (previous, next) {
       final notice = next.couponRemovedNotice;
       if (notice == null) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(
-              notice,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: CeltasColors.cream,
-                  ),
-            ),
-            backgroundColor: CeltasColors.surface,
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 2),
-          ),
-        );
+      showCeltasSnackBar(context, notice);
       ref.read(cartProvider.notifier).dismissCouponNotice();
     });
 
