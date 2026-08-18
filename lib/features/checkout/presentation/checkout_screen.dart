@@ -6,6 +6,7 @@ import 'package:celtas_mobile/features/addresses/presentation/widgets/address_fo
 import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
 import 'package:celtas_mobile/features/checkout/application/checkout_providers.dart';
 import 'package:celtas_mobile/features/orders/application/order_history_providers.dart';
+import 'package:celtas_mobile/features/settings/application/settings_providers.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
 import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
 import 'package:celtas_mobile/shared/widgets/svg_path.dart';
@@ -134,12 +135,23 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             '"Abrir WhatsApp" para enviarlo.';
       });
     } on ApiException catch (e) {
-      if (mounted) {
-        setState(() {
-          _confirming = false;
-          _orderError = e.message;
-        });
+      if (!mounted) return;
+      // 409: el local está cerrado (horario programado o cierre manual
+      // desde el panel), verificado ANTES de tocar la base — no se creó
+      // nada a medias. Es un bloqueo claro ("no puedes pedir ahora"), no un
+      // error corregible como un cupón inválido, así que no se mezcla con
+      // el resto de errores mostrados inline (`_orderError`): un diálogo
+      // bloqueante fuerza que el cliente lo lea, con el carrito intacto
+      // para reintentar más tarde.
+      if (e.statusCode == 409) {
+        setState(() => _confirming = false);
+        await _showClosedDialog(e.message);
+        return;
       }
+      setState(() {
+        _confirming = false;
+        _orderError = e.message;
+      });
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -148,6 +160,36 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         });
       }
     }
+  }
+
+  Future<void> _showClosedDialog(String message) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const ValueKey('checkout-closed-dialog'),
+        backgroundColor: CeltasColors.card,
+        title: Text(
+          'Local cerrado',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: CeltasColors.cream,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        content: Text(
+          message,
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: CeltasColors.textMuted),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            style: TextButton.styleFrom(foregroundColor: CeltasColors.orange),
+            child: const Text('ENTENDIDO'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _retryOpenWhatsapp() async {
@@ -192,6 +234,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Widget build(BuildContext context) {
     final cart = ref.watch(cartProvider);
     final addressesAsync = ref.watch(addressListProvider);
+    final businessHoursAsync = ref.watch(businessHoursProvider);
     final textTheme = Theme.of(context).textTheme;
 
     addressesAsync.whenData((addresses) {
@@ -224,6 +267,20 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(24, 10, 24, 12),
                 children: [
+                  // Aviso preventivo, NO el bloqueo real: solo evita que el
+                  // cliente llene dirección/cupón para nada si ya se sabe de
+                  // antemano que el local está cerrado. El local puede cerrar
+                  // recién mientras el checkout está abierto, así que el 409
+                  // real de `POST /orders` al confirmar sigue siendo la
+                  // única fuente de verdad (`_showClosedDialog`) — este
+                  // aviso no deshabilita el botón de confirmar.
+                  if (businessHoursAsync.valueOrNull?.open == false) ...[
+                    _ClosedNotice(
+                      message: businessHoursAsync.valueOrNull!.message ??
+                          'El local está cerrado en este momento',
+                    ),
+                    const SizedBox(height: 18),
+                  ],
                   Text('DIRECCIÓN DE ENTREGA', style: textTheme.labelSmall),
                   const SizedBox(height: 10),
                   _AddressSection(
@@ -546,6 +603,54 @@ class _AddressCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── Aviso preventivo de local cerrado ─────────────────────────────────────
+
+/// Mismo patrón visual de "notice" que [_MissingAddressNotice] (card +
+/// ícono + texto), en tono `redLight` (no gold) porque a diferencia de "te
+/// falta elegir una dirección" esto no es algo que el cliente pueda corregir
+/// llenando el formulario — es el mismo tono que usa el resto de la app para
+/// estados negativos (ej. `cancelado` en `OrderStatusBadge`). Puramente
+/// informativo: NO deshabilita "CONFIRMAR PEDIDO" — ver doc de uso en
+/// `build()`.
+class _ClosedNotice extends StatelessWidget {
+  const _ClosedNotice({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('checkout-closed-notice'),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: CeltasColors.redLight.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(CeltasRadii.input),
+        border: Border.all(color: CeltasColors.redLight, width: 1.2),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            size: 18,
+            color: CeltasColors.redLight,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: CeltasColors.redLight,
+                fontWeight: FontWeight.w700,
+                fontSize: 12.5,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

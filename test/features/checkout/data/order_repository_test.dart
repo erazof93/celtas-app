@@ -1,3 +1,4 @@
+import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/features/cart/data/models/cart_item.dart';
 import 'package:celtas_mobile/features/checkout/data/order_repository.dart';
 import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
@@ -225,6 +226,101 @@ void main() {
       expect(result.id, 'order-1');
       expect(result.total, 15.5);
       expect(result.whatsappUrl, 'https://wa.me/51999999999');
+    });
+  });
+
+  group('createOrder — 409 local cerrado', () {
+    /// Contrato verificado contra `orders.service.ts` (`create`): el check
+    /// de `isOpenNow()` ocurre ANTES de tocar la base y lanza
+    /// `ConflictException` (409) con el mensaje ya armado en español, listo
+    /// para mostrar tal cual — mismo `message` que arma
+    /// `SettingsService.isOpenNow`, ej. horario programado
+    /// ("El local está cerrado en este momento. Hoy atendemos de 11:00 a
+    /// 23:00") o cierre manual con motivo ("El local está cerrado
+    /// temporalmente: Cerrado por mantenimiento").
+    void mockPost409(String message) {
+      when(
+        () => dio.post<Map<String, dynamic>>(
+          '/orders',
+          data: any(named: 'data'),
+        ),
+      ).thenThrow(
+        DioException(
+          requestOptions: RequestOptions(path: '/orders'),
+          response: Response<Map<String, dynamic>>(
+            requestOptions: RequestOptions(path: '/orders'),
+            statusCode: 409,
+            data: {'success': false, 'message': message, 'statusCode': 409},
+          ),
+          type: DioExceptionType.badResponse,
+        ),
+      );
+    }
+
+    test(
+      'horario programado: conserva el mensaje real del backend y el '
+      'statusCode 409',
+      () async {
+        mockPost409(
+          'El local está cerrado en este momento. Hoy atendemos de 11:00 a '
+          '23:00',
+        );
+
+        Object? caught;
+        try {
+          await repository.createOrder(
+            items: const [
+              CartItem(
+                menuItemId: 'i-1',
+                name: 'Berserker Burger',
+                unitPrice: 15.5,
+                quantity: 1,
+              ),
+            ],
+            addressId: 'addr-1',
+          );
+        } catch (e) {
+          caught = e;
+        }
+
+        expect(caught, isA<ApiException>());
+        final exception = caught as ApiException;
+        expect(
+          exception.message,
+          'El local está cerrado en este momento. Hoy atendemos de 11:00 a '
+          '23:00',
+        );
+        expect(exception.statusCode, 409);
+      },
+    );
+
+    test('cierre manual con motivo: conserva el mensaje real del backend', () async {
+      mockPost409('El local está cerrado temporalmente: Cerrado por mantenimiento');
+
+      Object? caught;
+      try {
+        await repository.createOrder(
+          items: const [
+            CartItem(
+              menuItemId: 'i-1',
+              name: 'Berserker Burger',
+              unitPrice: 15.5,
+              quantity: 1,
+            ),
+          ],
+          addressId: 'addr-1',
+        );
+      } catch (e) {
+        caught = e;
+      }
+
+      expect(caught, isA<ApiException>());
+      final exception = caught as ApiException;
+      expect(
+        exception.message,
+        'El local está cerrado temporalmente: Cerrado por mantenimiento',
+      );
+      expect(exception.statusCode, 409);
     });
   });
 }

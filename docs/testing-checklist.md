@@ -831,6 +831,96 @@ mutación.
 - [ ] CRUD de direcciones con verificación de que pertenecen al usuario (aunque esto lo
       garantiza el backend, confirmar que la UI no intente operar sobre IDs ajenos)
 
+### Bloqueo por local cerrado en el checkout (409 de `POST /orders` + aviso preventivo `GET /settings/business-hours`) — ✅ COMPLETO
+
+Feature cross-repo (backend y `celtas-admin` ya auditados con veredicto LISTO en sus propios
+repos); esta sección cubre solo la pieza de mobile. Contrato verificado contra
+`backend-celtas/src/modules/orders/orders.service.ts` (`create`: el check
+`SettingsService.isOpenNow()` ocurre ANTES de tocar la base, así que un 409 nunca deja nada a
+medias) y `backend-celtas/src/modules/settings/settings.controller.ts`/`settings.service.ts`
+(`GET /settings/business-hours` → `{ open, message, schedule, manualClosed }`, `message: string
+| null`, `null` solo cuando `open: true`).
+
+`git diff` confirmado real (no solo el resumen del encargo): `lib/core/network/api_client.dart`
+y `lib/features/checkout/data/order_repository.dart` **sin diff** (`ApiException.statusCode` ya
+existía, extraído de `error.response?.statusCode` en `apiExceptionFromDio`, y
+`order_repository.dart` ya envolvía su único `catch` con esa función — no hizo falta tocar
+ninguno de los dos). Cambios reales: `checkout_screen.dart` (`_showClosedDialog`,
+`_ClosedNotice`, rama `if (e.statusCode == 409)` en `_confirmOrder`) + feature nueva
+`lib/features/settings/` (`BusinessHours` freezed, `SettingsRepository`,
+`businessHoursProvider`).
+
+`flutter analyze`: `No issues found!` (salida cruda propia). `flutter test` (suite completa):
+`349: All tests passed!` (salida cruda propia; 348 previos + 1 nuevo agregado por esta
+auditoría, ver hallazgo de riesgo cubierto más abajo).
+
+✅ Pasó:
+- **Mutación real, verificada de forma independiente**: `if (e.statusCode == 409)` →
+  `if (false && e.statusCode == 409)` en `checkout_screen.dart` hace fallar exactamente el test
+  del diálogo (`Expected: exactly one matching candidate / Actual: Found 0 widgets with key
+  [checkout-closed-dialog]`), el resto de la suite sigue intacta; reverté y confirmé `git diff`
+  vacío + el test vuelve a pasar.
+- **409 vs. resto de errores de `POST /orders` sin regresión**: el test `'producto no disponible
+  → mensaje real del backend, no navega'` sigue usando `ApiException(..., statusCode: 400)` y
+  pasa sin cambios — confirma que el 400 (producto no disponible, y por el mismo mecanismo
+  cualquier otro código que no sea 409, ej. cupón inválido) sigue mostrándose inline vía
+  `_orderError`, sin colisionar con el diálogo nuevo.
+- **Carrito intacto tras el 409**: `container.read(cartProvider).items` se verifica `isNotEmpty`
+  tanto justo después del diálogo como después de cerrarlo con "ENTENDIDO"; no navega a Home
+  (`find.text('HOME')` → `findsNothing`) en ningún momento del flujo — coherente con que el 409
+  ocurre ANTES de tocar la base en el backend, así que no hay pedido creado que limpiar.
+- **Contrato de `ApiException`/`apiExceptionFromDio` verificado línea por línea**: extrae
+  `data['message']` del body de error (`{success: false, message, statusCode}`, confirmado contra
+  `HttpExceptionFilter` real del backend) y preserva `error.response?.statusCode` — el mock de
+  409 en `order_repository_test.dart` ejercita exactamente ese camino.
+- **`BusinessHours.message` nullable es real, no defensivo**: confirmado en
+  `settings.service.ts` (`evaluateSchedule`/`isOpenNow`) que `message: null` ocurre únicamente en
+  la rama `open: true`; el modelo Dart (`String? message`) refleja eso con precisión.
+- **Fidelidad de patrón del aviso preventivo**: `_ClosedNotice` es un espejo estructural exacto
+  de `_MissingAddressNotice` ya auditado (mismo padding, `CeltasRadii.input`, ancho de borde 1.2,
+  tamaño de ícono 18, `fontWeight.w700`/`fontSize: 12.5`, `withValues(alpha: 0.12)`), solo cambia
+  el token de color (`redLight` en vez de `gold`) — y `redLight` es el mismo tono ya usado en
+  todo el resto de la app para estados negativos (`OrderStatusBadge` de `cancelado`,
+  `CouponStatus.expired`), consistente con el criterio de "no es algo que el cliente pueda
+  corregir llenando el formulario" documentado en el propio comentario del widget.
+- **Aviso preventivo no bloquea el flujo real**: verificado por lectura de código que
+  `businessHoursAsync` solo se consulta con `.valueOrNull?.open == false` para decidir si se
+  muestra el banner — nunca se usa para deshabilitar `onPressed` del botón de confirmar. El 409
+  real de `POST /orders` sigue siendo la única fuente de verdad del bloqueo, correcto dado que el
+  local puede cerrar recién mientras el checkout ya está abierto.
+- **Riesgo señalado en el encargo, cubierto con test nuevo agregado por esta auditoría**: qué
+  pasa si `businessHoursProvider` está en loading o falla al entrar al checkout — confirmado por
+  lectura que la pantalla solo lee `.valueOrNull` (nunca `.value`/`.requireValue`, que sí
+  lanzarían en estado de error), así que loading y error se comportan igual: sin aviso, sin
+  crash, sin filtrar ningún mensaje de error a la UI del checkout. Se agregó el test `'GET
+  /settings/business-hours falla (ej. backend dormido) → sin aviso, sin crash, checkout sigue
+  usable'` en `checkout_screen_test.dart` (mock que lanza `ApiException`), confirmado en verde
+  junto con el resto de la suite (349/349).
+
+❌ Falló:
+- Ninguno funcional.
+
+⚠️ Riesgos / hallazgos menores no bloqueantes (los 2 primeros, corregidos tras esta auditoría):
+- ~~Inconsistencia de color en `_showClosedDialog`~~ — **corregido**: `backgroundColor` pasó de
+  `CeltasColors.surface` a `CeltasColors.card`, igual que los otros 3 `AlertDialog` de la app
+  (`profile_screen.dart`, `cart_screen.dart`, `addresses_screen.dart`). `flutter analyze`/
+  `flutter test` (349/349) vueltos a correr después del cambio, limpios.
+- ~~Shape del mock de 409 no calcado del contrato real~~ — **corregido**: el mock en
+  `order_repository_test.dart` pasó de `{'message', 'statusCode', 'error': 'Conflict'}` a
+  `{'success': false, 'message', 'statusCode'}`, igual al body real de `HttpExceptionFilter`.
+- No se pudo verificar el 409 real end-to-end contra el backend de producción en esta auditoría
+  (mismo límite ya declarado en el encargo: no hay credenciales de admin para activar el cierre
+  manual desde `celtas-admin` en esta sesión) — la cobertura de esta pieza depende enteramente de
+  mocks bien alineados al contrato leído del código fuente real, no de una prueba en vivo del
+  código de error 409 específico.
+- No hay verificación en dispositivo/emulador Android real de esta feature (mismo patrón de deuda
+  pendiente que otras secciones de este documento) — solo widget tests.
+
+**Veredicto: LISTO.** Los 2 hallazgos menores señalados por `@tester` (inconsistencia de color,
+shape de mock no 100% calcado) se corrigieron de inmediato tras la auditoría — quedan solo los 2
+riesgos de verificación en vivo (backend real con 409, dispositivo Android), ya documentados como
+no bloqueantes en el encargo original.
+
 ## Pedidos / Cupones
 
 - [x] Badges de estado de pedido visualmente distinguibles entre sí (los 5 estados)

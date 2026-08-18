@@ -751,6 +751,36 @@ celtas-mobile/
       Windows/Chrome/Edge, sin dispositivo conectado) — queda pendiente confirmar visualmente el
       color/contraste del aviso gold y el estado gris del botón en pantalla física antes de dar
       por cerrado el 100% de la verificación. Veredicto: **LISTO CON OBSERVACIONES**.
+- [x] **Mejora post-cierre: bloqueo por local cerrado (feature cross-repo, backend y
+      `celtas-admin` ya cerrados en sus propios repos).** `POST /orders` ahora puede devolver 409
+      (`ConflictException`, chequeado ANTES de tocar la base) cuando el local está cerrado
+      (horario programado o cierre manual con motivo desde el panel); `checkout_screen.dart`
+      distingue ese caso en `_confirmOrder` (`e.statusCode == 409`) mostrando un `AlertDialog`
+      bloqueante (`_showClosedDialog`) con el mensaje real del backend, en vez del texto inline
+      (`_orderError`) que sigue usando el resto de errores (ej. producto no disponible, cupón
+      inválido) sin cambios. `lib/core/network/api_client.dart` y
+      `lib/features/checkout/data/order_repository.dart` no necesitaron tocarse
+      (`ApiException.statusCode` y el `catch` con `apiExceptionFromDio` ya existían). Feature
+      nueva `lib/features/settings/` (`BusinessHours` freezed, `SettingsRepository`,
+      `businessHoursProvider` = `FutureProvider`) consume `GET /settings/business-hours`
+      (público) para un aviso preventivo (`_ClosedNotice`, mismo patrón visual que
+      `_MissingAddressNotice` pero tono `redLight`) que NO deshabilita el botón de confirmar — el
+      409 real al confirmar sigue siendo la única fuente de verdad, porque el local puede cerrar
+      recién mientras el checkout está abierto. Auditado por `@tester`: `flutter analyze` limpio
+      (`No issues found!`), 349/349 tests (`flutter test` completo, incluye 1 test nuevo agregado
+      por la auditoría para el caso "`businessHoursProvider` falla al entrar al checkout" — sin
+      aviso, sin crash, el 409 real sigue siendo el único bloqueo). Mutación real repetida de
+      forma independiente sobre `if (e.statusCode == 409)`: el test del diálogo falla exactamente
+      como se esperaba, revertido y confirmado en verde de nuevo. 2 hallazgos menores señalados
+      por la auditoría, corregidos de inmediato después (`flutter analyze`/`flutter test`
+      349/349 vueltos a correr limpios): `_showClosedDialog` usaba `CeltasColors.surface` en vez
+      de `CeltasColors.card` (el color que usan de forma consistente los otros 3 `AlertDialog` ya
+      existentes en la app — logout, vaciar carrito, eliminar dirección), y el mock de 409 en
+      `order_repository_test.dart` no calcaba el shape real del error del backend
+      (`{success, message, statusCode}` vs. un `error: 'Conflict'` inventado que el backend nunca
+      manda). No se pudo probar el 409 real end-to-end contra producción (sin credenciales de
+      admin en esta sesión, mismo límite ya declarado en el encargo) ni en dispositivo Android
+      real. Veredicto: **LISTO**.
 
 ### 6. Perfil + Direcciones — ✅ COMPLETO
 - [x] Ver/editar perfil (`GET`/`PATCH /users/me`)

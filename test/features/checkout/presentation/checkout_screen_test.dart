@@ -13,6 +13,9 @@ import 'package:celtas_mobile/features/coupons/data/models/validated_coupon.dart
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
 import 'package:celtas_mobile/features/orders/application/order_history_providers.dart';
 import 'package:celtas_mobile/features/orders/data/order_history_repository.dart';
+import 'package:celtas_mobile/features/settings/application/settings_providers.dart';
+import 'package:celtas_mobile/features/settings/data/models/business_hours.dart';
+import 'package:celtas_mobile/features/settings/data/settings_repository.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show PlatformException;
@@ -31,6 +34,8 @@ class MockOrderRepository extends Mock implements OrderRepository {}
 
 class MockOrderHistoryRepository extends Mock
     implements OrderHistoryRepository {}
+
+class MockSettingsRepository extends Mock implements SettingsRepository {}
 
 /// Fake del canal de plataforma de `url_launcher` — sin esto, `launchUrl`
 /// lanza `MissingPluginException` en widget tests (no hay un dispositivo real
@@ -106,6 +111,7 @@ void main() {
     required MockAddressRepository addressRepository,
     required MockOrderRepository orderRepository,
     MockOrderHistoryRepository? orderHistoryRepository,
+    MockSettingsRepository? settingsRepository,
     List<PublicMenuItem> items = const [],
     ValidatedCoupon? coupon,
   }) async {
@@ -113,11 +119,20 @@ void main() {
     if (orderHistoryRepository == null) {
       when(() => historyRepo.getMyOrders()).thenAnswer((_) async => []);
     }
+    final settingsRepo = settingsRepository ?? MockSettingsRepository();
+    if (settingsRepository == null) {
+      // Default: local abierto — la mayoría de los tests de este archivo no
+      // se ocupan del aviso preventivo, así que no debe aparecer sin pedirlo.
+      when(() => settingsRepo.getBusinessHours()).thenAnswer(
+        (_) async => const BusinessHours(open: true, message: null),
+      );
+    }
     final container = ProviderContainer(
       overrides: [
         addressRepositoryProvider.overrideWithValue(addressRepository),
         orderRepositoryProvider.overrideWithValue(orderRepository),
         orderHistoryRepositoryProvider.overrideWithValue(historyRepo),
+        settingsRepositoryProvider.overrideWithValue(settingsRepo),
       ],
     );
     addTearDown(container.dispose);
@@ -612,6 +627,209 @@ void main() {
         findsNothing,
       );
       button = tester.widget<CeltasButton>(
+        find.byKey(const ValueKey('checkout-confirm')),
+      );
+      expect(button.onPressed, isNotNull);
+    });
+  });
+
+  group('bloqueo por local cerrado (409 de POST /orders)', () {
+    testWidgets(
+        'confirmar con el local cerrado → diálogo bloqueante con el mensaje '
+        'real del backend, carrito intacto, sigue en checkout tras cerrarlo',
+        (tester) async {
+      final addressRepo = MockAddressRepository();
+      when(() => addressRepo.getAddresses())
+          .thenAnswer((_) async => [home]);
+
+      final orderRepo = MockOrderRepository();
+      when(() => orderRepo.createOrder(
+            items: any(named: 'items'),
+            addressId: any(named: 'addressId'),
+            couponCode: any(named: 'couponCode'),
+          )).thenThrow(
+        const ApiException(
+          'El local está cerrado en este momento. Hoy atendemos de 11:00 a '
+          '23:00',
+          statusCode: 409,
+        ),
+      );
+
+      final container = await pumpCheckout(
+        tester,
+        addressRepository: addressRepo,
+        orderRepository: orderRepo,
+        items: [burger],
+      );
+
+      await tester.tap(find.byKey(const ValueKey('checkout-confirm')));
+      await tester.pumpAndSettle();
+
+      // Diálogo bloqueante, no el texto inline que usan otros errores (ej.
+      // producto no disponible) — regresión: si esto vuelve a mostrarse como
+      // el resto de errores genéricos (`_orderError`), el diálogo no aparece.
+      expect(
+        find.byKey(const ValueKey('checkout-closed-dialog')),
+        findsOneWidget,
+      );
+      expect(find.text('Local cerrado'), findsOneWidget);
+      expect(
+        find.text(
+          'El local está cerrado en este momento. Hoy atendemos de 11:00 a '
+          '23:00',
+        ),
+        findsOneWidget,
+      );
+      // El pedido no se creó (409, antes de tocar la base): el carrito se
+      // conserva intacto, sin navegar a ninguna pantalla de éxito.
+      expect(container.read(cartProvider).items, isNotEmpty);
+      expect(find.text('HOME'), findsNothing);
+
+      // "ENTENDIDO" solo cierra el diálogo — el cliente se queda en el
+      // checkout con su carrito, puede reintentar más tarde.
+      await tester.tap(find.text('ENTENDIDO'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('checkout-closed-dialog')),
+        findsNothing,
+      );
+      expect(find.text('HOME'), findsNothing);
+      expect(find.byKey(const ValueKey('checkout-confirm')), findsOneWidget);
+      expect(container.read(cartProvider).items, isNotEmpty);
+    });
+
+    testWidgets(
+        'cierre manual con motivo → el diálogo muestra ese mensaje tal cual',
+        (tester) async {
+      final addressRepo = MockAddressRepository();
+      when(() => addressRepo.getAddresses())
+          .thenAnswer((_) async => [home]);
+
+      final orderRepo = MockOrderRepository();
+      when(() => orderRepo.createOrder(
+            items: any(named: 'items'),
+            addressId: any(named: 'addressId'),
+            couponCode: any(named: 'couponCode'),
+          )).thenThrow(
+        const ApiException(
+          'El local está cerrado temporalmente: Cerrado por mantenimiento',
+          statusCode: 409,
+        ),
+      );
+
+      await pumpCheckout(
+        tester,
+        addressRepository: addressRepo,
+        orderRepository: orderRepo,
+        items: [burger],
+      );
+
+      await tester.tap(find.byKey(const ValueKey('checkout-confirm')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'El local está cerrado temporalmente: Cerrado por mantenimiento',
+        ),
+        findsOneWidget,
+      );
+    });
+  });
+
+  group('aviso preventivo de local cerrado (GET /settings/business-hours)', () {
+    testWidgets(
+        'open: false al entrar al checkout → aviso visible de inmediato, '
+        'sin deshabilitar el botón de confirmar',
+        (tester) async {
+      final addressRepo = MockAddressRepository();
+      when(() => addressRepo.getAddresses())
+          .thenAnswer((_) async => [home]);
+
+      final settingsRepo = MockSettingsRepository();
+      when(() => settingsRepo.getBusinessHours()).thenAnswer(
+        (_) async => const BusinessHours(
+          open: false,
+          message: 'Hoy no atendemos',
+        ),
+      );
+
+      await pumpCheckout(
+        tester,
+        addressRepository: addressRepo,
+        orderRepository: MockOrderRepository(),
+        settingsRepository: settingsRepo,
+        items: [burger],
+      );
+
+      expect(
+        find.byKey(const ValueKey('checkout-closed-notice')),
+        findsOneWidget,
+      );
+      expect(find.text('Hoy no atendemos'), findsOneWidget);
+      // Puramente informativo: el bloqueo real es el 409 al confirmar, no
+      // este aviso — el botón sigue habilitado (hay dirección seleccionada).
+      final button = tester.widget<CeltasButton>(
+        find.byKey(const ValueKey('checkout-confirm')),
+      );
+      expect(button.onPressed, isNotNull);
+    });
+
+    testWidgets('open: true → sin aviso', (tester) async {
+      final addressRepo = MockAddressRepository();
+      when(() => addressRepo.getAddresses())
+          .thenAnswer((_) async => [home]);
+
+      await pumpCheckout(
+        tester,
+        addressRepository: addressRepo,
+        orderRepository: MockOrderRepository(),
+        items: [burger],
+      );
+
+      expect(
+        find.byKey(const ValueKey('checkout-closed-notice')),
+        findsNothing,
+      );
+    });
+
+    testWidgets(
+        'GET /settings/business-hours falla (ej. backend dormido) → sin '
+        'aviso, sin crash, checkout sigue usable',
+        (tester) async {
+      // `businessHoursProvider` es puramente informativo — si falla, el
+      // checkout no debe bloquearse ni mostrar ningún error de esto: la
+      // pantalla solo lee `.valueOrNull`, que es `null` en estado de error,
+      // así que el `if (businessHoursAsync.valueOrNull?.open == false)` no
+      // se cumple y simplemente no hay aviso. El 409 real de `POST /orders`
+      // sigue siendo la única fuente de verdad del bloqueo.
+      final addressRepo = MockAddressRepository();
+      when(() => addressRepo.getAddresses())
+          .thenAnswer((_) async => [home]);
+
+      final settingsRepo = MockSettingsRepository();
+      when(() => settingsRepo.getBusinessHours())
+          .thenThrow(const ApiException('No se pudo conectar con el servidor'));
+
+      await pumpCheckout(
+        tester,
+        addressRepository: addressRepo,
+        orderRepository: MockOrderRepository(),
+        settingsRepository: settingsRepo,
+        items: [burger],
+      );
+
+      expect(
+        find.byKey(const ValueKey('checkout-closed-notice')),
+        findsNothing,
+      );
+      // No se filtra ningún mensaje de error de esto a la UI del checkout.
+      expect(
+        find.text('No se pudo conectar con el servidor'),
+        findsNothing,
+      );
+      // El resto de la pantalla sigue funcionando con normalidad.
+      final button = tester.widget<CeltasButton>(
         find.byKey(const ValueKey('checkout-confirm')),
       );
       expect(button.onPressed, isNotNull);
