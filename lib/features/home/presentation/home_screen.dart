@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
@@ -6,6 +8,9 @@ import 'package:celtas_mobile/features/home/data/models/banner.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_category.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
 import 'package:celtas_mobile/features/notifications/application/notification_providers.dart';
+import 'package:celtas_mobile/features/settings/application/settings_providers.dart';
+import 'package:celtas_mobile/features/settings/data/models/business_hours.dart';
+import 'package:celtas_mobile/shared/widgets/business_closed_notice.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_snackbar.dart';
 import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
@@ -55,13 +60,133 @@ import 'package:url_launcher/url_launcher.dart';
 ///   - Error: mensaje + botón de reintento.
 ///   - Vacío: sin banners activos → se oculta el carrusel (no es error); sin
 ///     categorías → mensaje de menú vacío.
-class HomeScreen extends ConsumerWidget {
+///
+/// Mejora post-cierre: cartel de "local cerrado" (`businessHoursProvider`,
+/// `lib/features/settings/` — mismo provider global, sin `.autoDispose`, que
+/// ya usa el checkout para su propio aviso; reutilizado tal cual, sin
+/// duplicar la consulta a `GET /settings/business-hours`). Puramente
+/// informativo: el cliente sigue pudiendo navegar el menú y armar su
+/// carrito con el cartel visible — el único bloqueo real sigue siendo el
+/// 409 del checkout.
+///
+/// Se refresca de forma **event-driven, no por polling** (decisión de
+/// arquitectura explícita — reducir carga sobre un backend en Render free
+/// con muchos usuarios concurrentes): el backend devuelve `nextChangeAt`
+/// (ver [BusinessHours]), el instante exacto en que `open` va a cambiar, y
+/// esta pantalla programa un ÚNICO `Timer` (no periódico) para ese momento.
+/// Al dispararse, vuelve a consultar el endpoint — lo que a su vez entrega
+/// un `nextChangeAt` nuevo y se reprograma solo, autoperpetuándose sin
+/// nunca "adivinar" un intervalo. Sin `nextChangeAt` (cierre manual, o el
+/// horario configurado nunca abre) no se programa ningún timer — ver
+/// `_HomeScreenState._onBusinessHoursChanged`. También se refresca de
+/// inmediato al volver de segundo plano (`didChangeAppLifecycleState`), por
+/// si el estado cambió mientras la app no estaba en foreground.
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with WidgetsBindingObserver {
+  /// Margen defensivo sobre `nextChangeAt` para no dispararse un instante
+  /// antes por un pequeño desfase entre el reloj del backend y el del
+  /// dispositivo — el timer dispara un puñado de segundos DESPUÉS del
+  /// instante exacto, nunca antes.
+  static const _clockDriftMargin = Duration(seconds: 5);
+
+  Timer? _nextChangeTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // `fireImmediately: true`: si el provider ya tiene un valor cacheado al
+    // montar esta pantalla (ej. el cliente ya pasó por el checkout antes),
+    // programa el timer de una vez con ese valor — no hace falta esperar a
+    // un cambio futuro para la primera programación.
+    ref.listenManual<AsyncValue<BusinessHours>>(
+      businessHoursProvider,
+      (previous, next) => _onBusinessHoursChanged(next),
+      fireImmediately: true,
+    );
+  }
+
+  /// Única fuente de la lógica de re-programación: cada vez que llega un
+  /// valor REALMENTE nuevo del provider (fetch inicial resuelto, el propio
+  /// timer disparándose, o el refresco forzado al volver de segundo plano),
+  /// reprograma el timer contra el `nextChangeAt` recibido. Nunca deja dos
+  /// timers corriendo a la vez — cancela cualquier timer previo antes de
+  /// programar el nuevo.
+  ///
+  /// Exige `next is AsyncData<BusinessHours> && !next.isLoading` a
+  /// propósito, NUNCA `next.valueOrNull` a secas ni solo el tipo: mientras
+  /// un `invalidate()` está en vuelo, Riverpod 2.x modela el estado como
+  /// `AsyncData(isLoading: true, value: <valor ANTERIOR>)` — sigue siendo
+  /// `AsyncData` (no un `AsyncLoading` aparte), pero con el dato VIEJO, para
+  /// no parpadear la UI. Reaccionar a eso reprograma un timer contra un
+  /// `nextChangeAt` ya vencido, que dispara casi de inmediato y genera un
+  /// `invalidate()` fantasma mientras el fetch real todavía está en vuelo
+  /// (bug real encontrado con un test que simula la carrera entre el timer
+  /// viejo y un refetch lento — sin el `!next.isLoading`, el test lo
+  /// reproducía de forma consistente).
+  void _onBusinessHoursChanged(AsyncValue<BusinessHours> next) {
+    // `next is AsyncData` NO alcanza por sí solo: mientras un `invalidate()`
+    // está en vuelo, Riverpod 2.x lo modela como `AsyncData(isLoading: true,
+    // value: <valor ANTERIOR>)` (no un `AsyncLoading` aparte) — sigue siendo
+    // `AsyncData`, pero con el dato viejo, para no parpadear la UI. Hace
+    // falta el `!next.isLoading` explícito para exigir un valor realmente
+    // asentado.
+    if (next is! AsyncData<BusinessHours> || next.isLoading) return;
+    _scheduleNextChangeTimer(next.value.nextChangeAt);
+  }
+
+  void _scheduleNextChangeTimer(DateTime? nextChangeAt) {
+    _nextChangeTimer?.cancel();
+    _nextChangeTimer = null;
+    // `null`: cierre manual (impredecible, puede levantarse en cualquier
+    // momento) o el horario configurado nunca abre — decisión de producto
+    // ya tomada: no programar nada, el cartel se actualiza solo con el
+    // próximo refresco natural (volver de segundo plano, o reabrir la app).
+    if (nextChangeAt == null) return;
+    final rawDelay = nextChangeAt.difference(DateTime.now());
+    final delay = rawDelay.isNegative
+        ? Duration.zero
+        : rawDelay + _clockDriftMargin;
+    _nextChangeTimer = Timer(delay, () {
+      // El nuevo valor llega vía `ref.listenManual` de arriba, que ya se
+      // encarga de reprogramar con el `nextChangeAt` siguiente — acá solo
+      // hace falta disparar el refetch.
+      ref.invalidate(businessHoursProvider);
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // La app pudo pasar minutos/horas en segundo plano — no confiar en que
+    // el timer programado (si lo había) siga siendo válido: cancelarlo y
+    // reconsultar desde cero cubre también el caso del cierre manual (que
+    // nunca tiene timer propio, ver `_scheduleNextChangeTimer`).
+    if (state == AppLifecycleState.resumed) {
+      _nextChangeTimer?.cancel();
+      _nextChangeTimer = null;
+      ref.invalidate(businessHoursProvider);
+    }
+  }
+
+  @override
+  void dispose() {
+    _nextChangeTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final bannersAsync = ref.watch(activeBannersProvider);
     final menuAsync = ref.watch(publicMenuProvider);
+    final businessHours = ref.watch(businessHoursProvider).valueOrNull;
     final (cartCount, cartTotal) = ref.watch(
       cartProvider.select((state) => (state.totalCount, state.total)),
     );
@@ -74,6 +199,26 @@ class HomeScreen extends ConsumerWidget {
             Column(
               children: [
                 const _HomeHeader(),
+                // Cartel FIJO (no scrollea con el menú), debajo del header y
+                // antes del contenido — a diferencia del aviso del checkout
+                // (que sí vive dentro de la lista scrolleable), acá se pidió
+                // explícitamente que se mantenga siempre visible mientras el
+                // local esté cerrado. Desaparece solo en el próximo refresco
+                // en que `open` vuelva a `true` (ver doc de la clase).
+                if (businessHours?.open == false)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      CeltasSpacing.page,
+                      0,
+                      CeltasSpacing.page,
+                      12,
+                    ),
+                    child: BusinessClosedNotice(
+                      key: const ValueKey('home-closed-notice'),
+                      message: businessHours!.message ??
+                          'El local está cerrado en este momento',
+                    ),
+                  ),
                 Expanded(
                   child: RefreshIndicator(
                     color: CeltasColors.orange,

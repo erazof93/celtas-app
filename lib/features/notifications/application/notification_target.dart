@@ -18,6 +18,9 @@ sealed class NotificationTarget {
     if (data.containsKey('couponCode')) {
       return const CouponNotificationTarget();
     }
+    if (data.containsKey('businessHoursChanged')) {
+      return const BusinessHoursNotificationTarget();
+    }
     return const NoneNotificationTarget();
   }
 }
@@ -39,6 +42,16 @@ class OrderNotificationTarget extends NotificationTarget {
 /// Cupón nuevo (manual o automático): `{ couponCode }`.
 class CouponNotificationTarget extends NotificationTarget {
   const CouponNotificationTarget();
+}
+
+/// Cambió el horario de atención (el admin activó/desactivó el cierre
+/// manual): `{ businessHoursChanged: 'true' }`. Sin más contenido — es solo
+/// un aviso de "algo cambió", nunca la fuente del estado real: el título y
+/// cuerpo de la notificación NO deben tratarse como el estado verdadero,
+/// siempre hay que reconsultar `GET /settings/business-hours`
+/// (`businessHoursProvider`) para saber si el local está abierto ahora.
+class BusinessHoursNotificationTarget extends NotificationTarget {
+  const BusinessHoursNotificationTarget();
 }
 
 /// Payload sin llaves reconocidas — no se invalida ni navega a nada.

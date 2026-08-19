@@ -194,6 +194,122 @@ solo cuando pasa lo aplicable de este checklist.
       construcción (mismo `cartProvider.select` que la muestra), así que el riesgo es bajo, pero
       no está confirmado con un test explícito.
 
+### Cartel de "local cerrado" en el Home, event-driven vía `nextChangeAt` (reemplaza un intento previo con `Timer.periodic`, nunca comiteado) — ✅ COMPLETO
+
+Última pieza de la feature cross-repo "horario de atención" (backend y `celtas-admin` ya
+cerrados en sus propios repos, con el bloqueo real del checkout — 409 de `POST /orders` — y su
+aviso preventivo ya auditados en la sección "Bloqueo por local cerrado en el checkout" de más
+abajo, sin cambios ahí salvo extraer el widget visual a uno compartido). Contrato nuevo
+verificado contra el código fuente real del backend, no asumido: `backend-celtas/src/modules/
+settings/settings.controller.ts` (`businessHours()`) y `settings.service.ts`
+(`getNextChangeAt()`) — `GET /settings/business-hours` ahora también devuelve `nextChangeAt`
+(ISO 8601 UTC o `null`), el instante exacto en que `open` va a cambiar, calculado a partir del
+horario programado en hora de Lima; `null` cuando el cierre manual está activo (impredecible) o
+el horario configurado nunca abre (los 7 días `closed`). Confirmado en vivo contra el backend de
+producción (`curl https://backend-celtas.onrender.com/settings/business-hours`, local realmente
+cerrado en el momento de la verificación): `nextChangeAt` presente con el local cerrado.
+
+Mecanismo **event-driven, no polling** (decisión de arquitectura explícita para reducir carga
+sobre Render free con muchos usuarios concurrentes) en `home_screen.dart`
+(`_HomeScreenState`, `HomeScreen` pasó de `ConsumerWidget` a `ConsumerStatefulWidget` con
+`WidgetsBindingObserver`): `ref.listenManual(businessHoursProvider, ..., fireImmediately: true)`
+programa un único `Timer` (nunca periódico) contra `nextChangeAt` + un margen de deriva de reloj
+de 5s; al disparar, solo hace `ref.invalidate(businessHoursProvider)` — el propio `listenManual`
+reprograma con el `nextChangeAt` nuevo que llegue, autoperpetuándose. `nextChangeAt: null` → no
+se programa nada. `AppLifecycleState.resumed` cancela cualquier timer pendiente y reconsulta de
+inmediato. `businessHoursProvider` (`FutureProvider`, sin `.autoDispose`) no se tocó — ya era
+observable por igual desde `home_screen.dart` que desde `checkout_screen.dart` sin ajustes. El
+cartel (`BusinessClosedNotice`, extraído de `_ClosedNotice` del checkout a
+`shared/widgets/business_closed_notice.dart`, mismo bloque visual sin cambio, reutilizado por
+ambas pantallas) es puramente informativo — NO deshabilita nada, el cliente sigue pudiendo
+navegar y agregar productos al carrito con el local cerrado.
+
+**Bug real encontrado y corregido durante el desarrollo de esta misma sesión** (no se omite ni
+se suaviza): la primera versión de `_onBusinessHoursChanged` decidía si reprogramar el timer con
+`next.valueOrNull` (o incluso `next is AsyncData<BusinessHours>` a secas). Riverpod 2.x, mientras
+un `invalidate()` está en vuelo, entrega `AsyncData(isLoading: true, value: <valor ANTERIOR>)` —
+sigue siendo `AsyncData` (no un `AsyncLoading` aparte, para no parpadear la UI), pero con datos
+VIEJOS. Reaccionar a eso reprogramaba un timer contra un `nextChangeAt` YA VENCIDO, que disparaba
+casi de inmediato y generaba un `invalidate()` fantasma mientras el fetch real todavía estaba en
+vuelo — una carrera real entre el timer viejo y el refetch de `resumed`. El chequeo correcto,
+verificado con un test que reproduce la carrera exacta, es
+`if (next is! AsyncData<BusinessHours> || next.isLoading) return;` en
+`lib/features/home/presentation/home_screen.dart` — exige un valor `AsyncData` genuinamente
+asentado, nunca en medio de un refresco.
+
+`flutter analyze` (salida cruda propia): `No issues found!`. `flutter test` (suite completa,
+salida cruda propia): `359: All tests passed!`.
+
+✅ Pasó:
+- **Diff real revisado completo** (`git diff`), no solo el resumen del encargo — coincide con lo
+  descrito: `home_screen.dart` (`ConsumerWidget` → `ConsumerStatefulWidget`), `business_hours.dart`
+  + regenerados `.freezed.dart`/`.g.dart` (`nextChangeAt` parseado a `DateTime` real vía
+  `DateTime.parse`, no queda `String` suelto — confirmado en el `.g.dart` generado), extracción
+  transparente de `_ClosedNotice` → `BusinessClosedNotice` (mismo `key:
+  ValueKey('checkout-closed-notice')` preservado en el checkout, contenido visual idéntico
+  carácter por carácter en el diff).
+- **Las 3 mutaciones del encargo, repetidas de forma independiente** (no solo confiando en las ya
+  hechas por la sesión principal), cada una revertida y confirmada con `git diff` idéntico al
+  original después:
+  1. `rawDelay + _clockDriftMargin` → `rawDelay - _clockDriftMargin` (fires-not-early): falla
+     exactamente el test `'el timer se dispara en el instante de nextChangeAt ..., no antes'`
+     (`Expected: <1> Actual: <2>`), con el efecto cascada esperado sobre el test de la carrera.
+  2. Se quitó el `if (nextChangeAt == null) return;` (con un fallback de 1h para no crashear):
+     falla exactamente el test `'nextChangeAt: null ... → NO programa ningún timer'`
+     (`Expected: <1> Actual: <2>`), y en cascada 5 tests más que dependían de que no hubiera timer
+     previo activo.
+  3. Se quitó `|| next.isLoading` del chequeo: falla exactamente el test de la carrera
+     (`'resumed cancela el timer viejo de inmediato (síncrono) ...'`, `Expected: <2> Actual: <3>`
+     — el refetch fantasma que describe el bug real encontrado durante el desarrollo), reproduce
+     el bug documentado arriba de forma consistente.
+- **`ref.listenManual` sin `.close()` en `dispose()` verificado que NO es un leak**: confirmado
+  leyendo `flutter_riverpod-2.6.1/lib/src/consumer.dart` (doc del método + implementación en
+  `ConsumerStatefulElement.unmount()`) que la suscripción se cierra automáticamente cuando el
+  widget se desmonta — no hacía falta guardar/cerrar la suscripción a mano.
+- **Barrido propio (no solo confiar en el de la sesión principal) de `test/` buscando otros
+  lugares que monten el `HomeScreen` real sin stubear `businessHoursProvider`**: `grep -rn
+  "HomeScreen"` en todo `test/` solo encuentra referencias en `home_screen_test.dart` (su propio
+  archivo) y `app_router_test.dart` (que ya stubea `businessHoursProvider` en su `overrides()`
+  compartido). `cart_screen_test.dart` y `product_detail_screen_test.dart` registran la ruta
+  `/home` pero con un `Scaffold(body: Text('HOME'))` falso, no el `HomeScreen` real — confirmado
+  leyendo el código de sus routers de prueba, no solo el resumen del encargo.
+- **Contrato de `nextChangeAt` verificado contra el código fuente real del backend**
+  (`backend-celtas/src/modules/settings/settings.controller.ts`/`settings.service.ts`, no contra
+  el resumen del encargo): `getNextChangeAt()` siempre calcula el próximo instante hacia adelante
+  desde `reference = new Date()` (el reloj del propio servidor al momento del request) — nunca
+  devuelve un instante ya vencido *según su propio reloj*. La única forma de que el cliente reciba
+  un `nextChangeAt` ya vencido es la latencia de red / cold-start de Render (documentado hasta
+  30-50s), que es exactamente el caso que `rawDelay.isNegative ? Duration.zero : ...` maneja
+  correctamente (dispara casi de inmediato en vez de con un delay negativo inválido).
+- **Diseño del margen de 5s y el caso borde de `nextChangeAt` muy vencido al arrancar la app**:
+  evaluado explícitamente — no es un bug. `Duration.zero` dispara el refetch casi de inmediato, lo
+  cual es el comportamiento correcto (el estado real cambió hace rato, hay que reflejarlo ya). El
+  refetch resultante siempre calcula un `nextChangeAt` genuinamente futuro desde el reloj del
+  servidor en ESE momento (nunca repite el mismo instante ya vencido), así que no hay riesgo de
+  loop ajustado de refetch continuo bajo operación normal.
+
+❌ Falló:
+- Ninguno funcional.
+
+⚠️ Riesgos / hallazgos menores no bloqueantes:
+- **No verificado en vivo con el Home realmente abierto** en dispositivo/emulador ni contra
+  `celtas-admin` con credenciales de admin (ni en esta auditoría ni en el desarrollo original) —
+  solo se verificó en vivo el contrato de `GET /settings/business-hours` contra producción (con
+  el local realmente cerrado, `nextChangeAt` presente) y todo lo demás vía widget tests +
+  lectura de código fuente real (mobile + backend). Queda pendiente confirmar visualmente en un
+  dispositivo real que el cartel se ve/actualiza como se espera y que el timer sobrevive
+  correctamente el ciclo real de background/foreground de Android (no solo el simulado por
+  `tester.binding.handleAppLifecycleStateChanged` en los widget tests).
+- **Riesgo teórico, no observado, de refetch ajustado si el backend devolviera repetidamente un
+  `nextChangeAt` ya vencido por un margen mayor al esperado** (ej. si el reloj del servidor
+  estuviera mal configurado, o Render tarda mucho más de los 30-50s documentados en despertar):
+  no habría loop infinito porque cada refetch recalcula un `nextChangeAt` genuinamente nuevo
+  desde el reloj del servidor en ese momento (confirmado leyendo `getNextChangeAt()`), pero no
+  hay ningún backoff explícito del lado mobile si esto llegara a fallar — bajo riesgo dado cómo
+  está implementado el backend, sin evidencia de que ocurra, no bloqueante.
+
+**Veredicto: LISTO.**
+
 ## Carrito / Checkout
 
 - [x] El total lo calcula el backend, la app nunca lo envía ni lo asume
@@ -1269,6 +1385,91 @@ no bloqueantes en el encargo original.
       **Veredicto: LISTO PARA MARCAR COMPLETO.** Ningún bug real encontrado en esta ronda — las 6
       mejoras se verificaron contra el código real (no contra la descripción de la sesión
       principal) y quedaron con cobertura de test adicional donde faltaba.
+
+---
+
+### Aviso proactivo por push de cambio de horario de atención (`{ businessHoursChanged: 'true' }`) — última pieza de la feature cross-repo "horario de atención" — ✅ COMPLETO
+
+Extiende el patrón ya existente de `NotificationTarget` (sealed class, clasificación de `data`
+por llave presente, sin campo `type` explícito) con un cuarto caso,
+`BusinessHoursNotificationTarget`, para el aviso que el backend manda cuando el admin
+activa/desactiva el cierre manual desde `celtas-admin`. Payload sin más contenido que la llave
+`businessHoursChanged` — nunca la fuente del estado real, siempre hay que reconsultar
+`GET /settings/business-hours` (`businessHoursProvider`).
+
+✅ **Verificado de forma independiente**:
+- `git diff` real de los 3 archivos tocados
+  (`notification_target.dart`, `notification_service.dart`, `notifications_screen.dart`)
+  coincide exactamente con lo reportado por la sesión principal, incluido el 4to switch en
+  `notifications_screen.dart` (`_NotificationCard._handleTap` + el cálculo de `tappable`) que no
+  estaba en el encargo original y se agregó por el error de exhaustividad del compilador — no es
+  un desvío sin justificar, es la consecuencia correcta de que el `sealed class` obliga a cubrir
+  el caso nuevo en cualquier `switch` existente.
+- `grep` de `OrderNotificationTarget|CouponNotificationTarget|NoneNotificationTarget|BusinessHoursNotificationTarget`
+  en todo `lib/` confirma que no queda ningún otro `switch`/pattern-match sobre
+  `NotificationTarget` sin actualizar — los únicos 4 puntos de consumo
+  (`fromPayload`, `_invalidateFor`, `_navigateFor`, `fallbackTitle` de `_saveToHistory` en
+  `notification_service.dart`, y `_handleTap`/`tappable` en `notifications_screen.dart`) cubren el
+  caso nuevo de forma exhaustiva.
+- **Mutación 1** (comentar el `if (data.containsKey('businessHoursChanged'))` en `fromPayload`):
+  repetida de forma independiente — el test `{ businessHoursChanged: "true" } →
+  BusinessHoursNotificationTarget` falló exactamente como se esperaba (`Actual:
+  NoneNotificationTarget`). Reverted, `git diff` idéntico al original después.
+- **Mutación 2** (quitar `&& target is! BusinessHoursNotificationTarget` del cálculo de
+  `tappable` en `notifications_screen.dart`): repetida de forma independiente — el test de
+  `onTap: null` falló exactamente como se esperaba (`Expected: null, Actual: <Closure...>`).
+  Reverted, `git diff` idéntico al original después.
+- `flutter analyze`: `No issues found!` (salida cruda propia, no la de la sesión principal).
+- `flutter test` completo: **361/361** (salida cruda propia).
+- **`_invalidateFor`'s nuevo case confirmado correcto contra el código real**, no dado por
+  sentado: `businessHoursProvider` (`settings_providers.dart`) es un `FutureProvider` global, sin
+  `.autoDispose`; `main.dart` crea un único `ProviderContainer` a mano y lo pasa tanto a
+  `NotificationService.instance.init(container)` como a la raíz del árbol de widgets vía
+  `UncontrolledProviderScope(container: container, ...)` — es literalmente el mismo container y
+  la misma instancia de provider que `HomeScreen`/`CheckoutScreen` leen con `ref.watch`/
+  `ref.listenManual`. `_container.invalidate(businessHoursProvider)` desde `NotificationService`
+  (que corre fuera del árbol de widgets) sí dispara la reprogramación del timer del Home tal como
+  se afirma — no hay dos containers ni dos instancias de provider en juego.
+- **Decisión de excluir `BusinessHoursNotificationTarget` de `tappable`**: evaluada como
+  coherente, no como un desvío raro — sigue el mismo criterio ya usado para
+  `NoneNotificationTarget` (si no hay pantalla a la que navegar, la tarjeta no debería
+  comportarse como tocable, para no dejar un toque sin ningún efecto visible/ripple sin acción).
+  No había instrucción explícita del encargo sobre esto; la alternativa (dejarla tappable con un
+  feedback distinto, ej. forzar un refetch manual con un SnackBar) también sería válida mas no
+  fue pedida — no es necesaria para que el cartel del Home se actualice, que ya ocurre solo por
+  `_invalidateFor` sin depender de que el cliente toque nada.
+
+❌ **Nada falló** en esta ronda.
+
+⚠️ **Riesgos / casos borde no cubiertos, no bloqueantes**:
+- Sigue sin existir `notification_service_test.dart` — `_invalidateFor`/`_navigateFor` (incluido
+  el case nuevo de `BusinessHoursNotificationTarget`) no tienen cobertura automatizada, mismo gap
+  preexistente ya documentado en auditorías anteriores del módulo 9, no introducido por esta
+  ronda. No se pudo mutar ese método por la misma razón: no hay ningún test que lo ejercite.
+- **No se pudo probar en vivo** con un dispositivo/emulador Android o iOS conectado activando el
+  cierre manual real desde `celtas-admin`: `flutter devices` en esta sesión solo detecta Windows
+  desktop y navegadores web (Chrome/Edge), ninguno de los dos recibe push de FCM de forma
+  representativa del comportamiento real en Android, y no había credenciales de admin
+  disponibles para disparar el toggle real desde el panel. Mismo límite ya declarado en
+  auditorías anteriores de esta misma feature (el bloqueo 409 y el cartel event-driven del Home
+  tampoco se probaron en vivo). Riesgo real no cerrado: el comportamiento exacto de
+  `flutter_local_notifications`/FCM en foreground/background/terminated para este payload
+  específico solo está verificado por lectura de código (mismo camino ya usado por
+  `orderId`/`couponCode`, que sí se probó en vivo en el módulo 9 original), no por observación
+  directa.
+- Hallazgo de higiene de repo, no de código: al momento de esta auditoría, el working tree tenía
+  sin commitear no solo los 3 archivos de esta ronda sino también el cartel event-driven del Home
+  y la extracción de `business_closed_notice.dart` (trabajo de una sesión anterior, ya auditado
+  LISTO según el encargo) — confirmado que el único commit real de la feature de horario
+  (`bc7c3ad`) solo incluye el bloqueo 409 + aviso preventivo del checkout, no el cartel del Home.
+  No es un problema de esta ronda ni bloquea su veredicto, pero vale la pena que la sesión
+  principal comitee ese trabajo pendiente para que quede un historial de commits consistente con
+  lo que `ROADMAP.md` marca como completo.
+
+**Veredicto: LISTO PARA MARCAR COMPLETO.** Con esto se cierra la feature cross-repo "horario de
+atención" — backend, `celtas-admin`, bloqueo real (409), aviso preventivo del checkout, cartel
+event-driven del Home, y ahora el aviso proactivo por push. Ningún bug real encontrado en esta
+ronda específica.
 
 ---
 

@@ -124,7 +124,11 @@ void main() {
       // Default: local abierto — la mayoría de los tests de este archivo no
       // se ocupan del aviso preventivo, así que no debe aparecer sin pedirlo.
       when(() => settingsRepo.getBusinessHours()).thenAnswer(
-        (_) async => const BusinessHours(open: true, message: null),
+        (_) async => const BusinessHours(
+          open: true,
+          message: null,
+          nextChangeAt: null,
+        ),
       );
     }
     final container = ProviderContainer(
@@ -751,6 +755,7 @@ void main() {
         (_) async => const BusinessHours(
           open: false,
           message: 'Hoy no atendemos',
+          nextChangeAt: null,
         ),
       );
 

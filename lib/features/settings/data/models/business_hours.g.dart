@@ -10,7 +10,14 @@ _BusinessHours _$BusinessHoursFromJson(Map<String, dynamic> json) =>
     _BusinessHours(
       open: json['open'] as bool,
       message: json['message'] as String?,
+      nextChangeAt: json['nextChangeAt'] == null
+          ? null
+          : DateTime.parse(json['nextChangeAt'] as String),
     );
 
 Map<String, dynamic> _$BusinessHoursToJson(_BusinessHours instance) =>
-    <String, dynamic>{'open': instance.open, 'message': instance.message};
+    <String, dynamic>{
+      'open': instance.open,
+      'message': instance.message,
+      'nextChangeAt': instance.nextChangeAt?.toIso8601String(),
+    };

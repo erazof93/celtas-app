@@ -11,6 +11,8 @@ import 'package:celtas_mobile/features/home/data/models/public_menu_category.dar
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
 import 'package:celtas_mobile/features/notifications/data/models/notification_history_item.dart';
 import 'package:celtas_mobile/features/notifications/data/notification_history_repository.dart';
+import 'package:celtas_mobile/features/settings/application/settings_providers.dart';
+import 'package:celtas_mobile/features/settings/data/models/business_hours.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_bottom_nav.dart';
 import 'package:flutter/material.dart' hide Banner;
 import 'package:flutter/services.dart';
@@ -54,8 +56,8 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  /// Overrides comunes: auth fake + Home sin requests reales (banners y menú
-  /// vacíos — el Home real los carga del backend).
+  /// Overrides comunes: auth fake + Home sin requests reales (banners, menú
+  /// y horario de atención — el Home real los carga del backend).
   List<Override> overrides(
     MockAuthRepository repository, {
     List<PublicMenuCategory> menu = const [],
@@ -64,6 +66,10 @@ void main() {
     authRepositoryProvider.overrideWithValue(repository),
     activeBannersProvider.overrideWith((ref) async => banners),
     publicMenuProvider.overrideWith((ref) async => menu),
+    businessHoursProvider.overrideWith(
+      (ref) async =>
+          const BusinessHours(open: true, message: null, nextChangeAt: null),
+    ),
   ];
 
   /// Login rápido de punta a punta (Splash → Login → sesión activa).

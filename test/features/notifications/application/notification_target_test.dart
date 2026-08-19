@@ -21,6 +21,17 @@ void main() {
       expect(target, isA<CouponNotificationTarget>());
     });
 
+    test(
+      '{ businessHoursChanged: "true" } → BusinessHoursNotificationTarget',
+      () {
+        final target = NotificationTarget.fromPayload({
+          'businessHoursChanged': 'true',
+        });
+
+        expect(target, isA<BusinessHoursNotificationTarget>());
+      },
+    );
+
     test('payload sin llaves reconocidas → NoneNotificationTarget', () {
       final target = NotificationTarget.fromPayload({'algoInesperado': 'x'});
 

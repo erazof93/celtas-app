@@ -111,6 +111,11 @@ class _NotificationCard extends StatelessWidget {
         context.push('/orders/$orderId');
       case CouponNotificationTarget():
         context.go('/coupons');
+      case BusinessHoursNotificationTarget():
+        // Sin pantalla propia — no debería dispararse nunca (ver `tappable`
+        // abajo, que ya excluye este caso), pero queda acá por la
+        // exhaustividad del switch.
+        break;
       case NoneNotificationTarget():
         break;
     }
@@ -119,8 +124,13 @@ class _NotificationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    // Sin pantalla a la que navegar para `BusinessHoursNotificationTarget`
+    // (igual que `NoneNotificationTarget`) — no tappable, para no dejar un
+    // toque sin ningún efecto visible.
+    final target = NotificationTarget.fromPayload(item.data);
     final tappable =
-        NotificationTarget.fromPayload(item.data) is! NoneNotificationTarget;
+        target is! NoneNotificationTarget &&
+        target is! BusinessHoursNotificationTarget;
 
     return GestureDetector(
       onTap: tappable ? () => _handleTap(context) : null,

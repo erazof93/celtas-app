@@ -10,6 +10,8 @@ import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
 import 'package:celtas_mobile/features/home/presentation/home_screen.dart';
 import 'package:celtas_mobile/features/notifications/application/notification_providers.dart';
 import 'package:celtas_mobile/features/notifications/data/models/notification_history_item.dart';
+import 'package:celtas_mobile/features/settings/application/settings_providers.dart';
+import 'package:celtas_mobile/features/settings/data/models/business_hours.dart';
 import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
 import 'package:flutter/material.dart' hide Banner;
 import 'package:flutter/services.dart' show PlatformException;
@@ -87,11 +89,24 @@ void main() {
     List<Banner> banners = const [],
     List<PublicMenuCategory> menu = const [],
     List<NotificationHistoryItem>? notifications,
+    Override? businessHoursOverride,
   }) async {
     final container = ProviderContainer(
       overrides: [
         activeBannersProvider.overrideWith((ref) async => banners),
         publicMenuProvider.overrideWith((ref) async => menu),
+        // Default: local abierto, sin `nextChangeAt` — la mayoría de los
+        // tests de este archivo no se ocupan del cartel de "local cerrado",
+        // así que no debe aparecer sin pedirlo, y no debe hacer una request
+        // de red real.
+        businessHoursOverride ??
+            businessHoursProvider.overrideWith(
+              (ref) async => const BusinessHours(
+                open: true,
+                message: null,
+                nextChangeAt: null,
+              ),
+            ),
         if (notifications != null)
           notificationHistoryProvider.overrideWith(
             () => _FakeNotificationHistoryNotifier(notifications),
@@ -191,6 +206,13 @@ void main() {
         overrides: [
           activeBannersProvider.overrideWith((ref) async => const []),
           publicMenuProvider.overrideWith((ref) async => [withSauces]),
+          businessHoursProvider.overrideWith(
+            (ref) async => const BusinessHours(
+              open: true,
+              message: null,
+              nextChangeAt: null,
+            ),
+          ),
         ],
       );
       addTearDown(container.dispose);
@@ -737,6 +759,336 @@ void main() {
           findsOneWidget,
         );
         expect(fakeUrlLauncher.lastLaunchedUrl, isNull);
+      },
+    );
+  });
+
+  group('cartel de "local cerrado" (GET /settings/business-hours)', () {
+    testWidgets(
+      'open: false → cartel visible con el mensaje real del backend, y el '
+      'resto del Home sigue funcionando (SÍ se puede seguir agregando '
+      'productos con el cartel visible)',
+      (tester) async {
+        final container = await pumpHome(
+          tester,
+          menu: [category],
+          businessHoursOverride: businessHoursProvider.overrideWith(
+            (ref) async => const BusinessHours(
+              open: false,
+              message:
+                  'El local está cerrado en este momento. Hoy atendemos de '
+                  '11:00 a 23:00',
+              nextChangeAt: null,
+            ),
+          ),
+        );
+
+        expect(
+          find.byKey(const ValueKey('home-closed-notice')),
+          findsOneWidget,
+        );
+        expect(
+          find.text(
+            'El local está cerrado en este momento. Hoy atendemos de 11:00 '
+            'a 23:00',
+          ),
+          findsOneWidget,
+        );
+
+        // Regla de negocio central de este cambio: el cartel es puramente
+        // informativo — el cliente sigue pudiendo agregar productos al
+        // carrito con el local cerrado. El único bloqueo real sigue siendo
+        // el 409 del checkout.
+        await tester.tap(find.byKey(const ValueKey('add-i-1')));
+        await tester.pump();
+
+        expect(container.read(cartProvider).items, isNotEmpty);
+        expect(
+          find.descendant(
+            of: find.byType(SnackBar),
+            matching: find.textContaining('Agregado:'),
+          ),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets('open: true → sin cartel', (tester) async {
+      await pumpHome(tester, menu: [category]);
+
+      expect(
+        find.byKey(const ValueKey('home-closed-notice')),
+        findsNothing,
+      );
+    });
+
+    testWidgets(
+      'nextChangeAt: null (cierre manual, o el horario nunca abre) → NO '
+      'programa ningún timer',
+      (tester) async {
+        var calls = 0;
+        await pumpHome(
+          tester,
+          businessHoursOverride: businessHoursProvider.overrideWith((
+            ref,
+          ) async {
+            calls++;
+            return const BusinessHours(
+              open: false,
+              message: 'El local está cerrado temporalmente: mantenimiento',
+              nextChangeAt: null,
+            );
+          }),
+        );
+
+        expect(calls, 1);
+
+        // Sin timer programado, ningún avance de tiempo (por más grande que
+        // sea) debería disparar un refetch nuevo.
+        await tester.pump(const Duration(hours: 2));
+        await tester.pumpAndSettle();
+
+        expect(calls, 1);
+      },
+    );
+
+    testWidgets(
+      'el timer se dispara en el instante de nextChangeAt (con el margen '
+      'de deriva de reloj), no antes',
+      (tester) async {
+        var calls = 0;
+        final firstChange = DateTime.now().add(const Duration(minutes: 10));
+        await pumpHome(
+          tester,
+          businessHoursOverride: businessHoursProvider.overrideWith((
+            ref,
+          ) async {
+            calls++;
+            return BusinessHours(
+              open: true,
+              message: null,
+              nextChangeAt: firstChange,
+            );
+          }),
+        );
+
+        expect(calls, 1);
+
+        // Justo antes de nextChangeAt (con margen de sobra): no debería
+        // haber vuelto a consultar todavía.
+        await tester.pump(const Duration(minutes: 9, seconds: 58));
+        await tester.pump();
+        expect(calls, 1);
+
+        // Cruza nextChangeAt + el margen de 5s de deriva de reloj: ahora sí
+        // debe haber disparado el refetch.
+        await tester.pump(const Duration(seconds: 9));
+        await tester.pumpAndSettle();
+        expect(calls, 2);
+      },
+    );
+
+    testWidgets(
+      'al dispararse, reconsulta y se reprograma con el nextChangeAt nuevo '
+      'devuelto por esa respuesta (no se queda pegado al primer valor)',
+      (tester) async {
+        var calls = 0;
+        await pumpHome(
+          tester,
+          businessHoursOverride: businessHoursProvider.overrideWith((
+            ref,
+          ) async {
+            calls++;
+            // `DateTime.now()` fresco en cada llamada, no capturado una
+            // sola vez afuera: `tester.pump(duration)` avanza el reloj
+            // FALSO de los `Timer`, pero NO el `DateTime.now()` real —
+            // anclar el 2do valor a un `now` capturado al principio del
+            // test calcularía mal el delay real que ve el widget. Fetch
+            // inicial: cambia en 5 min. Fetch tras dispararse ese timer:
+            // cambia en otros 3 min desde ESE momento.
+            final next = calls == 1
+                ? DateTime.now().add(const Duration(minutes: 5))
+                : DateTime.now().add(const Duration(minutes: 3));
+            return BusinessHours(open: true, message: null, nextChangeAt: next);
+          }),
+        );
+
+        expect(calls, 1);
+
+        // Dispara el primer timer (5 min + margen).
+        await tester.pump(const Duration(minutes: 5, seconds: 7));
+        await tester.pumpAndSettle();
+        expect(calls, 2);
+
+        // Si NO se hubiera reprogramado con el nextChangeAt nuevo (3 min
+        // desde ESE momento, no desde el inicio), no pasaría nada acá.
+        await tester.pump(const Duration(minutes: 2, seconds: 50));
+        await tester.pumpAndSettle();
+        expect(calls, 2);
+
+        // El timer reprogramado sí dispara en su nuevo momento (3 min +
+        // margen de 5s desde que se reprogramó).
+        await tester.pump(const Duration(seconds: 20));
+        await tester.pumpAndSettle();
+        expect(calls, 3);
+      },
+    );
+
+    testWidgets(
+      'AppLifecycleState.resumed cancela cualquier timer pendiente y '
+      'reconsulta de inmediato (no deja dos timers corriendo a la vez)',
+      (tester) async {
+        var calls = 0;
+        final now = DateTime.now();
+        await pumpHome(
+          tester,
+          businessHoursOverride: businessHoursProvider.overrideWith((
+            ref,
+          ) async {
+            calls++;
+            // Fetch inicial: próximo cambio en 5 min. Fetch tras "resumed":
+            // en 20 min — valores bien separados para poder distinguir si
+            // el timer del fetch inicial quedó corriendo por error.
+            final next = calls == 1
+                ? now.add(const Duration(minutes: 5))
+                : now.add(const Duration(minutes: 20));
+            return BusinessHours(open: true, message: null, nextChangeAt: next);
+          }),
+        );
+
+        expect(calls, 1);
+
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.paused,
+        );
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pumpAndSettle();
+
+        // Reconsultó de inmediato al volver, sin esperar los 5 min.
+        expect(calls, 2);
+
+        // Si el timer del fetch inicial (5 min) NO se hubiera cancelado,
+        // dispararía acá un 3er refetch fantasma.
+        await tester.pump(const Duration(minutes: 5, seconds: 7));
+        await tester.pumpAndSettle();
+        expect(calls, 2);
+
+        // El timer reprogramado tras el resumed (20 min) sí dispara en su
+        // momento.
+        await tester.pump(const Duration(minutes: 15));
+        await tester.pumpAndSettle();
+        expect(calls, 3);
+      },
+    );
+
+    testWidgets(
+      'resumed cancela el timer viejo de inmediato (síncrono), antes de que '
+      'complete el refetch que el propio resumed dispara — evita una '
+      'carrera donde el timer viejo dispara un refetch fantasma mientras el '
+      'nuevo sigue en vuelo',
+      (tester) async {
+        var calls = 0;
+        await pumpHome(
+          tester,
+          businessHoursOverride: businessHoursProvider.overrideWith((
+            ref,
+          ) async {
+            calls++;
+            if (calls == 1) {
+              // Timer viejo: dispara a los 2s + margen(5s) = 7s.
+              return BusinessHours(
+                open: true,
+                message: null,
+                nextChangeAt: DateTime.now().add(const Duration(seconds: 2)),
+              );
+            }
+            // Cualquier fetch DESPUÉS del primero (el que dispara "resumed",
+            // o un refetch fantasma del timer viejo si no se hubiera
+            // cancelado) tarda 10s en resolver — más que los 7s del timer
+            // viejo, a propósito: si el timer viejo sigue vivo, tiene
+            // tiempo de sobra para disparar (y sumar una llamada de más)
+            // ANTES de que este primer refetch termine.
+            await Future<void>.delayed(const Duration(seconds: 10));
+            return const BusinessHours(
+              open: false,
+              message: 'Cerrado',
+              nextChangeAt: null,
+            );
+          }),
+        );
+
+        expect(calls, 1);
+
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.paused,
+        );
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        // Flush del microtask que arranca el refetch (calls=2, entra en su
+        // delay de 10s) sin todavía avanzar tiempo de reloj.
+        await tester.pump();
+        expect(calls, 2);
+
+        // Cruza los 7s del timer viejo MIENTRAS el fetch de "resumed"
+        // (10s) todavía está en vuelo.
+        await tester.pump(const Duration(seconds: 7));
+        expect(
+          calls,
+          2,
+          reason:
+              'si el timer viejo no se hubiera cancelado, dispararía acá '
+              'un refetch fantasma (calls pasaría a 3)',
+        );
+
+        // Deja completar el resto del delay de 10s.
+        await tester.pump(const Duration(seconds: 4));
+        await tester.pumpAndSettle();
+
+        expect(calls, 2);
+      },
+    );
+
+    testWidgets(
+      'el timer se cancela al salir del Home (dispose) — no sigue '
+      'consultando en segundo plano',
+      (tester) async {
+        var calls = 0;
+        final firstChange = DateTime.now().add(const Duration(minutes: 10));
+        final container = await pumpHome(
+          tester,
+          businessHoursOverride: businessHoursProvider.overrideWith((
+            ref,
+          ) async {
+            calls++;
+            return BusinessHours(
+              open: true,
+              message: null,
+              nextChangeAt: firstChange,
+            );
+          }),
+        );
+
+        expect(calls, 1);
+
+        // Desmonta el Home reemplazando el árbol de widgets → dispara
+        // `dispose()`, que debe cancelar el timer.
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: const MaterialApp(home: SizedBox.shrink()),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.pump(const Duration(minutes: 15));
+        await tester.pumpAndSettle();
+
+        // Sin llamadas nuevas: si el timer siguiera corriendo, ya habría
+        // disparado un 2do refetch en el minuto 10.
+        expect(calls, 1);
       },
     );
   });

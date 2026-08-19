@@ -25,6 +25,12 @@ void main() {
     receivedAt: DateTime.utc(2026, 8, 11, 9, 5),
     data: const {'couponCode': 'VIKINGO10'},
   );
+  final businessHoursNotification = NotificationHistoryItem(
+    title: 'El local está cerrado temporalmente',
+    body: 'Cerrado por mantenimiento',
+    receivedAt: DateTime.utc(2026, 8, 13, 20),
+    data: const {'businessHoursChanged': 'true'},
+  );
 
   Widget buildApp(List<NotificationHistoryItem> history) {
     final router = GoRouter(
@@ -131,6 +137,39 @@ void main() {
 
     expect(find.text('Mis cupones'), findsOneWidget);
   });
+
+  testWidgets(
+    'tocar una notificación de horario de atención no navega a ningún '
+    'lado (sin pantalla propia — el título/cuerpo de la notificación no es '
+    'el estado real, no hay nada a lo que navegar)',
+    (tester) async {
+      await tester.pumpWidget(buildApp([businessHoursNotification]));
+      await tester.pumpAndSettle();
+
+      // La tarjeta no es tappable (`onTap: null`), no solo "tocarla no hace
+      // nada" — mismo criterio que `NoneNotificationTarget`, para no dejar
+      // un toque sin ningún efecto visible.
+      final gestureDetector = tester.widget<GestureDetector>(
+        find.ancestor(
+          of: find.text('El local está cerrado temporalmente'),
+          matching: find.byType(GestureDetector),
+        ),
+      );
+      expect(gestureDetector.onTap, isNull);
+
+      await tester.tap(find.text('El local está cerrado temporalmente'));
+      await tester.pumpAndSettle();
+
+      // Sigue en /notifications: ninguna de las otras rutas de prueba
+      // (detalle de pedido, Mis cupones) se activó.
+      expect(
+        find.text('El local está cerrado temporalmente'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Detalle de pedido'), findsNothing);
+      expect(find.text('Mis cupones'), findsNothing);
+    },
+  );
 
   testWidgets(
     'entrar a la pantalla marca todo el historial como leído (el badge '

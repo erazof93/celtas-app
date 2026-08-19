@@ -8,6 +8,7 @@ import 'package:celtas_mobile/features/notifications/application/notification_pr
 import 'package:celtas_mobile/features/notifications/application/notification_target.dart';
 import 'package:celtas_mobile/features/notifications/data/models/notification_history_item.dart';
 import 'package:celtas_mobile/features/orders/application/order_history_providers.dart';
+import 'package:celtas_mobile/features/settings/application/settings_providers.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -34,10 +35,16 @@ const _androidChannel = AndroidNotificationChannel(
 /// dejar que `ProviderScope` lo cree internamente.
 ///
 /// Payload de notificación confirmado contra el backend real
-/// (`orders.service.ts` / `coupons.service.ts`, no hay un campo `type`
-/// explícito — se infiere por la llave presente en `data`):
+/// (`orders.service.ts` / `coupons.service.ts` / `settings.service.ts`, no
+/// hay un campo `type` explícito — se infiere por la llave presente en
+/// `data`):
 ///   - Cambio de estado de pedido: `{ orderId, status }`
 ///   - Cupón nuevo (manual o automático): `{ couponCode }`
+///   - Cambio de horario de atención (cierre manual activado/desactivado
+///     desde el panel): `{ businessHoursChanged: 'true' }` — sin más
+///     contenido, solo un aviso de "algo cambió"; el título/cuerpo de la
+///     notificación NUNCA es el estado real, siempre hay que reconsultar
+///     `GET /settings/business-hours`.
 class NotificationService {
   NotificationService._();
 
@@ -123,6 +130,7 @@ class NotificationService {
     final fallbackTitle = switch (target) {
       OrderNotificationTarget() => 'Actualización de tu pedido',
       CouponNotificationTarget() => 'Tenés un cupón nuevo',
+      BusinessHoursNotificationTarget() => 'Aviso del local',
       NoneNotificationTarget() => 'Celtas',
     };
     _container
@@ -186,6 +194,13 @@ class NotificationService {
         _container.invalidate(orderDetailProvider(orderId));
       case CouponNotificationTarget():
         _container.invalidate(userCouponListProvider);
+      case BusinessHoursNotificationTarget():
+        // Mismo provider que ya usan `home_screen.dart`/`checkout_screen.dart`
+        // — invalidarlo dispara un refetch y, del lado del Home, reprograma
+        // su timer de `nextChangeAt` solo con el `ref.listenManual` que ya
+        // existe ahí. El cartel se actualiza sin más código, incluso con la
+        // app en foreground.
+        _container.invalidate(businessHoursProvider);
       case NoneNotificationTarget():
         break;
     }
@@ -197,6 +212,11 @@ class NotificationService {
         _container.read(routerProvider).push('/orders/$orderId');
       case CouponNotificationTarget():
         _container.read(routerProvider).go('/coupons');
+      case BusinessHoursNotificationTarget():
+        // Sin pantalla propia a la que navegar — el cliente se queda donde
+        // esté, el cartel del Home (si está montado) se actualiza solo vía
+        // `_invalidateFor`.
+        break;
       case NoneNotificationTarget():
         break;
     }

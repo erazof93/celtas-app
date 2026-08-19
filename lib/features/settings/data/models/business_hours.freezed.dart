@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$BusinessHours {
 
- bool get open; String? get message;
+ bool get open; String? get message; DateTime? get nextChangeAt;
 /// Create a copy of BusinessHours
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +28,16 @@ $BusinessHoursCopyWith<BusinessHours> get copyWith => _$BusinessHoursCopyWithImp
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is BusinessHours&&(identical(other.open, open) || other.open == open)&&(identical(other.message, message) || other.message == message));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is BusinessHours&&(identical(other.open, open) || other.open == open)&&(identical(other.message, message) || other.message == message)&&(identical(other.nextChangeAt, nextChangeAt) || other.nextChangeAt == nextChangeAt));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,open,message);
+int get hashCode => Object.hash(runtimeType,open,message,nextChangeAt);
 
 @override
 String toString() {
-  return 'BusinessHours(open: $open, message: $message)';
+  return 'BusinessHours(open: $open, message: $message, nextChangeAt: $nextChangeAt)';
 }
 
 
@@ -48,7 +48,7 @@ abstract mixin class $BusinessHoursCopyWith<$Res>  {
   factory $BusinessHoursCopyWith(BusinessHours value, $Res Function(BusinessHours) _then) = _$BusinessHoursCopyWithImpl;
 @useResult
 $Res call({
- bool open, String? message
+ bool open, String? message, DateTime? nextChangeAt
 });
 
 
@@ -65,11 +65,12 @@ class _$BusinessHoursCopyWithImpl<$Res>
 
 /// Create a copy of BusinessHours
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? open = null,Object? message = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? open = null,Object? message = freezed,Object? nextChangeAt = freezed,}) {
   return _then(_self.copyWith(
 open: null == open ? _self.open : open // ignore: cast_nullable_to_non_nullable
 as bool,message: freezed == message ? _self.message : message // ignore: cast_nullable_to_non_nullable
-as String?,
+as String?,nextChangeAt: freezed == nextChangeAt ? _self.nextChangeAt : nextChangeAt // ignore: cast_nullable_to_non_nullable
+as DateTime?,
   ));
 }
 
@@ -154,10 +155,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool open,  String? message)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool open,  String? message,  DateTime? nextChangeAt)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _BusinessHours() when $default != null:
-return $default(_that.open,_that.message);case _:
+return $default(_that.open,_that.message,_that.nextChangeAt);case _:
   return orElse();
 
 }
@@ -175,10 +176,10 @@ return $default(_that.open,_that.message);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool open,  String? message)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool open,  String? message,  DateTime? nextChangeAt)  $default,) {final _that = this;
 switch (_that) {
 case _BusinessHours():
-return $default(_that.open,_that.message);case _:
+return $default(_that.open,_that.message,_that.nextChangeAt);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -195,10 +196,10 @@ return $default(_that.open,_that.message);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool open,  String? message)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool open,  String? message,  DateTime? nextChangeAt)?  $default,) {final _that = this;
 switch (_that) {
 case _BusinessHours() when $default != null:
-return $default(_that.open,_that.message);case _:
+return $default(_that.open,_that.message,_that.nextChangeAt);case _:
   return null;
 
 }
@@ -210,11 +211,12 @@ return $default(_that.open,_that.message);case _:
 @JsonSerializable()
 
 class _BusinessHours implements BusinessHours {
-  const _BusinessHours({required this.open, required this.message});
+  const _BusinessHours({required this.open, required this.message, required this.nextChangeAt});
   factory _BusinessHours.fromJson(Map<String, dynamic> json) => _$BusinessHoursFromJson(json);
 
 @override final  bool open;
 @override final  String? message;
+@override final  DateTime? nextChangeAt;
 
 /// Create a copy of BusinessHours
 /// with the given fields replaced by the non-null parameter values.
@@ -229,16 +231,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _BusinessHours&&(identical(other.open, open) || other.open == open)&&(identical(other.message, message) || other.message == message));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _BusinessHours&&(identical(other.open, open) || other.open == open)&&(identical(other.message, message) || other.message == message)&&(identical(other.nextChangeAt, nextChangeAt) || other.nextChangeAt == nextChangeAt));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,open,message);
+int get hashCode => Object.hash(runtimeType,open,message,nextChangeAt);
 
 @override
 String toString() {
-  return 'BusinessHours(open: $open, message: $message)';
+  return 'BusinessHours(open: $open, message: $message, nextChangeAt: $nextChangeAt)';
 }
 
 
@@ -249,7 +251,7 @@ abstract mixin class _$BusinessHoursCopyWith<$Res> implements $BusinessHoursCopy
   factory _$BusinessHoursCopyWith(_BusinessHours value, $Res Function(_BusinessHours) _then) = __$BusinessHoursCopyWithImpl;
 @override @useResult
 $Res call({
- bool open, String? message
+ bool open, String? message, DateTime? nextChangeAt
 });
 
 
@@ -266,11 +268,12 @@ class __$BusinessHoursCopyWithImpl<$Res>
 
 /// Create a copy of BusinessHours
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? open = null,Object? message = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? open = null,Object? message = freezed,Object? nextChangeAt = freezed,}) {
   return _then(_BusinessHours(
 open: null == open ? _self.open : open // ignore: cast_nullable_to_non_nullable
 as bool,message: freezed == message ? _self.message : message // ignore: cast_nullable_to_non_nullable
-as String?,
+as String?,nextChangeAt: freezed == nextChangeAt ? _self.nextChangeAt : nextChangeAt // ignore: cast_nullable_to_non_nullable
+as DateTime?,
   ));
 }
 
