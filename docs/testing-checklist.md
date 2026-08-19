@@ -1473,6 +1473,110 @@ ronda específica.
 
 ---
 
+### Gestión del permiso de notificaciones en Perfil (`_NotificationPermissionRow`) — ✅ LISTO
+
+Escrito originalmente en un sandbox sin SDK de Flutter/`pub.dev` bloqueado — nunca había pasado
+por `flutter analyze`/`flutter test` reales hasta esta auditoría. Verificado con herramientas
+propias (no repetido de lo que reportó la sesión que escribió el código).
+
+`flutter pub get`: `permission_handler` resuelve en `11.4.0` (satisface `^11.3.1`), sin
+conflictos — confirmado en `pubspec.lock` (`git diff` propio). `flutter analyze` (salida cruda
+propia, tras revertir todas las mutaciones de esta auditoría): `No issues found!`. `flutter test`
+(suite completa, salida cruda propia): `377: All tests passed!`.
+
+✅ Pasó:
+- **`actionForAuthorizationStatus` cubre los 4 casos de forma exhaustiva** (`switch` sin
+  `default` sobre un `enum` — el compilador exige agregar cualquier caso nuevo, no hay forma de
+  que un 5to valor de `AuthorizationStatus` pase desapercibido): `notDetermined` →
+  `requestPermission`, `denied` → `openSystemSettings`, `authorized`/`provisional` → `none`.
+  Cubierto 1:1 por los 4 tests de `notification_permission_action_test.dart`.
+- **Mutación real** (`denied` → `requestPermission` en vez de `openSystemSettings`, revertida
+  después, `git diff` limpio confirmado): falla exactamente en las 3 capas que deberían
+  detectarlo — `notification_permission_action_test.dart` (lógica pura),
+  `notification_permission_provider_test.dart` (`handleTap()`), y `profile_screen_test.dart`
+  (grupo "Renglón de notificaciones", tap real) — confirma que las 3 capas de test ejercitan
+  código real, no un mock que pasaría igual sin él.
+- **`WidgetsBindingObserver` en `ProfileScreen`**: `addObserver(this)` en `initState`,
+  `removeObserver(this)` en `dispose` — sin doble-registro (una sola llamada a cada uno, mismo
+  patrón ya usado y auditado en `HomeScreen`/`businessHoursProvider`), sin fuga (el observer se
+  remueve antes de `super.dispose()`).
+- **`handleTap()` nunca asume el resultado de `requestPermission()`**: siempre llama a
+  `refresh()` al final, que vuelve a preguntar `getStatus()` real — confirmado por lectura y por
+  el test dedicado (mock de `getStatus()` con contador, `notDetermined` en la 1ra llamada,
+  `authorized` desde la 2da).
+- **Fidelidad**: el ícono de campana reutiliza el path SVG exacto ya usado en
+  `home_screen.dart` (`home-notifications-bell`), no uno nuevo inventado. Colores por token
+  (`CeltasColors.orange`/`cream`/`textMuted`/`redLight`/`divider`), sin `Color(0xFF...)` sueltos.
+  El renglón replica el mismo padding/border/tamaño de ícono/tipografía que `_MenuRow` (patrón ya
+  auditado en este archivo), con el chevron reemplazado deliberadamente por el texto de
+  estado/spinner — no hay contraparte en `design-reference/` para este renglón (es una pantalla
+  ya existente con un elemento nuevo, mismo criterio ya aceptado en auditorías previas de este
+  documento para elementos interactivos sin mockup, ej. el ícono de lápiz de editar salsas).
+- **Estados explícitos**: carga → `CircularProgressIndicator` de 14px en vez del texto, sin texto
+  "Activadas"/"Desactivadas" a medias; error (`getStatus()` falla) → texto "No se pudo verificar"
+  en `redLight`, tap reintenta vía `refresh()` en vez de `handleTap()` (no dispara
+  `requestPermission()`/`openSystemSettings()` por error de red). Vacío no aplica (no hay lista).
+- **`permission_handler` se usa exclusivamente por `openAppSettings()`** — confirmado por
+  lectura de `notification_permission_repository.dart` (`getStatus()`/`requestPermission()` van
+  enteramente por `FirebaseMessaging`) y del código nativo real de
+  `permission_handler_android-12.1.0` (`AppSettingsManager.java`): usa
+  `Settings.ACTION_APPLICATION_DETAILS_SETTINGS`, un intent estándar hacia la app de Configuración
+  del sistema — no requiere `<queries>` en `AndroidManifest.xml` ni entradas en `Info.plist`.
+  `POST_NOTIFICATIONS` ya estaba declarado en `AndroidManifest.xml` de un módulo anterior,
+  confirmado presente.
+- Ningún texto de UI en inglés ("Activadas", "Desactivadas", "No se pudo verificar",
+  "Notificaciones").
+
+❌ Falló:
+- Ninguno bloqueante.
+
+⚠️ Riesgos / hallazgos no bloqueantes:
+- **Gap real de aislamiento en el test de `AppLifecycleState.resumed`**: confirmado con mutación
+  — cambiar el guard de `didChangeAppLifecycleState` de `state == AppLifecycleState.resumed` a
+  `state == AppLifecycleState.paused` **no hace fallar el test** (`377: All tests passed!` con la
+  mutación puesta), porque el test dispara `handleAppLifecycleStateChanged(paused)` seguido de
+  `handleAppLifecycleStateChanged(resumed)` en la misma prueba (necesario para forzar una
+  transición real desde el estado inicial del harness) — con el guard mutado a `paused`, el
+  refresh se dispara en la transición "equivocada" pero el resultado observable final
+  (`calls == 2`, texto "Activadas") es idéntico. Una mutación a un estado que el test nunca envía
+  (`AppLifecycleState.detached`) sí lo hace fallar correctamente (`Expected: <2>, Actual: <1>`),
+  así que el test no está completamente ciego, pero no aísla específicamente "solo `resumed`, no
+  `paused`". El código de producción real usa `resumed` (confirmado por lectura directa, correcto
+  — es el evento correcto para "la app volvió a primer plano"), así que no hay bug, solo un test
+  que podría ser más estricto. Sugerencia no bloqueante: separar el `tester.binding
+  .handleAppLifecycleStateChanged(AppLifecycleState.paused)` en un `setUp`/paso previo neutro sin
+  cambiar el mock, y verificar `calls == 1` (sin refresh) justo después de `paused` y antes de
+  `resumed`, para que una regresión a "refresca en `paused`" quede realmente cubierta.
+- **Sin test para el estado visual "provisional"** (`_NotificationPermissionRow` muestra
+  "Activadas" igual que `authorized`, mismo branch del `switch` expression) — riesgo bajo, la
+  lógica pura sí lo cubre (`actionForAuthorizationStatus`) y el mapeo visual es el mismo branch
+  que `authorized`, que sí tiene test.
+- **Sin test para el estado de error visual** de `_NotificationPermissionRow` (`getStatus()`
+  lanzando, texto "No se pudo verificar" + tap disparando `refresh()` en vez de `handleTap()`) —
+  el código lo maneja explícitamente (confirmado por lectura), pero no hay cobertura de
+  regresión, a diferencia de los 3 estados visuales sí testeados (`authorized`/`denied` +
+  comportamientos de tap). Mismo patrón de gap ya documentado en este archivo para
+  `NotificationsScreen` (estado de error sin test) antes de que se corrigiera en una auditoría
+  posterior — vale la pena el mismo tratamiento acá.
+- No hay `ios/Podfile` en este repo todavía — preexistente, no introducido por este cambio, fuera
+  de alcance de esta auditoría (no se intentó build de iOS).
+- No verificado en dispositivo/emulador real (sin dispositivo conectado en esta sesión): que el
+  diálogo nativo de Android efectivamente aparezca al tocar "Desactivadas" en `notDetermined`,
+  que `openAppSettings()` abra la pantalla correcta de la app en un Android real, y que el
+  refresh al volver de background se sienta natural (no hay razón para dudar de la mecánica, ya
+  cubierta por widget test, pero es la misma limitación ya declarada para el resto del módulo de
+  horario/notificaciones en auditorías previas de este documento).
+
+**Veredicto: LISTO.** `flutter analyze` limpio y `flutter test` 377/377 confirmados con salida
+cruda propia; lógica de decisión exhaustiva y verificada con mutación real en 3 capas;
+`WidgetsBindingObserver` correctamente implementado sin fuga ni doble-registro; estados de
+carga/error explícitos; sin colores sueltos ni texto en inglés. Ningún hallazgo bloqueante — los
+2 riesgos de cobertura de test (aislamiento del test de `resumed`, estado de error/`provisional`
+sin test dedicado) son mejoras de robustez de test, no bugs de producción, y no impiden marcar
+este ítem completo en `ROADMAP.md`.
+
+---
+
 ## Branding / Íconos y Splash nativos (assets nativos, no es un módulo funcional del roadmap)
 
 No existe una sección de "General" aplicable en la forma estándar (loading/error/vacío no

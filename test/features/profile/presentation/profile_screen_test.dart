@@ -312,9 +312,17 @@ void main() {
         final repository = MockProfileRepository();
         when(() => repository.getProfile()).thenAnswer((_) async => user);
         final permissionRepo = MockNotificationPermissionRepository();
-        when(
-          () => permissionRepo.getStatus(),
-        ).thenAnswer((_) async => AuthorizationStatus.notDetermined);
+        var calls = 0;
+        when(() => permissionRepo.getStatus()).thenAnswer((_) async {
+          calls++;
+          // Primera consulta (build inicial): notDetermined. Tras el tap,
+          // handleTap() nunca asume el resultado de requestPermission() —
+          // vuelve a preguntar el estado real (refresh()), que ya debe
+          // reflejar el cambio.
+          return calls == 1
+              ? AuthorizationStatus.notDetermined
+              : AuthorizationStatus.authorized;
+        });
         when(
           () => permissionRepo.requestPermission(),
         ).thenAnswer((_) async => AuthorizationStatus.authorized);
@@ -332,6 +340,7 @@ void main() {
 
         verify(() => permissionRepo.requestPermission()).called(1);
         verifyNever(() => permissionRepo.openSystemSettings());
+        expect(calls, 2);
         // Refrescó tras el pedido: ahora muestra el estado real nuevo.
         expect(find.text('Activadas'), findsOneWidget);
       },

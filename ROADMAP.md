@@ -990,7 +990,7 @@ celtas-mobile/
       representativo de FCM en Android). Veredicto: **LISTO**. Detalle completo en
       `docs/testing-checklist.md`, sección "Aviso proactivo por push de cambio de horario de
       atención".
-- [ ] **Notificaciones de marketing/fidelización (feature cross-repo: backend `POST
+- [x] **Notificaciones de marketing/fidelización (feature cross-repo: backend `POST
       /notifications/broadcast` + `celtas-admin` sección Marketing, ambos ya implementados) —
       dos partes:**
       - **Parte 1 (verificación, sin cambios de código)**: un push de marketing (sin `orderId`,
@@ -1045,6 +1045,17 @@ celtas-mobile/
         la configuración nativa de `permission_handler` en Android/iOS (probablemente ninguna
         adicional más allá de agregar la dependencia, pero sin verificar) — y solo entonces
         invocar a `@tester` para el veredicto LISTO y marcar este ítem completo.
+      - ✅ **Limitación cerrada por `@tester`**: `flutter pub get` resolvió `permission_handler`
+        en `11.4.0` sin conflictos, `flutter analyze` limpio y `flutter test` 377/377 (salida
+        cruda propia). Un test tenía un bug propio (mock estático de `getStatus()` que no
+        reflejaba el estado tras `requestPermission()`) — corregido en el propio archivo de
+        test, sin tocar código de producción. Lógica de decisión (`actionForAuthorizationStatus`)
+        verificada exhaustiva y correcta con mutación real en las 3 capas de test.
+        `permission_handler` confirmado en uso exclusivo vía `openAppSettings()` (código nativo
+        real revisado, no requiere `<queries>`/`Info.plist`). Detalle completo, incluidos 2
+        hallazgos no bloqueantes de cobertura de test, en `docs/testing-checklist.md`, sección
+        "Gestión del permiso de notificaciones en Perfil". **Veredicto: LISTO** — ítem marcado
+        completo.
 
 ### 10. Deploy y Calidad
 - [x] Pase de auditoría general: estados de carga/error en todas las pantallas, sin datos
