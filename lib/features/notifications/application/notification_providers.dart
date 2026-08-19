@@ -1,7 +1,10 @@
 import 'package:celtas_mobile/core/network/api_client.dart';
+import 'package:celtas_mobile/features/notifications/application/notification_permission_action.dart';
 import 'package:celtas_mobile/features/notifications/data/models/notification_history_item.dart';
 import 'package:celtas_mobile/features/notifications/data/notification_history_repository.dart';
+import 'package:celtas_mobile/features/notifications/data/notification_permission_repository.dart';
 import 'package:celtas_mobile/features/notifications/data/notification_repository.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Repositorio de notificaciones push contra el backend real.
@@ -96,3 +99,59 @@ final unreadNotificationCountProvider = Provider<int>((ref) {
   if (history == null) return 0;
   return history.where((item) => !item.read).length;
 });
+
+/// Repositorio del permiso de notificaciones (wrap de `FirebaseMessaging`/
+/// `permission_handler`, ver el docstring de la clase).
+final notificationPermissionRepositoryProvider =
+    Provider<NotificationPermissionRepository>(
+      (ref) => NotificationPermissionRepository(),
+    );
+
+/// Estado del permiso de notificaciones (renglón "Notificaciones" en
+/// Perfil). `ProfileScreen` lo invalida al volver a foreground
+/// (`didChangeAppLifecycleState`), por si el usuario lo cambió desde
+/// Configuración sin reiniciar la app.
+class NotificationPermissionNotifier extends AsyncNotifier<AuthorizationStatus> {
+  @override
+  Future<AuthorizationStatus> build() =>
+      ref.read(notificationPermissionRepositoryProvider).getStatus();
+
+  /// Reconsulta el estado real del sistema operativo. Usa
+  /// `copyWithPrevious`/`AsyncValue.guard` (en vez de un `ref.invalidate`
+  /// externo) para mantener el valor anterior visible mientras carga —
+  /// mismo criterio de no dejar la UI en blanco durante un refresh que ya
+  /// se sigue en el resto de la app (ver `businessHoursProvider`/Home,
+  /// aunque ahí el `copyWithPrevious` lo aplica Riverpod internamente sobre
+  /// un `FutureProvider`, no un método manual como este).
+  Future<void> refresh() async {
+    state = const AsyncLoading<AuthorizationStatus>().copyWithPrevious(state);
+    state = await AsyncValue.guard(
+      () => ref.read(notificationPermissionRepositoryProvider).getStatus(),
+    );
+  }
+
+  /// Acción al tocar el renglón: decide qué hacer según el estado actual
+  /// (`actionForAuthorizationStatus`) y refresca el estado real al terminar
+  /// — nunca asume el resultado, siempre vuelve a preguntarle al sistema
+  /// operativo (`requestPermission()` puede quedar en `denied` igual que
+  /// antes si el usuario lo rechaza en el diálogo).
+  Future<void> handleTap() async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    final repo = ref.read(notificationPermissionRepositoryProvider);
+    switch (actionForAuthorizationStatus(current)) {
+      case NotificationPermissionAction.requestPermission:
+        await repo.requestPermission();
+      case NotificationPermissionAction.openSystemSettings:
+        await repo.openSystemSettings();
+      case NotificationPermissionAction.none:
+        return;
+    }
+    await refresh();
+  }
+}
+
+final notificationPermissionProvider =
+    AsyncNotifierProvider<NotificationPermissionNotifier, AuthorizationStatus>(
+      NotificationPermissionNotifier.new,
+    );

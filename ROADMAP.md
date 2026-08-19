@@ -990,6 +990,61 @@ celtas-mobile/
       representativo de FCM en Android). Veredicto: **LISTO**. Detalle completo en
       `docs/testing-checklist.md`, sección "Aviso proactivo por push de cambio de horario de
       atención".
+- [ ] **Notificaciones de marketing/fidelización (feature cross-repo: backend `POST
+      /notifications/broadcast` + `celtas-admin` sección Marketing, ambos ya implementados) —
+      dos partes:**
+      - **Parte 1 (verificación, sin cambios de código)**: un push de marketing (sin `orderId`,
+        `couponCode` ni `businessHoursChanged` en `data`) ya cae en `NoneNotificationTarget` vía
+        `NotificationTarget.fromPayload` — se muestra la notificación
+        (foreground/background/terminated) pero no navega ni invalida nada, comportamiento
+        correcto para un mensaje informativo. Ya había cobertura de test para "sin llaves
+        reconocidas" en `notification_target_test.dart` (payload con clave desconocida y
+        payload vacío, ambos → `NoneNotificationTarget`); el switch exhaustivo (sealed class)
+        en `_invalidateFor`/`_navegateFor` garantiza en compilación que ese caso no dispara
+        nada. **Hallazgo no bloqueante, documentado para decisión del usuario**:
+        `_saveToHistory` excluye explícitamente `NoneNotificationTarget` del historial local
+        (`if (target is NoneNotificationTarget) return;`, decisión previa al módulo de
+        marketing) — una campaña de marketing se muestra como notificación del sistema pero
+        NUNCA queda en la pantalla `/notifications` ni en el historial de admin visible al
+        cliente. Si se quiere que las campañas queden en el historial local, es un cambio de
+        producto a decidir, no un bug de esta verificación.
+      - **Parte 2 (feature nueva): gestión del permiso de notificaciones en Perfil.**
+        Confirmado contra la doc oficial de FlutterFire: una vez que el usuario rechaza el
+        permiso, `requestPermission()` YA NO puede volver a mostrar el diálogo del sistema
+        (devuelve `denied` sin interacción) — hay que redirigir a Configuración del sistema, no
+        reintentar. Nuevo renglón "Notificaciones: Activadas/Desactivadas" en Perfil, entre
+        Historial de pedidos y Cerrar sesión: `NotificationPermissionRepository` (wrap fino de
+        `FirebaseMessaging.instance.getNotificationSettings()`/`requestPermission()` +
+        `openAppSettings()` de `permission_handler`, nueva dependencia — justificada, chica y
+        estándar para este caso puntual, misma decisión ya tomada en el plan). Lógica de acción
+        pura y testeable aparte (`actionForAuthorizationStatus`, mismo criterio que
+        `NotificationTarget.fromPayload`): `notDetermined` → pedido nativo normal, `denied` →
+        abre Configuración del sistema, `authorized`/`provisional` → no hace nada.
+        `NotificationPermissionNotifier` (`AsyncNotifier`) expone el estado y `handleTap()`/
+        `refresh()`; `ProfileScreen` agrega `WidgetsBindingObserver` (mismo patrón que
+        `HomeScreen` con `businessHoursProvider`) y reconsulta el estado real en
+        `didChangeAppLifecycleState(resumed)`, por si el usuario lo cambió desde Configuración
+        sin reiniciar la app. Tests nuevos: `notification_permission_action_test.dart` (lógica
+        pura, 4 casos), `notification_permission_provider_test.dart` (repositorio mockeado con
+        `mocktail`, cubre los 3 casos de `handleTap()` + `refresh()` + que tras
+        `requestPermission()` se vuelve a preguntar el estado real, nunca se asume), y 6 tests
+        nuevos en `profile_screen_test.dart` (los 3 estados visuales, los 3 comportamientos de
+        tap, y el refresh real al volver de segundo plano vía
+        `tester.binding.handleAppLifecycleStateChanged`).
+      - ⚠️ **Limitación real de esta ronda, declarada explícitamente**: se implementó en un
+        sandbox cloud sin SDK de Flutter instalado y con `pub.dev` bloqueado por el allowlist de
+        red de la sesión — **no se pudo correr `flutter analyze` ni `flutter test` en ningún
+        momento**, ni para la Parte 1 (verificación por lectura de código) ni para la Parte 2
+        (código nuevo). Todo el código fue escrito con máximo cuidado replicando patrones ya
+        probados del propio repo (`HomeScreen`/`businessHoursProvider` para el lifecycle
+        listener, `NotificationTarget.fromPayload` para la función pura, `mocktail` +
+        `ProviderContainer` para los tests de provider, `notification_history_provider_test.dart`
+        como referencia directa de estilo), pero **no está verificado por el compilador ni por
+        los tests reales todavía**. Pendiente antes de marcar completo: correr `flutter pub get`
+        (agrega `permission_handler` de verdad), `flutter analyze`, `flutter test` completo, y
+        la configuración nativa de `permission_handler` en Android/iOS (probablemente ninguna
+        adicional más allá de agregar la dependencia, pero sin verificar) — y solo entonces
+        invocar a `@tester` para el veredicto LISTO y marcar este ítem completo.
 
 ### 10. Deploy y Calidad
 - [x] Pase de auditoría general: estados de carga/error en todas las pantallas, sin datos

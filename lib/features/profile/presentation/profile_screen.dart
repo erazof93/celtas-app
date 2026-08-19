@@ -2,11 +2,13 @@ import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
 import 'package:celtas_mobile/features/auth/data/models/user.dart';
+import 'package:celtas_mobile/features/notifications/application/notification_providers.dart';
 import 'package:celtas_mobile/features/profile/application/profile_providers.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_text_field.dart';
 import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
 import 'package:celtas_mobile/shared/widgets/svg_stroke_icon.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -24,7 +26,8 @@ class ProfileScreen extends ConsumerStatefulWidget {
   ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+class _ProfileScreenState extends ConsumerState<ProfileScreen>
+    with WidgetsBindingObserver {
   final _formKey = GlobalKey<FormState>();
   final _fullNameController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -33,10 +36,28 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _fullNameController.dispose();
     _phoneController.dispose();
     super.dispose();
+  }
+
+  // El usuario pudo activar/desactivar el permiso desde Configuración del
+  // sistema sin reiniciar la app (ej. volvió de `openSystemSettings()`) —
+  // re-consulta el estado real cada vez que la app vuelve a foreground,
+  // mismo patrón que `HomeScreen` con `businessHoursProvider`.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ref.read(notificationPermissionProvider.notifier).refresh();
+    }
   }
 
   void _startEditing(User user) {
@@ -189,6 +210,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           'M18 18.6a1.4 1.4 0 1 0 0 2.8a1.4 1.4 0 1 0 0-2.8',
                       label: 'Historial de pedidos',
                       onTap: () => context.go('/orders'),
+                    ),
+                    const _NotificationPermissionRow(
+                      key: ValueKey('profile-menu-notifications'),
                     ),
                     _MenuRow(
                       key: const ValueKey('profile-menu-logout'),
@@ -459,6 +483,98 @@ class _MenuRow extends StatelessWidget {
             ),
             if (showChevron)
               const SvgStrokeIcon(path: 'M9 6l6 6-6 6', size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Renglón "Notificaciones: Activadas/Desactivadas" — estado real leído con
+/// `FirebaseMessaging.instance.getNotificationSettings()`
+/// (`notificationPermissionProvider`), re-chequeado al volver de segundo
+/// plano (`_ProfileScreenState.didChangeAppLifecycleState`).
+///
+/// Al tocarlo: si nunca se le preguntó (`notDetermined`), dispara el pedido
+/// nativo normal; si ya lo rechazó (`denied`), abre Configuración del
+/// sistema — `requestPermission()` no puede volver a mostrar el diálogo una
+/// vez rechazado (confirmado contra la doc oficial de FlutterFire), así que
+/// reintentarlo ahí no haría nada. Ver `actionForAuthorizationStatus`.
+class _NotificationPermissionRow extends ConsumerWidget {
+  const _NotificationPermissionRow({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final statusAsync = ref.watch(notificationPermissionProvider);
+    final notifier = ref.read(notificationPermissionProvider.notifier);
+    final textTheme = Theme.of(context).textTheme;
+
+    // Mismo criterio que `HomeScreen`/`businessHoursProvider`: nunca solo
+    // `valueOrNull` a secas para decidir el texto — se distingue "cargando"
+    // y "error" explícitamente antes de mirar el valor.
+    final (String trailingText, Color trailingColor) = statusAsync.hasError
+        ? ('No se pudo verificar', CeltasColors.redLight)
+        : switch (statusAsync.valueOrNull) {
+            AuthorizationStatus.authorized ||
+            AuthorizationStatus.provisional => (
+              'Activadas',
+              CeltasColors.textMuted,
+            ),
+            AuthorizationStatus.denied ||
+            AuthorizationStatus.notDetermined => (
+              'Desactivadas',
+              CeltasColors.redLight,
+            ),
+            null => ('', CeltasColors.textMuted),
+          };
+
+    return InkWell(
+      key: const ValueKey('profile-notifications-tap'),
+      onTap: statusAsync.isLoading
+          ? null
+          : statusAsync.hasError
+          ? notifier.refresh
+          : notifier.handleTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4),
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: CeltasColors.divider)),
+        ),
+        child: Row(
+          children: [
+            const SvgStrokeIcon(
+              path:
+                  'M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9'
+                  'M13.7 21a2 2 0 0 1-3.4 0',
+              size: 19,
+              color: CeltasColors.orange,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                'Notificaciones',
+                style: textTheme.bodyLarge?.copyWith(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: CeltasColors.cream,
+                ),
+              ),
+            ),
+            if (statusAsync.isLoading)
+              const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              Text(
+                trailingText,
+                style: textTheme.bodySmall?.copyWith(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: trailingColor,
+                ),
+              ),
           ],
         ),
       ),

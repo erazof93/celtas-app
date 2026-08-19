@@ -4,9 +4,12 @@ import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
 import 'package:celtas_mobile/features/auth/application/auth_state.dart';
 import 'package:celtas_mobile/features/auth/data/auth_repository.dart';
 import 'package:celtas_mobile/features/auth/data/models/user.dart';
+import 'package:celtas_mobile/features/notifications/application/notification_providers.dart';
+import 'package:celtas_mobile/features/notifications/data/notification_permission_repository.dart';
 import 'package:celtas_mobile/features/profile/application/profile_providers.dart';
 import 'package:celtas_mobile/features/profile/data/profile_repository.dart';
 import 'package:celtas_mobile/features/profile/presentation/profile_screen.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,6 +21,9 @@ import 'package:mocktail/mocktail.dart';
 class MockProfileRepository extends Mock implements ProfileRepository {}
 
 class MockAuthRepository extends Mock implements AuthRepository {}
+
+class MockNotificationPermissionRepository extends Mock
+    implements NotificationPermissionRepository {}
 
 void main() {
   final user = User(
@@ -66,14 +72,29 @@ void main() {
     WidgetTester tester, {
     required MockProfileRepository profileRepository,
     MockAuthRepository? authRepository,
+    MockNotificationPermissionRepository? notificationPermissionRepository,
   }) async {
     final authRepo = authRepository ?? MockAuthRepository();
     when(() => authRepo.readRefreshToken()).thenAnswer((_) async => null);
+
+    // Default: ya autorizado, para no afectar los tests que no le importa
+    // el estado del permiso de notificaciones.
+    final notificationPermissionRepo =
+        notificationPermissionRepository ??
+        MockNotificationPermissionRepository();
+    if (notificationPermissionRepository == null) {
+      when(
+        () => notificationPermissionRepo.getStatus(),
+      ).thenAnswer((_) async => AuthorizationStatus.authorized);
+    }
 
     final container = ProviderContainer(
       overrides: [
         profileRepositoryProvider.overrideWithValue(profileRepository),
         authRepositoryProvider.overrideWithValue(authRepo),
+        notificationPermissionRepositoryProvider.overrideWithValue(
+          notificationPermissionRepo,
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -246,5 +267,171 @@ void main() {
 
     verifyNever(() => authRepo.signOutFromGoogle());
     expect(find.text('LOGIN'), findsNothing);
+  });
+
+  group('Renglón de notificaciones', () {
+    testWidgets('authorized → muestra "Activadas"', (tester) async {
+      final repository = MockProfileRepository();
+      when(() => repository.getProfile()).thenAnswer((_) async => user);
+      final permissionRepo = MockNotificationPermissionRepository();
+      when(
+        () => permissionRepo.getStatus(),
+      ).thenAnswer((_) async => AuthorizationStatus.authorized);
+
+      await pumpScreen(
+        tester,
+        profileRepository: repository,
+        notificationPermissionRepository: permissionRepo,
+      );
+
+      expect(find.text('Notificaciones'), findsOneWidget);
+      expect(find.text('Activadas'), findsOneWidget);
+    });
+
+    testWidgets('denied → muestra "Desactivadas"', (tester) async {
+      final repository = MockProfileRepository();
+      when(() => repository.getProfile()).thenAnswer((_) async => user);
+      final permissionRepo = MockNotificationPermissionRepository();
+      when(
+        () => permissionRepo.getStatus(),
+      ).thenAnswer((_) async => AuthorizationStatus.denied);
+
+      await pumpScreen(
+        tester,
+        profileRepository: repository,
+        notificationPermissionRepository: permissionRepo,
+      );
+
+      expect(find.text('Desactivadas'), findsOneWidget);
+    });
+
+    testWidgets(
+      'notDetermined → tocar el renglón dispara requestPermission(), '
+      'NUNCA openSystemSettings()',
+      (tester) async {
+        final repository = MockProfileRepository();
+        when(() => repository.getProfile()).thenAnswer((_) async => user);
+        final permissionRepo = MockNotificationPermissionRepository();
+        when(
+          () => permissionRepo.getStatus(),
+        ).thenAnswer((_) async => AuthorizationStatus.notDetermined);
+        when(
+          () => permissionRepo.requestPermission(),
+        ).thenAnswer((_) async => AuthorizationStatus.authorized);
+
+        await pumpScreen(
+          tester,
+          profileRepository: repository,
+          notificationPermissionRepository: permissionRepo,
+        );
+
+        await tester.tap(
+          find.byKey(const ValueKey('profile-notifications-tap')),
+        );
+        await tester.pumpAndSettle();
+
+        verify(() => permissionRepo.requestPermission()).called(1);
+        verifyNever(() => permissionRepo.openSystemSettings());
+        // Refrescó tras el pedido: ahora muestra el estado real nuevo.
+        expect(find.text('Activadas'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'denied → tocar el renglón abre Configuración del sistema, NUNCA '
+      'vuelve a llamar requestPermission() (el diálogo nativo ya no '
+      'aparece una vez rechazado)',
+      (tester) async {
+        final repository = MockProfileRepository();
+        when(() => repository.getProfile()).thenAnswer((_) async => user);
+        final permissionRepo = MockNotificationPermissionRepository();
+        when(
+          () => permissionRepo.getStatus(),
+        ).thenAnswer((_) async => AuthorizationStatus.denied);
+        when(
+          () => permissionRepo.openSystemSettings(),
+        ).thenAnswer((_) async => true);
+
+        await pumpScreen(
+          tester,
+          profileRepository: repository,
+          notificationPermissionRepository: permissionRepo,
+        );
+
+        await tester.tap(
+          find.byKey(const ValueKey('profile-notifications-tap')),
+        );
+        await tester.pumpAndSettle();
+
+        verify(() => permissionRepo.openSystemSettings()).called(1);
+        verifyNever(() => permissionRepo.requestPermission());
+      },
+    );
+
+    testWidgets(
+      'authorized → tocar el renglón no llama a request ni a openSettings',
+      (tester) async {
+        final repository = MockProfileRepository();
+        when(() => repository.getProfile()).thenAnswer((_) async => user);
+        final permissionRepo = MockNotificationPermissionRepository();
+        when(
+          () => permissionRepo.getStatus(),
+        ).thenAnswer((_) async => AuthorizationStatus.authorized);
+
+        await pumpScreen(
+          tester,
+          profileRepository: repository,
+          notificationPermissionRepository: permissionRepo,
+        );
+
+        await tester.tap(
+          find.byKey(const ValueKey('profile-notifications-tap')),
+        );
+        await tester.pumpAndSettle();
+
+        verifyNever(() => permissionRepo.requestPermission());
+        verifyNever(() => permissionRepo.openSystemSettings());
+      },
+    );
+
+    testWidgets(
+      'AppLifecycleState.resumed reconsulta el estado real (por si el '
+      'usuario lo cambió desde Configuración sin reiniciar la app)',
+      (tester) async {
+        final repository = MockProfileRepository();
+        when(() => repository.getProfile()).thenAnswer((_) async => user);
+        final permissionRepo = MockNotificationPermissionRepository();
+        var calls = 0;
+        when(() => permissionRepo.getStatus()).thenAnswer((_) async {
+          calls++;
+          // Primera consulta: desactivadas. El usuario "se fue a
+          // Configuración y las activó" — la segunda consulta (tras
+          // resumed) ya debe reflejar el cambio real.
+          return calls == 1
+              ? AuthorizationStatus.denied
+              : AuthorizationStatus.authorized;
+        });
+
+        await pumpScreen(
+          tester,
+          profileRepository: repository,
+          notificationPermissionRepository: permissionRepo,
+        );
+
+        expect(find.text('Desactivadas'), findsOneWidget);
+
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.paused,
+        );
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pumpAndSettle();
+
+        expect(calls, 2);
+        expect(find.text('Activadas'), findsOneWidget);
+        expect(find.text('Desactivadas'), findsNothing);
+      },
+    );
   });
 }
