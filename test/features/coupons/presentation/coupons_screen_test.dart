@@ -6,6 +6,7 @@ import 'package:celtas_mobile/features/coupons/data/models/coupon_status.dart';
 import 'package:celtas_mobile/features/coupons/data/models/user_coupon.dart';
 import 'package:celtas_mobile/features/coupons/data/models/validated_coupon.dart';
 import 'package:celtas_mobile/features/coupons/presentation/coupons_screen.dart';
+import 'package:celtas_mobile/shared/utils/spanish_date.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,13 +18,18 @@ import 'package:mocktail/mocktail.dart';
 class MockCouponRepository extends Mock implements CouponRepository {}
 
 void main() {
+  // Fecha relativa a "ahora", no un calendario fijo: un cupón fixture
+  // "activo" con una fecha calendario absoluta deja de ser válido apenas el
+  // reloj real la alcanza (ya pasó con `withMin` más abajo, ver PR que
+  // corrigió este patrón).
+  final activeExpiresAt = DateTime.now().add(const Duration(days: 30));
   final active = UserCoupon(
     id: 'c-1',
     code: 'VIKINGO10',
     discountType: CouponDiscountType.percentage,
     discountValue: 10,
     status: CouponStatus.active,
-    expiresAt: DateTime(2026, 8, 31),
+    expiresAt: activeExpiresAt,
   );
   final used = UserCoupon(
     id: 'c-2',
@@ -101,7 +107,10 @@ void main() {
 
     expect(find.text('10% OFF'), findsOneWidget);
     expect(find.text('Código: VIKINGO10'), findsOneWidget);
-    expect(find.text('Válido hasta 31 ago 2026'), findsOneWidget);
+    expect(
+      find.text('Válido hasta ${formatLongDate(activeExpiresAt)}'),
+      findsOneWidget,
+    );
     expect(find.text('USADO'), findsNothing);
     expect(find.text('EXPIRADO'), findsNothing);
   });
@@ -120,13 +129,14 @@ void main() {
   testWidgets(
       'cupón con minPurchaseAmount 0 → se trata igual que sin mínimo, no '
       'muestra nada raro en la tarjeta', (tester) async {
+    final zeroMinExpiresAt = DateTime.now().add(const Duration(days: 30));
     final zeroMin = UserCoupon(
       id: 'c-5',
       code: 'SINMINIMO',
       discountType: CouponDiscountType.percentage,
       discountValue: 10,
       status: CouponStatus.active,
-      expiresAt: DateTime(2026, 8, 31),
+      expiresAt: zeroMinExpiresAt,
       minPurchaseAmount: 0,
     );
     final repository = MockCouponRepository();
@@ -135,19 +145,23 @@ void main() {
     await pumpScreen(tester, repository: repository);
 
     expect(find.textContaining('Pedido mínimo'), findsNothing);
-    expect(find.text('Válido hasta 31 ago 2026'), findsOneWidget);
+    expect(
+      find.text('Válido hasta ${formatLongDate(zeroMinExpiresAt)}'),
+      findsOneWidget,
+    );
   });
 
   testWidgets(
       'cupón con minPurchaseAmount > 0 → muestra "Pedido mínimo: S/X.XX" '
       'junto con la fecha, mismo patrón del mockup original', (tester) async {
+    final withMinExpiresAt = DateTime.now().add(const Duration(days: 30));
     final withMin = UserCoupon(
       id: 'c-6',
       code: 'GRANDE50',
       discountType: CouponDiscountType.fixedAmount,
       discountValue: 15,
       status: CouponStatus.active,
-      expiresAt: DateTime(2026, 8, 20),
+      expiresAt: withMinExpiresAt,
       minPurchaseAmount: 50,
     );
     final repository = MockCouponRepository();
@@ -156,7 +170,9 @@ void main() {
     await pumpScreen(tester, repository: repository);
 
     expect(
-      find.text('Pedido mínimo: S/ 50.00 · Válido hasta 20 ago 2026'),
+      find.text(
+        'Pedido mínimo: S/ 50.00 · Válido hasta ${formatLongDate(withMinExpiresAt)}',
+      ),
       findsOneWidget,
     );
   });
@@ -272,7 +288,7 @@ void main() {
       discountType: CouponDiscountType.percentage,
       discountValue: 5,
       status: CouponStatus.active,
-      expiresAt: DateTime(2026, 9),
+      expiresAt: DateTime.now().add(const Duration(days: 40)),
     );
     final activeB = UserCoupon(
       id: 'g-2',
@@ -280,7 +296,7 @@ void main() {
       discountType: CouponDiscountType.percentage,
       discountValue: 8,
       status: CouponStatus.active,
-      expiresAt: DateTime(2026, 9, 2),
+      expiresAt: DateTime.now().add(const Duration(days: 41)),
     );
     final usedA = UserCoupon(
       id: 'g-3',
