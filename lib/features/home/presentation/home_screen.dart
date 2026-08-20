@@ -1009,12 +1009,20 @@ class _ProductImage extends StatelessWidget {
         ),
       );
     }
+    // Thumbnail de 76x76 lógicos: se limita la decodificación en memoria al
+    // tamaño físico real mostrado (con el devicePixelRatio del dispositivo)
+    // en vez de decodificar la imagen a su resolución original servida por
+    // el backend (puede ser varias veces más grande que el slot visible).
+    final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
+    final cacheDimension = (76 * devicePixelRatio).round();
     return ClipRRect(
       borderRadius: BorderRadius.circular(CeltasRadii.control),
       child: CachedNetworkImage(
         imageUrl: imageUrl,
         width: 76,
         height: 76,
+        memCacheWidth: cacheDimension,
+        memCacheHeight: cacheDimension,
         fit: BoxFit.cover,
         placeholder: (context, url) => Container(
           width: 76,
