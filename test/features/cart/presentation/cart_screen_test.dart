@@ -809,6 +809,81 @@ void main() {
     );
   });
 
+  group('nota (comentario libre)', () {
+    testWidgets(
+      'ítem con comentario → muestra "nota: ..." debajo de la línea de '
+      'salsas',
+      (tester) async {
+        final container = ProviderContainer(
+          overrides: [
+            couponRepositoryProvider.overrideWithValue(
+              MockCouponRepository(),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+        container.read(cartProvider.notifier).addItem(
+          burger,
+          selectedSauces: const [SauceOption(id: 's-1', name: 'Mayonesa')],
+          comment: 'Sin cebolla',
+        );
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router()),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('cremas: Mayonesa'), findsOneWidget);
+        expect(find.text('nota: Sin cebolla'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'ítem con comentario y sin salsas → muestra "nota: ..." en el mismo '
+      'lugar, sin la línea de "cremas"',
+      (tester) async {
+        final container = ProviderContainer(
+          overrides: [
+            couponRepositoryProvider.overrideWithValue(
+              MockCouponRepository(),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+        container
+            .read(cartProvider.notifier)
+            .addItem(burger, comment: 'Bien cocida');
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router()),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('nota: Bien cocida'), findsOneWidget);
+        expect(find.textContaining('cremas:'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'ítem sin comentario → no muestra la línea de "nota"',
+      (tester) async {
+        await pumpCart(
+          tester,
+          couponRepository: MockCouponRepository(),
+          items: [burger],
+        );
+
+        expect(find.textContaining('nota:'), findsNothing);
+      },
+    );
+  });
+
   group('editar salsas desde el carrito (ícono de lápiz)', () {
     const withSaucesMenu = [
       PublicMenuCategory(

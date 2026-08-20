@@ -35,20 +35,26 @@ class AddressSnapshotInput {
 ///
 /// `POST /orders` (contrato verificado contra `celtas-backend/src/modules/
 /// orders/dto/create-order.dto.ts` + `orders.service.ts`):
-///   - `items`: `[{ menuItemId, quantity, sauceIds? }]`, obligatorio, al
-///     menos 1. `sauceIds` es tri-state real (`resolveSelectedSauces` en el
-///     backend distingue los tres casos, no colapsa `undefined` y `[]`):
-///     la llave se OMITE por completo si el ítem no tiene catálogo de
-///     salsas o el cliente nunca eligió (`CartItem.selectedSauces` vacío y
-///     `explicitlyNoSauces == false`) → el backend guarda
-///     `selectedSauces: null` ("no aplica"); se manda `sauceIds: []`
-///     EXPLÍCITO si el cliente tocó "Sin salsas" a propósito
+///   - `items`: `[{ menuItemId, quantity, sauceIds?, comment? }]`,
+///     obligatorio, al menos 1. `sauceIds` es tri-state real
+///     (`resolveSelectedSauces` en el backend distingue los tres casos, no
+///     colapsa `undefined` y `[]`): la llave se OMITE por completo si el
+///     ítem no tiene catálogo de salsas o el cliente nunca eligió
+///     (`CartItem.selectedSauces` vacío y `explicitlyNoSauces == false`) →
+///     el backend guarda `selectedSauces: null` ("no aplica"); se manda
+///     `sauceIds: []` EXPLÍCITO si el cliente tocó "Sin salsas" a propósito
 ///     (`explicitlyNoSauces == true`) → el backend guarda
 ///     `selectedSauces: []` y esto se muestra literal como "Sin salsas" en
 ///     WhatsApp/admin; con salsas elegidas, se mandan sus ids. El backend
 ///     valida cada id contra las salsas que ese producto realmente ofrece y
 ///     guarda los NOMBRES como snapshot en `OrderItem.selectedSauces` — el
 ///     pedido no se ve afectado si la salsa se borra del catálogo después.
+///     `comment` (texto libre, opcional, `MaxLength(140)` en el backend) se
+///     manda SOLO si queda contenido real después de `trim()` — mismo
+///     criterio que `sauceIds`/`addressSnapshot`/`couponCode`: nunca se
+///     manda una llave irrelevante. El backend también trimea y trata
+///     vacío/solo-espacios como ausente (`resolveComment`), así que este
+///     `trim()` del lado del cliente es una garantía extra, no la única.
 ///   - `addressId` O `addressSnapshot` (JSON string) — nunca ambos, nunca
 ///     ninguno (el backend responde 400).
 ///   - `couponCode` opcional: se valida y canjea en la MISMA transacción del
@@ -87,6 +93,8 @@ class OrderRepository {
                   ]
                 else if (item.explicitlyNoSauces)
                   'sauceIds': const <String>[],
+                if (item.comment != null && item.comment!.trim().isNotEmpty)
+                  'comment': item.comment!.trim(),
               },
           ],
           'addressId': ?addressId,

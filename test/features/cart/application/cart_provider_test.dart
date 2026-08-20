@@ -228,6 +228,87 @@ void main() {
     );
   });
 
+  group('comentario (nota libre por línea del carrito)', () {
+    const mayo = SauceOption(id: 's-1', name: 'Mayonesa');
+
+    test('agregar con comentario guarda el string en la fila', () {
+      final container = createContainer();
+      container
+          .read(cartProvider.notifier)
+          .addItem(burger, comment: 'Sin cebolla');
+
+      final item = container.read(cartProvider).items.single;
+      expect(item.comment, 'Sin cebolla');
+      expect(item.lineKey, 'i-1::Sin cebolla');
+    });
+
+    test(
+      'mismo producto y mismo comentario → fusiona en una fila (suma '
+      'cantidad, igual que sin comentario)',
+      () {
+        final container = createContainer();
+        container
+            .read(cartProvider.notifier)
+            .addItem(burger, comment: 'Sin cebolla');
+        container
+            .read(cartProvider.notifier)
+            .addItem(burger, comment: 'Sin cebolla');
+
+        final state = container.read(cartProvider);
+        expect(state.items, hasLength(1));
+        expect(state.items.single.quantity, 2);
+      },
+    );
+
+    test(
+      'mismo producto con OTRO comentario → fila aparte, no fusiona (y '
+      'tampoco fusiona con la fila sin comentario)',
+      () {
+        final container = createContainer();
+        container
+            .read(cartProvider.notifier)
+            .addItem(burger, comment: 'Sin cebolla');
+        container
+            .read(cartProvider.notifier)
+            .addItem(burger, comment: 'Bien cocida');
+        container.read(cartProvider.notifier).addItem(burger); // sin nota
+
+        final state = container.read(cartProvider);
+        expect(state.items, hasLength(3));
+        expect(state.totalCount, 3);
+      },
+    );
+
+    test(
+      'mismo producto y mismas salsas pero distinto comentario → fila '
+      'aparte (el comentario participa en la key junto con las salsas)',
+      () {
+        final container = createContainer();
+        container.read(cartProvider.notifier).addItem(
+              burger,
+              selectedSauces: const [mayo],
+              comment: 'Sin cebolla',
+            );
+        container.read(cartProvider.notifier).addItem(
+              burger,
+              selectedSauces: const [mayo],
+              comment: 'Bien cocida',
+            );
+
+        final state = container.read(cartProvider);
+        expect(state.items, hasLength(2));
+        expect(state.totalCount, 2);
+      },
+    );
+
+    test('sin comentario, la key sigue siendo el menuItemId puro', () {
+      final container = createContainer();
+      container.read(cartProvider.notifier).addItem(burger);
+
+      expect(container.read(cartProvider).items.single.lineKey, 'i-1');
+    });
+  });
+
   group('updateLine (edición desde el carrito)', () {
     const mayo = SauceOption(id: 's-1', name: 'Mayonesa');
     const mostaza = SauceOption(id: 's-2', name: 'Mostaza');
@@ -409,6 +490,72 @@ void main() {
         expect(state.items.single.lineKey, 'i-1');
         expect(state.items.single.quantity, 3);
         expect(state.items.single.explicitlyNoSauces, isTrue);
+      },
+    );
+
+    test('reemplaza el comentario de la fila editada', () {
+      final container = createContainer();
+      container
+          .read(cartProvider.notifier)
+          .addItem(burger, comment: 'Sin cebolla');
+
+      container.read(cartProvider.notifier).updateLine(
+            'i-1::Sin cebolla',
+            quantity: 1,
+            selectedSauces: const [],
+            comment: 'Bien cocida',
+          );
+
+      final item = container.read(cartProvider).items.single;
+      expect(item.comment, 'Bien cocida');
+      expect(item.lineKey, 'i-1::Bien cocida');
+    });
+
+    test(
+      'cambiar el comentario de forma que ya no coincida con otra fila NO '
+      'la duplica: solo se actualiza la fila editada',
+      () {
+        final container = createContainer();
+        container
+            .read(cartProvider.notifier)
+            .addItem(burger, comment: 'Sin cebolla');
+
+        container.read(cartProvider.notifier).updateLine(
+              'i-1::Sin cebolla',
+              quantity: 1,
+              selectedSauces: const [],
+            );
+
+        final state = container.read(cartProvider);
+        expect(state.items, hasLength(1));
+        expect(state.items.single.lineKey, 'i-1');
+        expect(state.items.single.comment, isNull);
+      },
+    );
+
+    test(
+      'si el comentario nuevo coincide con OTRA fila ya existente, se '
+      'fusionan sumando cantidades',
+      () {
+        final container = createContainer();
+        final notifier = container.read(cartProvider.notifier);
+        notifier.addItem(burger, comment: 'Sin cebolla');
+        notifier.addItem(burger, quantity: 3); // sin comentario, 'i-1'
+
+        // Se edita la fila sin comentario para que pase a tener "Sin
+        // cebolla" — ya existe una fila con ese comentario exacto.
+        notifier.updateLine(
+          'i-1',
+          quantity: 3,
+          selectedSauces: const [],
+          comment: 'Sin cebolla',
+        );
+
+        final state = container.read(cartProvider);
+        expect(state.items, hasLength(1));
+        expect(state.items.single.lineKey, 'i-1::Sin cebolla');
+        // 1 (fila original) + 3 (fila editada, fusionada) = 4.
+        expect(state.items.single.quantity, 4);
       },
     );
   });

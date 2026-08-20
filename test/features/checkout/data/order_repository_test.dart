@@ -208,6 +208,130 @@ void main() {
       expect(captured.containsKey('total'), isFalse);
     });
 
+    test(
+      'ítem sin comentario → no manda la llave "comment"',
+      () async {
+        mockPostSuccess();
+
+        await repository.createOrder(
+          items: const [
+            CartItem(
+              menuItemId: 'i-1',
+              name: 'Berserker Burger',
+              unitPrice: 15.5,
+              quantity: 1,
+            ),
+          ],
+          addressId: 'addr-1',
+        );
+
+        final captured = verify(
+          () => dio.post<Map<String, dynamic>>(
+            '/orders',
+            data: captureAny(named: 'data'),
+          ),
+        ).captured.single as Map<String, dynamic>;
+        final item = (captured['items'] as List).single as Map<String, dynamic>;
+        expect(item.containsKey('comment'), isFalse);
+      },
+    );
+
+    test(
+      'ítem con comentario → manda "comment" trimeado',
+      () async {
+        mockPostSuccess();
+
+        await repository.createOrder(
+          items: const [
+            CartItem(
+              menuItemId: 'i-1',
+              name: 'Berserker Burger',
+              unitPrice: 15.5,
+              quantity: 1,
+              comment: '  Sin cebolla, bien cocida  ',
+            ),
+          ],
+          addressId: 'addr-1',
+        );
+
+        final captured = verify(
+          () => dio.post<Map<String, dynamic>>(
+            '/orders',
+            data: captureAny(named: 'data'),
+          ),
+        ).captured.single as Map<String, dynamic>;
+        final item = (captured['items'] as List).single as Map<String, dynamic>;
+        expect(item['comment'], 'Sin cebolla, bien cocida');
+      },
+    );
+
+    test(
+      'ítem con comentario solo espacios → no manda la llave "comment" '
+      '(mismo criterio que sauceIds: nunca una llave irrelevante)',
+      () async {
+        mockPostSuccess();
+
+        await repository.createOrder(
+          items: const [
+            CartItem(
+              menuItemId: 'i-1',
+              name: 'Berserker Burger',
+              unitPrice: 15.5,
+              quantity: 1,
+              comment: '   ',
+            ),
+          ],
+          addressId: 'addr-1',
+        );
+
+        final captured = verify(
+          () => dio.post<Map<String, dynamic>>(
+            '/orders',
+            data: captureAny(named: 'data'),
+          ),
+        ).captured.single as Map<String, dynamic>;
+        final item = (captured['items'] as List).single as Map<String, dynamic>;
+        expect(item.containsKey('comment'), isFalse);
+      },
+    );
+
+    test(
+      'varios ítems: cada uno manda su propio comentario de forma '
+      'independiente',
+      () async {
+        mockPostSuccess();
+
+        await repository.createOrder(
+          items: const [
+            CartItem(
+              menuItemId: 'i-1',
+              name: 'Celtas Burguesa Clásica',
+              unitPrice: 20,
+              quantity: 1,
+              comment: 'Sin cebolla',
+            ),
+            CartItem(
+              menuItemId: 'i-2',
+              name: 'Arroz Chaufa',
+              unitPrice: 18,
+              quantity: 1,
+            ),
+          ],
+          addressId: 'addr-1',
+        );
+
+        final captured = verify(
+          () => dio.post<Map<String, dynamic>>(
+            '/orders',
+            data: captureAny(named: 'data'),
+          ),
+        ).captured.single as Map<String, dynamic>;
+        final items = (captured['items'] as List).cast<Map<String, dynamic>>();
+        expect(items[0]['comment'], 'Sin cebolla');
+        expect(items[1].containsKey('comment'), isFalse);
+      },
+    );
+
     test('parsea id/total/whatsappUrl de la respuesta', () async {
       mockPostSuccess();
 

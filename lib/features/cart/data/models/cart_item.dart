@@ -32,6 +32,11 @@ abstract class CartItem with _$CartItem {
     // `order_repository.dart`: con `selectedSauces` vacío, este campo decide
     // si `sauceIds` se manda como `[]` explícito o se omite del todo.
     @Default(false) bool explicitlyNoSauces,
+    // Nota libre opcional del cliente para este ítem (ej. "sin cebolla"),
+    // espejo de `OrderItem.comment` en el backend. `null`/vacío = sin
+    // comentario — se normaliza a `null` al agregar/editar la fila (ver
+    // `CartNotifier`), nunca se guarda como string vacío o solo espacios.
+    String? comment,
   }) = _CartItem;
 
   const CartItem._();
@@ -40,19 +45,30 @@ abstract class CartItem with _$CartItem {
   double get lineTotal => unitPrice * quantity;
 
   /// Identifica una fila única del carrito. El mismo producto CON la misma
-  /// combinación de salsas se fusiona en una sola fila (suma cantidad); el
-  /// mismo producto con OTRA combinación queda en una fila aparte — ej. una
-  /// Celtas Burguesa con mayonesa y otra sin nada son dos líneas distintas
-  /// del carrito, cada una con su propio stepper de cantidad.
+  /// combinación de salsas Y el mismo comentario se fusiona en una sola fila
+  /// (suma cantidad); si cualquiera de los dos difiere, queda en una fila
+  /// aparte — ej. una Celtas Burguesa con mayonesa y otra sin nada son dos
+  /// líneas distintas del carrito, igual que una Celtas Burguesa con nota
+  /// "sin cebolla" y otra sin nota, cada una con su propio stepper de
+  /// cantidad.
   ///
-  /// Sin salsas seleccionadas, la key es igual al `menuItemId` puro — mismo
+  /// Sin salsas ni comentario, la key es igual al `menuItemId` puro — mismo
   /// valor que ya usaban `increment`/`decrement`/`removeItem` y los
-  /// `ValueKey` del carrito antes de que existieran las salsas, así ningún
-  /// producto sin salsas cambia de comportamiento con este agregado.
+  /// `ValueKey` del carrito antes de que existieran las salsas/el
+  /// comentario, así ningún producto sin ninguno de los dos cambia de
+  /// comportamiento con este agregado. Con solo salsas (sin comentario) la
+  /// key tampoco cambia respecto a antes de este agregado (`menuItemId::
+  /// idsOrdenados`) — el comentario solo agrega un segmento extra cuando
+  /// hay uno, en vez de ensuciar la key con un separador vacío de más.
   String get lineKey {
-    if (selectedSauces.isEmpty) return menuItemId;
-    final sortedIds = selectedSauces.map((sauce) => sauce.id).toList()
-      ..sort();
-    return '$menuItemId::${sortedIds.join(',')}';
+    if (selectedSauces.isEmpty && comment == null) return menuItemId;
+    final parts = [menuItemId];
+    if (selectedSauces.isNotEmpty) {
+      final sortedIds = selectedSauces.map((sauce) => sauce.id).toList()
+        ..sort();
+      parts.add(sortedIds.join(','));
+    }
+    if (comment != null) parts.add(comment!);
+    return parts.join('::');
   }
 }

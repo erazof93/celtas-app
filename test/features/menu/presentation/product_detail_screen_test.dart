@@ -554,6 +554,93 @@ void main() {
     );
   });
 
+  group('nota para el pedido (comentario libre por línea)', () {
+    testWidgets(
+      'el campo de nota está siempre visible, incluso en productos sin '
+      'catálogo de salsas',
+      (tester) async {
+        await pumpDetail(tester); // i-1, sin sauces
+
+        expect(find.text('NOTA PARA TU PEDIDO'), findsOneWidget);
+        expect(find.byKey(const ValueKey('detail-comment')), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'escribir una nota y agregar guarda el comentario trimeado en la '
+      'fila',
+      (tester) async {
+        final (container, _) = await pumpDetail(tester);
+
+        await tester.enterText(
+          find.byKey(const ValueKey('detail-comment')),
+          '  Sin cebolla  ',
+        );
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
+
+        expect(container.read(cartProvider).items.single.comment, 'Sin cebolla');
+      },
+    );
+
+    testWidgets(
+      'nota vacía o solo espacios se guarda como null (sin comentario), '
+      'mismo criterio que el backend',
+      (tester) async {
+        final (container, _) = await pumpDetail(tester);
+
+        await tester.enterText(
+          find.byKey(const ValueKey('detail-comment')),
+          '   ',
+        );
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
+
+        expect(container.read(cartProvider).items.single.comment, isNull);
+      },
+    );
+
+    testWidgets(
+      'sin tocar el campo de nota, la fila queda sin comentario',
+      (tester) async {
+        final (container, _) = await pumpDetail(tester);
+
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
+
+        expect(container.read(cartProvider).items.single.comment, isNull);
+      },
+    );
+
+    testWidgets(
+      'mismo producto con distinta nota crea una fila aparte en el '
+      'carrito (no fusiona), mismo criterio que las salsas',
+      (tester) async {
+        final (container, goRouter) = await pumpDetail(tester);
+
+        await tester.enterText(
+          find.byKey(const ValueKey('detail-comment')),
+          'Sin cebolla',
+        );
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
+
+        unawaited(goRouter.push('/product/i-1'));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const ValueKey('detail-comment')),
+          'Bien cocida',
+        );
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
+
+        final state = container.read(cartProvider);
+        expect(state.items, hasLength(2));
+        expect(state.totalCount, 2);
+      },
+    );
+  });
+
   group('modo edición (editingItem, ícono de lápiz del carrito)', () {
     /// Router con `/cart` como origen (destino real del `pop()` en modo
     /// edición, ver doc de `editingItem` en `product_detail_screen.dart`) y
@@ -776,6 +863,54 @@ void main() {
         expect(state.items.single.lineKey, 'i-3::s-1');
         // 1 (fila original con mayo) + 3 (fila editada, fusionada) = 4.
         expect(state.items.single.quantity, 4);
+      },
+    );
+
+    testWidgets(
+      'precarga la nota de la fila que se está editando en el campo de '
+      'comentario',
+      (tester) async {
+        await pumpEdit(
+          tester,
+          seed: (notifier) => notifier.addItem(
+            category.items.firstWhere((i) => i.id == 'i-1'),
+            comment: 'Sin cebolla',
+          ),
+          pickEditingLineKey: (state) => state.items.single.lineKey,
+          productId: 'i-1',
+        );
+
+        final field = tester.widget<TextField>(
+          find.byKey(const ValueKey('detail-comment')),
+        );
+        expect(field.controller?.text, 'Sin cebolla');
+      },
+    );
+
+    testWidgets(
+      'GUARDAR CAMBIOS con la nota editada actualiza el comentario de la '
+      'fila',
+      (tester) async {
+        final (container, _) = await pumpEdit(
+          tester,
+          seed: (notifier) => notifier.addItem(
+            category.items.firstWhere((i) => i.id == 'i-1'),
+            comment: 'Sin cebolla',
+          ),
+          pickEditingLineKey: (state) => state.items.single.lineKey,
+          productId: 'i-1',
+        );
+
+        await tester.enterText(
+          find.byKey(const ValueKey('detail-comment')),
+          'Bien cocida',
+        );
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
+
+        final state = container.read(cartProvider);
+        expect(state.items, hasLength(1));
+        expect(state.items.single.comment, 'Bien cocida');
       },
     );
   });

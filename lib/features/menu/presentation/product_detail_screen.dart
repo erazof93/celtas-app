@@ -106,13 +106,14 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
   late int _quantity;
   late final Set<String> _selectedSauceIds;
   late bool _explicitlyNoSauces;
+  late final TextEditingController _commentController;
 
   @override
   void initState() {
     super.initState();
-    // Modo edición: precarga cantidad y salsas de la fila que se está
-    // editando en vez de arrancar en 1/vacío — ver doc de `editingItem` en
-    // `ProductDetailScreen`. Si la fila editada tenía "Sin salsas" marcado
+    // Modo edición: precarga cantidad, salsas y comentario de la fila que se
+    // está editando en vez de arrancar en 1/vacío — ver doc de `editingItem`
+    // en `ProductDetailScreen`. Si la fila editada tenía "Sin salsas" marcado
     // explícitamente, precarga ese chip en vez de dejar todo vacío.
     final editingItem = widget.editingItem;
     _quantity = editingItem?.quantity ?? 1;
@@ -121,6 +122,15 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
         sauce.id,
     };
     _explicitlyNoSauces = editingItem?.explicitlyNoSauces ?? false;
+    _commentController = TextEditingController(
+      text: editingItem?.comment ?? '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
   }
 
   /// El producto exige una elección real (al menos una salsa, o "Sin
@@ -161,12 +171,18 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
     final selectedSauces = item.sauces
         .where((sauce) => _selectedSauceIds.contains(sauce.id))
         .toList();
+    // Vacío o solo espacios = sin comentario — mismo criterio que el
+    // backend (`OrdersService.resolveComment`, `create-order.dto.ts`), así
+    // dos filas sin nota real nunca quedan separadas por espacios sueltos.
+    final rawComment = _commentController.text.trim();
+    final comment = rawComment.isEmpty ? null : rawComment;
     if (editingItem != null) {
       ref.read(cartProvider.notifier).updateLine(
             editingItem.lineKey,
             quantity: _quantity,
             selectedSauces: selectedSauces,
             explicitlyNoSauces: _explicitlyNoSauces,
+            comment: comment,
           );
     } else {
       ref.read(cartProvider.notifier).addItem(
@@ -174,6 +190,7 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
             quantity: _quantity,
             selectedSauces: selectedSauces,
             explicitlyNoSauces: _explicitlyNoSauces,
+            comment: comment,
           );
     }
     // El SnackBar vive en el ScaffoldMessenger raíz (por encima del
@@ -319,6 +336,8 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
                         const _SauceChoiceNotice(),
                       ],
                     ],
+                    const SizedBox(height: 20),
+                    _CommentField(controller: _commentController),
                     const SizedBox(height: 20),
                     // Selector de cantidad (mockup: label CANTIDAD + stepper).
                     Row(
@@ -688,6 +707,60 @@ class _SauceChoiceNotice extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Nota libre opcional del cliente para este ítem (ej. "sin cebolla"). Nueva
+/// sección, sin precedente en `design-reference/` (12 pantallas, sin esta
+/// funcionalidad todavía) — se sigue el mismo lenguaje visual del resto de
+/// la pantalla (label bold + subtítulo muted, mismo patrón que "SALSAS Y
+/// CREMAS" arriba). Siempre visible, a diferencia del selector de salsas:
+/// el comentario no depende de que el producto tenga catálogo de salsas.
+class _CommentField extends StatelessWidget {
+  const _CommentField({required this.controller});
+
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'NOTA PARA TU PEDIDO',
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
+            color: CeltasColors.textLabel,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Opcional, ej. "sin cebolla"',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            fontSize: 12,
+            color: CeltasColors.textMuted,
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          key: const ValueKey('detail-comment'),
+          controller: controller,
+          maxLength: 140,
+          minLines: 1,
+          maxLines: 3,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            fontSize: 14,
+            color: CeltasColors.cream,
+          ),
+          decoration: const InputDecoration(
+            hintText: 'Ej. sin cebolla, bien cocida...',
+            isDense: true,
+          ),
+        ),
+      ],
     );
   }
 }

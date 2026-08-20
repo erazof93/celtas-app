@@ -1037,6 +1037,91 @@ shape de mock no 100% calcado) se corrigieron de inmediato tras la auditoría �
 riesgos de verificación en vivo (backend real con 409, dispositivo Android), ya documentados como
 no bloqueantes en el encargo original.
 
+### Comentario/nota libre opcional por ítem del carrito (`comment`) — ✅ COMPLETO
+
+Feature espejo de `OrderItem.comment`, ya soportado en producción por el backend y por
+`celtas-admin`. Contrato verificado por lectura directa (no por el resumen del encargo):
+`backend-celtas/src/modules/orders/dto/create-order.dto.ts`
+(`CreateOrderItemDto.comment?: string`, `@IsOptional()`, `@IsString()`, `@MaxLength(140)`) y
+`backend-celtas/src/modules/orders/orders.service.ts` (`resolveComment`, línea ~398: trimea y
+devuelve `null` si queda vacío; `buildWhatsappUrl`, línea ~426: agrega ` — Nota: {comment}` al
+mensaje solo cuando `comment !== null`). `celtas-admin/src/types/api.d.ts` línea 1179 confirma el
+mismo `comment?: string` en el DTO generado. Coincide exactamente con lo implementado en mobile.
+
+- [x] `flutter analyze` limpio (`No issues found!`, corrido de forma independiente)
+- [x] `flutter test` 399/399 (corrido de forma independiente, no solo confiado del reporte)
+- [x] `CartItem.comment` (`String?`, default `null`) participa en `lineKey` solo cuando no es
+      `null` — sin salsas ni comentario la key sigue siendo `menuItemId` puro (idéntica a antes);
+      con salsas y sin comentario sigue siendo `menuItemId::idsOrdenados` (idéntica a antes); el
+      segmento de comentario solo se agrega cuando hay uno. Confirmado por lectura de
+      `cart_item.dart` y con **mutación real**: reemplazar el `if (comment != null) parts.add(...)`
+      condicional por un `parts.add(comment ?? '')` incondicional (el bug real que el encargo
+      reportó haber cometido y corregido) rompió 7+ tests preexistentes de salsas
+      (`cart_provider_test.dart`, `product_detail_screen_test.dart`) con el error exacto esperado
+      (`'i-3::s-1'` vs `'i-3::s-1::'`, doble separador). Revertido con `git checkout --` y
+      reconstruido a mano comparando contra el contenido ya leído en esta misma auditoría (ver
+      nota de incidente abajo) — confirmado `flutter analyze`/`flutter test` (399/399) verdes tras
+      la reconstrucción.
+- [x] Fusión de filas: mismo producto + misma combinación de salsas + mismo comentario → se
+      fusiona (suma cantidad); si el comentario difiere, queda en fila aparte — `addItem`/
+      `updateLine` (`cart_provider.dart`) no necesitan un `OR` especial para `comment` en la
+      fusión (a diferencia de `explicitlyNoSauces`) porque, al participar en `lineKey`, dos filas
+      que se fusionan por definición ya tienen el mismo comentario.
+- [x] Trim + `null` si queda vacío, tanto del lado del cliente (`_addToCart` en
+      `product_detail_screen.dart`) como espejado del criterio real del backend
+      (`resolveComment`) — dos líneas de defensa, no una dependencia ciega del backend.
+- [x] `order_repository.dart`: `comment` se manda en el payload de `POST /orders` SOLO si
+      `item.comment != null && item.comment!.trim().isNotEmpty` — mismo criterio que `sauceIds`/
+      `addressSnapshot`/`couponCode`, nunca una llave irrelevante. Confirmado con los 4 casos de
+      `order_repository_test.dart`: ausente, presente+trimeado, solo-espacios→omitido,
+      independiente por ítem (un ítem con nota y otro sin nota en el mismo pedido).
+- [x] Fidelidad visual de "NOTA PARA TU PEDIDO": sin mockup de referencia para esta sección (no
+      existe en `design-reference/`, es una sección nueva igual que "SALSAS Y CREMAS" lo fue en su
+      momento) — juzgado contra el lenguaje visual ya establecido en la misma pantalla, no contra
+      un CSS inexistente. Confirmado por lectura: mismo patrón exacto que el label de
+      "SALSAS Y CREMAS" (`labelSmall`, `fontSize: 13`, `fontWeight: w700`, `letterSpacing: 0.5`,
+      `color: CeltasColors.textLabel`) + subtítulo (`bodySmall`, `fontSize: 12`,
+      `CeltasColors.textMuted`) — no una aproximación visual distinta.
+- [x] `cart_screen.dart`: línea `'nota: ${item.comment}'` solo cuando `comment` no es nulo/vacío,
+      mismo estilo (`bodySmall`, `fontSize: 11.5`, `italic`, `textMuted`) que la línea de salsas,
+      debajo de ella si ambas aplican — confirmado por los 3 casos nuevos de `cart_screen_test.dart`
+      (con salsas+nota, sin salsas+nota, sin nota→no muestra la línea).
+
+**Incidente durante esta auditoría (autoinfligido, corregido en el momento):** al hacer la prueba
+de mutación de arriba, se usó `git checkout -- lib/features/cart/data/models/cart_item.dart` para
+revertir — pero como esta feature completa nunca se había comiteado (confirmado con `git log`/
+`git status`: todo el cambio vivía como working tree sin commit), ese comando no deshizo solo la
+mutación: devolvió el archivo entero al último commit (`485ea1e`), es decir, **borró también la
+implementación real del campo `comment`** (no solo el bug de la mutación). Detectado de inmediato
+por el aviso del propio harness de que el archivo había cambiado en disco de forma no solicitada;
+reconstruido a mano línea por línea contra el contenido exacto ya leído momentos antes en esta
+misma sesión de auditoría (no desde memoria aproximada). Re-verificado con `flutter analyze`
+(`No issues found!`) y `flutter test` (399/399) después de la reconstrucción — mismo resultado que
+antes del incidente, sin pérdida real. Documentado acá en vez de omitido porque, aunque no afectó
+el resultado final, es el tipo de error que si no se detecta a tiempo destruye trabajo ajeno sin
+dejar rastro en git (nada comiteado, nada en el stash). Lección para próximas auditorías de este
+proyecto: no usar `git checkout --` como mecanismo de revertir mutaciones de prueba sobre archivos
+que puedan tener cambios sin commitear — preferir guardar el contenido original (ya leído) y
+restaurarlo con `Edit`, o confirmar primero con `git status`/`git diff` que el archivo está
+comiteado antes de un `checkout` destructivo.
+
+⚠️ Hallazgo no bloqueante (señalado en el encargo, confirmado real, no corregido por decisión
+explícita de alcance): el ícono de lápiz de `cart_screen.dart`
+(`_CartItemRow._offersSauces`) decide su visibilidad solo por si el producto ofrece catálogo de
+salsas. Un producto SIN salsas pero CON un comentario ya agregado no muestra el ícono de editar —
+no hay forma de editar solo la nota desde el carrito sin volver a pasar por "agregar de nuevo"
+(que crea una fila nueva en vez de reemplazar, dado que ya no hay `oldLineKey` accesible desde esa
+ruta). No se pidió cambiar este criterio en este encargo; queda como mejora de UX a evaluar, no
+como bug de esta feature.
+
+**Veredicto: LISTO.** Contrato de backend confirmado por lectura directa (no por el resumen del
+encargo), diseño consistente con el lenguaje visual ya establecido en la pantalla, `flutter
+analyze` y `flutter test` (399/399) verdes de forma independiente, el fix de `lineKey` reportado
+como corregido se confirmó real (no cosmético) con mutación, y los 5 casos de negocio del encargo
+(fusión/no-fusión por comentario, trim+null, comment nunca se manda si no aplica, diseño
+consistente, estados ya cubiertos por la sección de salsas) verificados. Sin regresiones: los 330+
+tests preexistentes de salsas siguen pasando sin haberse debilitado.
+
 ## Pedidos / Cupones
 
 - [x] Badges de estado de pedido visualmente distinguibles entre sí (los 5 estados)

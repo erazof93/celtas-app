@@ -730,6 +730,48 @@ celtas-mobile/
       **Veredicto final: LISTO.** Ver detalle completo (comparación sitio por sitio, salida cruda
       de ambas pasadas de mutación) en `docs/testing-checklist.md`, sección "Refactor:
       `showCeltasSnackBar` compartido".
+- [x] **Mejora post-cierre: comentario/nota libre opcional por ítem del carrito (`comment`)**,
+      espejo de un campo que backend y `celtas-admin` ya soportan en producción
+      (`OrderItem.comment`). Contrato verificado por lectura directa:
+      `create-order.dto.ts` (`CreateOrderItemDto.comment?: string`, `@IsOptional()`,
+      `@MaxLength(140)`) + `orders.service.ts` (`resolveComment`: trimea, `null` si queda vacío;
+      el mensaje de WhatsApp agrega ` — Nota: {comment}` cuando no es `null`).
+      - `CartItem` gana `String? comment` (default `null`). `lineKey` ahora incluye el comentario
+        además de `menuItemId` + salsas ordenadas — mismo criterio que ya existía para salsas
+        (fila separada si difiere), agregado como segmento condicional (solo si hay comentario)
+        para no romper el formato viejo de filas sin nota.
+      - `CartNotifier.addItem`/`updateLine` reciben `comment` opcional y lo propagan; al
+        participar en `lineKey`, la fusión por misma fila ya garantiza mismo comentario sin
+        necesitar un `OR` como el que sí usa `explicitlyNoSauces`.
+      - `product_detail_screen.dart`: sección nueva "NOTA PARA TU PEDIDO" (`_CommentField`),
+        `TextField` `maxLength: 140`, SIEMPRE visible (a diferencia del selector de salsas, que es
+        condicional al catálogo del producto) — mismo lenguaje visual que "SALSAS Y CREMAS"
+        (label + subtítulo muted). Modo edición precarga el texto de la fila que se edita.
+      - `cart_screen.dart`: línea `'nota: ${item.comment}'` debajo de la línea de salsas (o sola
+        si el producto no tiene catálogo), mismo estilo visual.
+      - `order_repository.dart`: `comment` se manda en el payload SOLO si queda contenido real
+        tras `trim()` — mismo criterio que `sauceIds`/`addressSnapshot`/`couponCode`.
+      - Tests nuevos en los 4 archivos ya existentes de la feature de salsas
+        (`cart_provider_test.dart`, `product_detail_screen_test.dart`, `cart_screen_test.dart`,
+        `order_repository_test.dart`) — 399/399 tests, `flutter analyze` limpio.
+      - Auditado por `@tester`: contrato re-verificado por lectura directa de
+        `create-order.dto.ts`/`orders.service.ts`/`api.d.ts` (no por el resumen del encargo);
+        `flutter analyze`/`flutter test` (399/399) corridos de forma independiente; confirmado con
+        **mutación real** que el fix de `lineKey` reportado (segmento de comentario condicional en
+        vez de incondicional) es real, no cosmético: la versión incondicional rompe 7+ tests
+        preexistentes de salsas. Durante esa mutación ocurrió un incidente autoinfligido de
+        `@tester` (uso de `git checkout --` sobre un archivo con cambios sin commitear, que borró
+        momentáneamente la implementación real además de la mutación) — detectado y reconstruido
+        de inmediato contra el contenido ya leído en la misma sesión, sin pérdida real; documentado
+        en detalle en `docs/testing-checklist.md` como lección para no repetir el mecanismo de
+        reversión en próximas auditorías. Fidelidad visual confirmada consistente con el patrón ya
+        establecido de "SALSAS Y CREMAS" (sin mockup de referencia para esta sección nueva, igual
+        que no lo hubo para salsas en su momento). **Veredicto: LISTO.** Hallazgo no bloqueante
+        (ya señalado en el encargo, confirmado real): el ícono de lápiz del carrito no aparece para
+        un producto sin catálogo de salsas que solo tiene un comentario — no se pidió cambiar este
+        criterio en este encargo, queda como mejora de UX a evaluar. Detalle completo en
+        `docs/testing-checklist.md`, sección "Comentario/nota libre opcional por ítem del carrito
+        (`comment`)".
 
 ### 5. Checkout — ✅ COMPLETO (5/5)
 - [x] Selector de dirección guardada (o agregar nueva): `GET /users/me/addresses` con

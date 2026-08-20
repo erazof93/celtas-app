@@ -21,7 +21,11 @@ mixin _$CartItem {
 // `false` siempre) de "el cliente eligió deliberadamente ninguna". Ver
 // `order_repository.dart`: con `selectedSauces` vacío, este campo decide
 // si `sauceIds` se manda como `[]` explícito o se omite del todo.
- bool get explicitlyNoSauces;
+ bool get explicitlyNoSauces;// Nota libre opcional del cliente para este ítem (ej. "sin cebolla"),
+// espejo de `OrderItem.comment` en el backend. `null`/vacío = sin
+// comentario — se normaliza a `null` al agregar/editar la fila (ver
+// `CartNotifier`), nunca se guarda como string vacío o solo espacios.
+ String? get comment;
 /// Create a copy of CartItem
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -32,16 +36,16 @@ $CartItemCopyWith<CartItem> get copyWith => _$CartItemCopyWithImpl<CartItem>(thi
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is CartItem&&(identical(other.menuItemId, menuItemId) || other.menuItemId == menuItemId)&&(identical(other.name, name) || other.name == name)&&(identical(other.unitPrice, unitPrice) || other.unitPrice == unitPrice)&&(identical(other.quantity, quantity) || other.quantity == quantity)&&(identical(other.image, image) || other.image == image)&&const DeepCollectionEquality().equals(other.selectedSauces, selectedSauces)&&(identical(other.explicitlyNoSauces, explicitlyNoSauces) || other.explicitlyNoSauces == explicitlyNoSauces));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is CartItem&&(identical(other.menuItemId, menuItemId) || other.menuItemId == menuItemId)&&(identical(other.name, name) || other.name == name)&&(identical(other.unitPrice, unitPrice) || other.unitPrice == unitPrice)&&(identical(other.quantity, quantity) || other.quantity == quantity)&&(identical(other.image, image) || other.image == image)&&const DeepCollectionEquality().equals(other.selectedSauces, selectedSauces)&&(identical(other.explicitlyNoSauces, explicitlyNoSauces) || other.explicitlyNoSauces == explicitlyNoSauces)&&(identical(other.comment, comment) || other.comment == comment));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,menuItemId,name,unitPrice,quantity,image,const DeepCollectionEquality().hash(selectedSauces),explicitlyNoSauces);
+int get hashCode => Object.hash(runtimeType,menuItemId,name,unitPrice,quantity,image,const DeepCollectionEquality().hash(selectedSauces),explicitlyNoSauces,comment);
 
 @override
 String toString() {
-  return 'CartItem(menuItemId: $menuItemId, name: $name, unitPrice: $unitPrice, quantity: $quantity, image: $image, selectedSauces: $selectedSauces, explicitlyNoSauces: $explicitlyNoSauces)';
+  return 'CartItem(menuItemId: $menuItemId, name: $name, unitPrice: $unitPrice, quantity: $quantity, image: $image, selectedSauces: $selectedSauces, explicitlyNoSauces: $explicitlyNoSauces, comment: $comment)';
 }
 
 
@@ -52,7 +56,7 @@ abstract mixin class $CartItemCopyWith<$Res>  {
   factory $CartItemCopyWith(CartItem value, $Res Function(CartItem) _then) = _$CartItemCopyWithImpl;
 @useResult
 $Res call({
- String menuItemId, String name, double unitPrice, int quantity, String? image, List<SauceOption> selectedSauces, bool explicitlyNoSauces
+ String menuItemId, String name, double unitPrice, int quantity, String? image, List<SauceOption> selectedSauces, bool explicitlyNoSauces, String? comment
 });
 
 
@@ -69,7 +73,7 @@ class _$CartItemCopyWithImpl<$Res>
 
 /// Create a copy of CartItem
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? menuItemId = null,Object? name = null,Object? unitPrice = null,Object? quantity = null,Object? image = freezed,Object? selectedSauces = null,Object? explicitlyNoSauces = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? menuItemId = null,Object? name = null,Object? unitPrice = null,Object? quantity = null,Object? image = freezed,Object? selectedSauces = null,Object? explicitlyNoSauces = null,Object? comment = freezed,}) {
   return _then(_self.copyWith(
 menuItemId: null == menuItemId ? _self.menuItemId : menuItemId // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -78,7 +82,8 @@ as double,quantity: null == quantity ? _self.quantity : quantity // ignore: cast
 as int,image: freezed == image ? _self.image : image // ignore: cast_nullable_to_non_nullable
 as String?,selectedSauces: null == selectedSauces ? _self.selectedSauces : selectedSauces // ignore: cast_nullable_to_non_nullable
 as List<SauceOption>,explicitlyNoSauces: null == explicitlyNoSauces ? _self.explicitlyNoSauces : explicitlyNoSauces // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,comment: freezed == comment ? _self.comment : comment // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 
@@ -163,10 +168,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String menuItemId,  String name,  double unitPrice,  int quantity,  String? image,  List<SauceOption> selectedSauces,  bool explicitlyNoSauces)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String menuItemId,  String name,  double unitPrice,  int quantity,  String? image,  List<SauceOption> selectedSauces,  bool explicitlyNoSauces,  String? comment)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _CartItem() when $default != null:
-return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that.image,_that.selectedSauces,_that.explicitlyNoSauces);case _:
+return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that.image,_that.selectedSauces,_that.explicitlyNoSauces,_that.comment);case _:
   return orElse();
 
 }
@@ -184,10 +189,10 @@ return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String menuItemId,  String name,  double unitPrice,  int quantity,  String? image,  List<SauceOption> selectedSauces,  bool explicitlyNoSauces)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String menuItemId,  String name,  double unitPrice,  int quantity,  String? image,  List<SauceOption> selectedSauces,  bool explicitlyNoSauces,  String? comment)  $default,) {final _that = this;
 switch (_that) {
 case _CartItem():
-return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that.image,_that.selectedSauces,_that.explicitlyNoSauces);case _:
+return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that.image,_that.selectedSauces,_that.explicitlyNoSauces,_that.comment);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -204,10 +209,10 @@ return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String menuItemId,  String name,  double unitPrice,  int quantity,  String? image,  List<SauceOption> selectedSauces,  bool explicitlyNoSauces)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String menuItemId,  String name,  double unitPrice,  int quantity,  String? image,  List<SauceOption> selectedSauces,  bool explicitlyNoSauces,  String? comment)?  $default,) {final _that = this;
 switch (_that) {
 case _CartItem() when $default != null:
-return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that.image,_that.selectedSauces,_that.explicitlyNoSauces);case _:
+return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that.image,_that.selectedSauces,_that.explicitlyNoSauces,_that.comment);case _:
   return null;
 
 }
@@ -219,7 +224,7 @@ return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that
 
 
 class _CartItem extends CartItem {
-  const _CartItem({required this.menuItemId, required this.name, required this.unitPrice, required this.quantity, this.image, final  List<SauceOption> selectedSauces = const <SauceOption>[], this.explicitlyNoSauces = false}): _selectedSauces = selectedSauces,super._();
+  const _CartItem({required this.menuItemId, required this.name, required this.unitPrice, required this.quantity, this.image, final  List<SauceOption> selectedSauces = const <SauceOption>[], this.explicitlyNoSauces = false, this.comment}): _selectedSauces = selectedSauces,super._();
   
 
 @override final  String menuItemId;
@@ -242,6 +247,11 @@ class _CartItem extends CartItem {
 // `order_repository.dart`: con `selectedSauces` vacío, este campo decide
 // si `sauceIds` se manda como `[]` explícito o se omite del todo.
 @override@JsonKey() final  bool explicitlyNoSauces;
+// Nota libre opcional del cliente para este ítem (ej. "sin cebolla"),
+// espejo de `OrderItem.comment` en el backend. `null`/vacío = sin
+// comentario — se normaliza a `null` al agregar/editar la fila (ver
+// `CartNotifier`), nunca se guarda como string vacío o solo espacios.
+@override final  String? comment;
 
 /// Create a copy of CartItem
 /// with the given fields replaced by the non-null parameter values.
@@ -253,16 +263,16 @@ _$CartItemCopyWith<_CartItem> get copyWith => __$CartItemCopyWithImpl<_CartItem>
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _CartItem&&(identical(other.menuItemId, menuItemId) || other.menuItemId == menuItemId)&&(identical(other.name, name) || other.name == name)&&(identical(other.unitPrice, unitPrice) || other.unitPrice == unitPrice)&&(identical(other.quantity, quantity) || other.quantity == quantity)&&(identical(other.image, image) || other.image == image)&&const DeepCollectionEquality().equals(other._selectedSauces, _selectedSauces)&&(identical(other.explicitlyNoSauces, explicitlyNoSauces) || other.explicitlyNoSauces == explicitlyNoSauces));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _CartItem&&(identical(other.menuItemId, menuItemId) || other.menuItemId == menuItemId)&&(identical(other.name, name) || other.name == name)&&(identical(other.unitPrice, unitPrice) || other.unitPrice == unitPrice)&&(identical(other.quantity, quantity) || other.quantity == quantity)&&(identical(other.image, image) || other.image == image)&&const DeepCollectionEquality().equals(other._selectedSauces, _selectedSauces)&&(identical(other.explicitlyNoSauces, explicitlyNoSauces) || other.explicitlyNoSauces == explicitlyNoSauces)&&(identical(other.comment, comment) || other.comment == comment));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,menuItemId,name,unitPrice,quantity,image,const DeepCollectionEquality().hash(_selectedSauces),explicitlyNoSauces);
+int get hashCode => Object.hash(runtimeType,menuItemId,name,unitPrice,quantity,image,const DeepCollectionEquality().hash(_selectedSauces),explicitlyNoSauces,comment);
 
 @override
 String toString() {
-  return 'CartItem(menuItemId: $menuItemId, name: $name, unitPrice: $unitPrice, quantity: $quantity, image: $image, selectedSauces: $selectedSauces, explicitlyNoSauces: $explicitlyNoSauces)';
+  return 'CartItem(menuItemId: $menuItemId, name: $name, unitPrice: $unitPrice, quantity: $quantity, image: $image, selectedSauces: $selectedSauces, explicitlyNoSauces: $explicitlyNoSauces, comment: $comment)';
 }
 
 
@@ -273,7 +283,7 @@ abstract mixin class _$CartItemCopyWith<$Res> implements $CartItemCopyWith<$Res>
   factory _$CartItemCopyWith(_CartItem value, $Res Function(_CartItem) _then) = __$CartItemCopyWithImpl;
 @override @useResult
 $Res call({
- String menuItemId, String name, double unitPrice, int quantity, String? image, List<SauceOption> selectedSauces, bool explicitlyNoSauces
+ String menuItemId, String name, double unitPrice, int quantity, String? image, List<SauceOption> selectedSauces, bool explicitlyNoSauces, String? comment
 });
 
 
@@ -290,7 +300,7 @@ class __$CartItemCopyWithImpl<$Res>
 
 /// Create a copy of CartItem
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? menuItemId = null,Object? name = null,Object? unitPrice = null,Object? quantity = null,Object? image = freezed,Object? selectedSauces = null,Object? explicitlyNoSauces = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? menuItemId = null,Object? name = null,Object? unitPrice = null,Object? quantity = null,Object? image = freezed,Object? selectedSauces = null,Object? explicitlyNoSauces = null,Object? comment = freezed,}) {
   return _then(_CartItem(
 menuItemId: null == menuItemId ? _self.menuItemId : menuItemId // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -299,7 +309,8 @@ as double,quantity: null == quantity ? _self.quantity : quantity // ignore: cast
 as int,image: freezed == image ? _self.image : image // ignore: cast_nullable_to_non_nullable
 as String?,selectedSauces: null == selectedSauces ? _self._selectedSauces : selectedSauces // ignore: cast_nullable_to_non_nullable
 as List<SauceOption>,explicitlyNoSauces: null == explicitlyNoSauces ? _self.explicitlyNoSauces : explicitlyNoSauces // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,comment: freezed == comment ? _self.comment : comment // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 

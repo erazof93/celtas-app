@@ -370,6 +370,20 @@ class _CartItemRow extends ConsumerWidget {
                         ),
                   ),
                 ],
+                // Nota libre opcional del cliente — mismo patrón visual que
+                // la línea de salsas de arriba, debajo de ella si ambas
+                // aplican (no reemplaza la de salsas, se agrega debajo).
+                if (item.comment != null && item.comment!.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'nota: ${item.comment}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontSize: 11.5,
+                          color: CeltasColors.textMuted,
+                          fontStyle: FontStyle.italic,
+                        ),
+                  ),
+                ],
                 const SizedBox(height: 2),
                 Text(
                   'S/ ${item.unitPrice.toStringAsFixed(2)} c/u',

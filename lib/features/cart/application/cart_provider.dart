@@ -73,15 +73,17 @@ class CartNotifier extends Notifier<CartState> {
 
   /// Agrega `quantity` unidades de un producto del menú, con la selección
   /// de salsas hecha en el detalle (vacía si el producto no ofrece salsas
-  /// o el cliente no eligió ninguna). Si ya existe una fila con el mismo
-  /// producto Y la misma combinación de salsas, suma a la cantidad
-  /// existente (no duplica la fila); si las salsas son distintas, se agrega
-  /// como una fila nueva.
+  /// o el cliente no eligió ninguna) y el comentario libre opcional
+  /// (`null`/vacío = sin nota). Si ya existe una fila con el mismo producto,
+  /// la misma combinación de salsas Y el mismo comentario, suma a la
+  /// cantidad existente (no duplica la fila); si cualquiera de los dos
+  /// difiere, se agrega como una fila nueva (ver `CartItem.lineKey`).
   void addItem(
     PublicMenuItem item, {
     int quantity = 1,
     List<SauceOption> selectedSauces = const [],
     bool explicitlyNoSauces = false,
+    String? comment,
   }) {
     if (quantity <= 0) return;
     final newLine = CartItem(
@@ -92,6 +94,7 @@ class CartNotifier extends Notifier<CartState> {
       image: item.image,
       selectedSauces: selectedSauces,
       explicitlyNoSauces: explicitlyNoSauces,
+      comment: comment,
     );
     final items = state.items;
     final index = items.indexWhere((i) => i.lineKey == newLine.lineKey);
@@ -132,6 +135,7 @@ class CartNotifier extends Notifier<CartState> {
     required int quantity,
     required List<SauceOption> selectedSauces,
     bool explicitlyNoSauces = false,
+    String? comment,
   }) {
     if (quantity <= 0) return;
     final items = state.items;
@@ -141,6 +145,7 @@ class CartNotifier extends Notifier<CartState> {
       quantity: quantity,
       selectedSauces: selectedSauces,
       explicitlyNoSauces: explicitlyNoSauces,
+      comment: comment,
     );
     final mergeIndex = items.indexWhere((i) => i.lineKey == updated.lineKey);
     if (mergeIndex >= 0 && mergeIndex != oldIndex) {
