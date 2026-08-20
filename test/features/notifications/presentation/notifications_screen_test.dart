@@ -20,7 +20,7 @@ void main() {
     data: const {'orderId': 'order-1', 'status': 'confirmado'},
   );
   final couponNotification = NotificationHistoryItem(
-    title: 'Tenés un cupón nuevo',
+    title: 'Tienes un cupón nuevo',
     body: 'Usa VIKINGO10 en tu próximo pedido',
     receivedAt: DateTime.utc(2026, 8, 11, 9, 5),
     data: const {'couponCode': 'VIKINGO10'},
@@ -112,7 +112,7 @@ void main() {
     expect(find.text('Pedido confirmado'), findsOneWidget);
     expect(find.text('Tu pedido #A1B2 fue confirmado'), findsOneWidget);
     expect(find.text('12 ago · 14:32'), findsOneWidget);
-    expect(find.text('Tenés un cupón nuevo'), findsOneWidget);
+    expect(find.text('Tienes un cupón nuevo'), findsOneWidget);
   });
 
   testWidgets('tocar una notificación de pedido → navega al detalle del '
@@ -132,7 +132,7 @@ void main() {
     await tester.pumpWidget(buildApp([couponNotification]));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Tenés un cupón nuevo'));
+    await tester.tap(find.text('Tienes un cupón nuevo'));
     await tester.pumpAndSettle();
 
     expect(find.text('Mis cupones'), findsOneWidget);

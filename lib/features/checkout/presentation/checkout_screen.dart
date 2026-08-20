@@ -132,7 +132,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         _pendingWhatsappUrl = result.whatsappUrl;
         _orderError =
             'Tu pedido #${result.id} se registró, pero no pudimos abrir '
-            'WhatsApp automáticamente. Verificá que esté instalado y tocá '
+            'WhatsApp automáticamente. Verifica que esté instalado y toca '
             '"Abrir WhatsApp" para enviarlo.';
       });
     } on ApiException catch (e) {
@@ -203,7 +203,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     } else {
       setState(() {
         _orderError =
-            'Seguimos sin poder abrir WhatsApp. Verificá que la app esté '
+            'Seguimos sin poder abrir WhatsApp. Verifica que la app esté '
             'instalada en este dispositivo.';
       });
     }
@@ -638,7 +638,7 @@ class _MissingAddressNotice extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Elegí o agregá una dirección de entrega para continuar',
+              'Elige o agrega una dirección de entrega para continuar',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: CeltasColors.gold,
                 fontWeight: FontWeight.w700,

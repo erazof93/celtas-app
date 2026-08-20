@@ -79,7 +79,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
   Future<void> _applyCoupon() async {
     final code = _couponController.text.trim();
     if (code.isEmpty) {
-      setState(() => _couponError = 'Ingresá un código de cupón');
+      setState(() => _couponError = 'Ingresa un código de cupón');
       return;
     }
     setState(() {
@@ -658,7 +658,7 @@ class _CouponSection extends StatelessWidget {
                       color: CeltasColors.cream,
                     ),
                 decoration: InputDecoration(
-                  hintText: 'Ingresá tu código',
+                  hintText: 'Ingresa tu código',
                   isDense: true,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -758,7 +758,7 @@ class _EmptyCart extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Agregá algo rico del menú para empezar.',
+              'Agrega algo rico del menú para empezar.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: CeltasColors.textMuted,

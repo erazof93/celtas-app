@@ -74,7 +74,7 @@ void main() {
 
     await pumpScreen(tester, repository: repository);
 
-    expect(find.text('Todavía no tenés direcciones guardadas'), findsOneWidget);
+    expect(find.text('Todavía no tienes direcciones guardadas'), findsOneWidget);
   });
 
   testWidgets('con direcciones → lista con badge PRINCIPAL en la default',

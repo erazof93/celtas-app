@@ -129,7 +129,7 @@ class NotificationService {
     if (target is NoneNotificationTarget) return;
     final fallbackTitle = switch (target) {
       OrderNotificationTarget() => 'Actualización de tu pedido',
-      CouponNotificationTarget() => 'Tenés un cupón nuevo',
+      CouponNotificationTarget() => 'Tienes un cupón nuevo',
       BusinessHoursNotificationTarget() => 'Aviso del local',
       NoneNotificationTarget() => 'Celtas',
     };

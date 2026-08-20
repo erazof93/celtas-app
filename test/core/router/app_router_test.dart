@@ -404,7 +404,7 @@ void main() {
         data: const {'orderId': 'order-1', 'status': 'confirmado'},
       ),
       NotificationHistoryItem(
-        title: 'Tenés un cupón nuevo',
+        title: 'Tienes un cupón nuevo',
         body: 'Usa VIKINGO10 en tu próximo pedido',
         receivedAt: DateTime.utc(2026, 8, 11, 9, 5),
         data: const {'couponCode': 'VIKINGO10'},

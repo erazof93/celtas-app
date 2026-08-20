@@ -144,3 +144,15 @@ sin contexto.
 - Para desarrollo contra el backend local desde el emulador Android: usar `http://10.0.2.2:3000`,
   NO `http://localhost:3000` (el emulador tiene su propia red virtual, `localhost` apunta al
   propio emulador, no a tu máquina host).
+
+## Español de Perú, tuteo — NUNCA voseo
+
+Todo texto de cara al usuario (labels, hints, mensajes de validación, snackbars, notificaciones
+push, empty states) va en tuteo neutro/peruano ("ingresa", "elige", "tienes", "verifica"),
+**nunca** en voseo rioplatense ("ingresá", "elegí", "tenés", "verificá", "vos", "sos"). El
+negocio es una dark kitchen en Lima, Perú — el voseo se coló en varias pantallas (login,
+register, profile, cart, checkout, product_detail, coupons, addresses, notifications) por
+copiar tono de mockups/copys en español rioplatense, y se corrigió en un barrido completo de
+`lib/` (ver historial de commits). Antes de escribir cualquier string nuevo de cara al usuario,
+revisa que el verbo esté conjugado en 2da persona singular "tú" (-as/-es/-is), no "vos"
+(-ás/-és/-ís). Si tocas un string existente que usa esta forma, corrígelo también.

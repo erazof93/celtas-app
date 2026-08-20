@@ -127,7 +127,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Iniciá sesión para pedir tu próxima comida',
+                  'Inicia sesión para pedir tu próxima comida',
                   style: textTheme.bodyMedium?.copyWith(
                     color: CeltasColors.textMuted,
                     fontSize: 14,
@@ -142,7 +142,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   textInputAction: TextInputAction.next,
                   validator: (value) {
                     final v = value?.trim() ?? '';
-                    if (v.isEmpty) return 'Ingresá tu email';
+                    if (v.isEmpty) return 'Ingresa tu email';
                     if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v)) {
                       return 'Email inválido';
                     }
@@ -157,7 +157,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   obscureText: true,
                   textInputAction: TextInputAction.done,
                   validator: (value) {
-                    if ((value ?? '').isEmpty) return 'Ingresá tu contraseña';
+                    if ((value ?? '').isEmpty) return 'Ingresa tu contraseña';
                     return null;
                   },
                   onFieldSubmitted: (_) => _submit(),
@@ -202,14 +202,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   loading: _submitting,
                 ),
                 const SizedBox(height: 22),
-                // Divider "o continuá con".
+                // Divider "o continúa con".
                 Row(
                   children: [
                     const Expanded(child: Divider(color: CeltasColors.border)),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       child: Text(
-                        'o continuá con',
+                        'o continúa con',
                         style: textTheme.bodySmall?.copyWith(
                           color: CeltasColors.placeholder,
                           fontSize: 12,
@@ -264,7 +264,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 Center(
                   child: Text.rich(
                     TextSpan(
-                      text: '¿No tenés cuenta? ',
+                      text: '¿No tienes cuenta? ',
                       style: textTheme.bodyMedium?.copyWith(
                         color: CeltasColors.textMuted,
                         fontSize: 13,

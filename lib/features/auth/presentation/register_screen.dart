@@ -92,7 +92,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Unite a la horda. Pedí en minutos.',
+                  'Únete a la horda. Pide en minutos.',
                   style: textTheme.bodyMedium?.copyWith(
                     color: CeltasColors.textMuted,
                     fontSize: 14,
@@ -106,7 +106,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   textInputAction: TextInputAction.next,
                   validator: (value) {
                     if ((value ?? '').trim().isEmpty) {
-                      return 'Ingresá tu nombre completo';
+                      return 'Ingresa tu nombre completo';
                     }
                     return null;
                   },
@@ -120,7 +120,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   textInputAction: TextInputAction.next,
                   validator: (value) {
                     final v = value?.trim() ?? '';
-                    if (v.isEmpty) return 'Ingresá tu email';
+                    if (v.isEmpty) return 'Ingresa tu email';
                     if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v)) {
                       return 'Email inválido';
                     }
@@ -144,7 +144,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   textInputAction: TextInputAction.done,
                   validator: (value) {
                     final v = value ?? '';
-                    if (v.isEmpty) return 'Ingresá una contraseña';
+                    if (v.isEmpty) return 'Ingresa una contraseña';
                     if (v.length < 8) {
                       return 'Mínimo 8 caracteres';
                     }
@@ -175,7 +175,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 Center(
                   child: Text.rich(
                     TextSpan(
-                      text: '¿Ya tenés cuenta? ',
+                      text: '¿Ya tienes cuenta? ',
                       style: textTheme.bodyMedium?.copyWith(
                         color: CeltasColors.textMuted,
                         fontSize: 13,
@@ -186,7 +186,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           child: GestureDetector(
                             onTap: () => context.go('/login'),
                             child: Text(
-                              'Iniciá sesión',
+                              'Inicia sesión',
                               style: textTheme.bodyMedium?.copyWith(
                                 color: CeltasColors.gold,
                                 fontSize: 13,

@@ -88,7 +88,7 @@ void main() {
 
     await pumpScreen(tester, repository: repository);
 
-    expect(find.text('Todavía no tenés cupones'), findsOneWidget);
+    expect(find.text('Todavía no tienes cupones'), findsOneWidget);
   });
 
   testWidgets(

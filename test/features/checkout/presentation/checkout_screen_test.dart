@@ -588,7 +588,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.text('Elegí o agregá una dirección de entrega para continuar'),
+        find.text('Elige o agrega una dirección de entrega para continuar'),
         findsOneWidget,
       );
       var button = tester.widget<CeltasButton>(

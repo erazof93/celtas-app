@@ -86,7 +86,7 @@ class AddressFormCard extends StatelessWidget {
               hintText: 'Casa, Trabajo…',
               textInputAction: TextInputAction.next,
               validator: (v) =>
-                  (v ?? '').trim().isEmpty ? 'Ingresá un alias' : null,
+                  (v ?? '').trim().isEmpty ? 'Ingresa un alias' : null,
             ),
             const SizedBox(height: 12),
             CeltasTextField(
@@ -96,7 +96,7 @@ class AddressFormCard extends StatelessWidget {
               hintText: 'Av. Los Álamos 123',
               textInputAction: TextInputAction.next,
               validator: (v) => (v ?? '').trim().isEmpty
-                  ? 'Ingresá la dirección completa'
+                  ? 'Ingresa la dirección completa'
                   : null,
             ),
             const SizedBox(height: 12),
@@ -107,7 +107,7 @@ class AddressFormCard extends StatelessWidget {
               hintText: 'San Juan de Miraflores',
               textInputAction: TextInputAction.next,
               validator: (v) =>
-                  (v ?? '').trim().isEmpty ? 'Ingresá el distrito' : null,
+                  (v ?? '').trim().isEmpty ? 'Ingresa el distrito' : null,
             ),
             const SizedBox(height: 12),
             CeltasTextField(

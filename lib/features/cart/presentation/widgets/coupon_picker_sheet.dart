@@ -261,7 +261,7 @@ class _PickerEmpty extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Text(
-          'No tenés cupones activos para aplicar',
+          'No tienes cupones activos para aplicar',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: CeltasColors.textMuted,

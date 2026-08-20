@@ -1252,7 +1252,7 @@ class _EmptyMenu extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Volvé pronto, estamos preparando algo rico.',
+            'Vuelve pronto, estamos preparando algo rico.',
             textAlign: TextAlign.center,
             style: Theme.of(
               context,

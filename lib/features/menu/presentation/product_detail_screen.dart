@@ -397,7 +397,7 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
                     // criterio que el aviso de cupón de `cart_screen.dart`.
                     showCeltasSnackBar(
                       context,
-                      'Elegí tus salsas o toca "Sin salsas" para continuar',
+                      'Elige tus salsas o toca "Sin salsas" para continuar',
                     );
                     return;
                   }
@@ -586,7 +586,7 @@ class _SauceSelector extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Elegí las que quieras, o "Sin salsas"',
+          'Elige las que quieras, o "Sin salsas"',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
             fontSize: 12,
             color: CeltasColors.textMuted,
@@ -697,7 +697,7 @@ class _SauceChoiceNotice extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Elegí tus salsas o toca "Sin salsas" para continuar',
+              'Elige tus salsas o toca "Sin salsas" para continuar',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: CeltasColors.gold,
                 fontWeight: FontWeight.w700,

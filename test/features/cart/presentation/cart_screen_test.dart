@@ -244,7 +244,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('cart-coupon-apply')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Ingresá un código de cupón'), findsOneWidget);
+      expect(find.text('Ingresa un código de cupón'), findsOneWidget);
     });
 
     testWidgets(
@@ -553,7 +553,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text('No tenés cupones activos para aplicar'),
+        find.text('No tienes cupones activos para aplicar'),
         findsOneWidget,
       );
     });

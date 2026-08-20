@@ -387,7 +387,7 @@ void main() {
           find.descendant(
             of: find.byType(SnackBar),
             matching: find.text(
-              'Elegí tus salsas o toca "Sin salsas" para continuar',
+              'Elige tus salsas o toca "Sin salsas" para continuar',
             ),
           ),
           findsOneWidget,

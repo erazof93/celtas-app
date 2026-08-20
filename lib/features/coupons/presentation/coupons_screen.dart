@@ -358,7 +358,7 @@ class _EmptyCoupons extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            'Todavía no tenés cupones',
+            'Todavía no tienes cupones',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: CeltasColors.textMuted,

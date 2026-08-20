@@ -1243,6 +1243,21 @@ celtas-mobile/
       confirmado por timestamps de archivo). `flutter analyze` limpio, tests sin regresión (283
       tras esta ronda, incluye un test nuevo de regresión para el asset del ícono). Auditado por
       `@tester`: veredicto LISTO.
+- [x] **Fix transversal: voseo rioplatense → tuteo (español de Perú) en todo `lib/`.** Barrido
+      completo de `lib/` (regex sobre verbos conjugados en `-ás/-és/-ís` dentro de strings, más
+      grep de `vos`/`sos`) encontró 27 strings de cara al usuario con voseo rioplatense
+      ("ingresá", "elegí", "tenés", "verificá", "volvé", "unite", "pedí", "continuá") en 12
+      pantallas/servicios (login, registro, perfil, carrito, checkout, detalle de producto,
+      cupones, direcciones, notificaciones, home) — quedó de una etapa temprana en la que se
+      copió tono de mockups/copys en español rioplatense, incorrecto para el mercado real (Lima,
+      Perú). Corregido a tuteo neutro ("ingresa", "elige", "tienes", "verifica", "vuelve",
+      "únete", "pide", "continúa") sin cambiar significado ni tono. Los 6 tests de widget que
+      buscaban esos strings exactos (`find.text(...)`) se actualizaron en el mismo cambio, más 3
+      fixtures de notificación con el mismo texto (`app_router_test.dart`,
+      `notifications_screen_test.dart`) aunque no dependían directamente del string de
+      producción. 399/399 tests, `flutter analyze` limpio. Regla nueva agregada a
+      `.claude/skills/flutter-celtas/SKILL.md` ("Español de Perú, tuteo — NUNCA voseo") para que
+      no se repita en texto nuevo.
 - [ ] Definir distribución: Google Play (pago único ~$25) vs. APK directo mientras se valida
 
 ---

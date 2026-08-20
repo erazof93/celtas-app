@@ -384,7 +384,7 @@ class _EditForm extends StatelessWidget {
               controller: fullNameController,
               textInputAction: TextInputAction.next,
               validator: (v) => (v ?? '').trim().isEmpty
-                  ? 'Ingresá tu nombre completo'
+                  ? 'Ingresa tu nombre completo'
                   : null,
             ),
             const SizedBox(height: 12),

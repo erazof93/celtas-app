@@ -525,7 +525,7 @@ class _EmptyAddresses extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            'Todavía no tenés direcciones guardadas',
+            'Todavía no tienes direcciones guardadas',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: CeltasColors.textMuted,
