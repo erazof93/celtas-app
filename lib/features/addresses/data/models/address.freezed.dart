@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$Address {
 
- String get id; String get alias; String get fullAddress; String? get reference; String get district; bool get isDefault;
+ String get id; String get alias; String get fullAddress; String? get reference; String get district; bool get isDefault; double? get latitude; double? get longitude;
 /// Create a copy of Address
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +28,16 @@ $AddressCopyWith<Address> get copyWith => _$AddressCopyWithImpl<Address>(this as
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is Address&&(identical(other.id, id) || other.id == id)&&(identical(other.alias, alias) || other.alias == alias)&&(identical(other.fullAddress, fullAddress) || other.fullAddress == fullAddress)&&(identical(other.reference, reference) || other.reference == reference)&&(identical(other.district, district) || other.district == district)&&(identical(other.isDefault, isDefault) || other.isDefault == isDefault));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is Address&&(identical(other.id, id) || other.id == id)&&(identical(other.alias, alias) || other.alias == alias)&&(identical(other.fullAddress, fullAddress) || other.fullAddress == fullAddress)&&(identical(other.reference, reference) || other.reference == reference)&&(identical(other.district, district) || other.district == district)&&(identical(other.isDefault, isDefault) || other.isDefault == isDefault)&&(identical(other.latitude, latitude) || other.latitude == latitude)&&(identical(other.longitude, longitude) || other.longitude == longitude));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,alias,fullAddress,reference,district,isDefault);
+int get hashCode => Object.hash(runtimeType,id,alias,fullAddress,reference,district,isDefault,latitude,longitude);
 
 @override
 String toString() {
-  return 'Address(id: $id, alias: $alias, fullAddress: $fullAddress, reference: $reference, district: $district, isDefault: $isDefault)';
+  return 'Address(id: $id, alias: $alias, fullAddress: $fullAddress, reference: $reference, district: $district, isDefault: $isDefault, latitude: $latitude, longitude: $longitude)';
 }
 
 
@@ -48,7 +48,7 @@ abstract mixin class $AddressCopyWith<$Res>  {
   factory $AddressCopyWith(Address value, $Res Function(Address) _then) = _$AddressCopyWithImpl;
 @useResult
 $Res call({
- String id, String alias, String fullAddress, String? reference, String district, bool isDefault
+ String id, String alias, String fullAddress, String? reference, String district, bool isDefault, double? latitude, double? longitude
 });
 
 
@@ -65,7 +65,7 @@ class _$AddressCopyWithImpl<$Res>
 
 /// Create a copy of Address
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? alias = null,Object? fullAddress = null,Object? reference = freezed,Object? district = null,Object? isDefault = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? alias = null,Object? fullAddress = null,Object? reference = freezed,Object? district = null,Object? isDefault = null,Object? latitude = freezed,Object? longitude = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,alias: null == alias ? _self.alias : alias // ignore: cast_nullable_to_non_nullable
@@ -73,7 +73,9 @@ as String,fullAddress: null == fullAddress ? _self.fullAddress : fullAddress // 
 as String,reference: freezed == reference ? _self.reference : reference // ignore: cast_nullable_to_non_nullable
 as String?,district: null == district ? _self.district : district // ignore: cast_nullable_to_non_nullable
 as String,isDefault: null == isDefault ? _self.isDefault : isDefault // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,latitude: freezed == latitude ? _self.latitude : latitude // ignore: cast_nullable_to_non_nullable
+as double?,longitude: freezed == longitude ? _self.longitude : longitude // ignore: cast_nullable_to_non_nullable
+as double?,
   ));
 }
 
@@ -158,10 +160,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String alias,  String fullAddress,  String? reference,  String district,  bool isDefault)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String alias,  String fullAddress,  String? reference,  String district,  bool isDefault,  double? latitude,  double? longitude)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Address() when $default != null:
-return $default(_that.id,_that.alias,_that.fullAddress,_that.reference,_that.district,_that.isDefault);case _:
+return $default(_that.id,_that.alias,_that.fullAddress,_that.reference,_that.district,_that.isDefault,_that.latitude,_that.longitude);case _:
   return orElse();
 
 }
@@ -179,10 +181,10 @@ return $default(_that.id,_that.alias,_that.fullAddress,_that.reference,_that.dis
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String alias,  String fullAddress,  String? reference,  String district,  bool isDefault)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String alias,  String fullAddress,  String? reference,  String district,  bool isDefault,  double? latitude,  double? longitude)  $default,) {final _that = this;
 switch (_that) {
 case _Address():
-return $default(_that.id,_that.alias,_that.fullAddress,_that.reference,_that.district,_that.isDefault);case _:
+return $default(_that.id,_that.alias,_that.fullAddress,_that.reference,_that.district,_that.isDefault,_that.latitude,_that.longitude);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -199,10 +201,10 @@ return $default(_that.id,_that.alias,_that.fullAddress,_that.reference,_that.dis
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String alias,  String fullAddress,  String? reference,  String district,  bool isDefault)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String alias,  String fullAddress,  String? reference,  String district,  bool isDefault,  double? latitude,  double? longitude)?  $default,) {final _that = this;
 switch (_that) {
 case _Address() when $default != null:
-return $default(_that.id,_that.alias,_that.fullAddress,_that.reference,_that.district,_that.isDefault);case _:
+return $default(_that.id,_that.alias,_that.fullAddress,_that.reference,_that.district,_that.isDefault,_that.latitude,_that.longitude);case _:
   return null;
 
 }
@@ -214,7 +216,7 @@ return $default(_that.id,_that.alias,_that.fullAddress,_that.reference,_that.dis
 @JsonSerializable()
 
 class _Address implements Address {
-  const _Address({required this.id, required this.alias, required this.fullAddress, this.reference, required this.district, this.isDefault = false});
+  const _Address({required this.id, required this.alias, required this.fullAddress, this.reference, required this.district, this.isDefault = false, this.latitude, this.longitude});
   factory _Address.fromJson(Map<String, dynamic> json) => _$AddressFromJson(json);
 
 @override final  String id;
@@ -223,6 +225,8 @@ class _Address implements Address {
 @override final  String? reference;
 @override final  String district;
 @override@JsonKey() final  bool isDefault;
+@override final  double? latitude;
+@override final  double? longitude;
 
 /// Create a copy of Address
 /// with the given fields replaced by the non-null parameter values.
@@ -237,16 +241,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Address&&(identical(other.id, id) || other.id == id)&&(identical(other.alias, alias) || other.alias == alias)&&(identical(other.fullAddress, fullAddress) || other.fullAddress == fullAddress)&&(identical(other.reference, reference) || other.reference == reference)&&(identical(other.district, district) || other.district == district)&&(identical(other.isDefault, isDefault) || other.isDefault == isDefault));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Address&&(identical(other.id, id) || other.id == id)&&(identical(other.alias, alias) || other.alias == alias)&&(identical(other.fullAddress, fullAddress) || other.fullAddress == fullAddress)&&(identical(other.reference, reference) || other.reference == reference)&&(identical(other.district, district) || other.district == district)&&(identical(other.isDefault, isDefault) || other.isDefault == isDefault)&&(identical(other.latitude, latitude) || other.latitude == latitude)&&(identical(other.longitude, longitude) || other.longitude == longitude));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,alias,fullAddress,reference,district,isDefault);
+int get hashCode => Object.hash(runtimeType,id,alias,fullAddress,reference,district,isDefault,latitude,longitude);
 
 @override
 String toString() {
-  return 'Address(id: $id, alias: $alias, fullAddress: $fullAddress, reference: $reference, district: $district, isDefault: $isDefault)';
+  return 'Address(id: $id, alias: $alias, fullAddress: $fullAddress, reference: $reference, district: $district, isDefault: $isDefault, latitude: $latitude, longitude: $longitude)';
 }
 
 
@@ -257,7 +261,7 @@ abstract mixin class _$AddressCopyWith<$Res> implements $AddressCopyWith<$Res> {
   factory _$AddressCopyWith(_Address value, $Res Function(_Address) _then) = __$AddressCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String alias, String fullAddress, String? reference, String district, bool isDefault
+ String id, String alias, String fullAddress, String? reference, String district, bool isDefault, double? latitude, double? longitude
 });
 
 
@@ -274,7 +278,7 @@ class __$AddressCopyWithImpl<$Res>
 
 /// Create a copy of Address
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? alias = null,Object? fullAddress = null,Object? reference = freezed,Object? district = null,Object? isDefault = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? alias = null,Object? fullAddress = null,Object? reference = freezed,Object? district = null,Object? isDefault = null,Object? latitude = freezed,Object? longitude = freezed,}) {
   return _then(_Address(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,alias: null == alias ? _self.alias : alias // ignore: cast_nullable_to_non_nullable
@@ -282,7 +286,9 @@ as String,fullAddress: null == fullAddress ? _self.fullAddress : fullAddress // 
 as String,reference: freezed == reference ? _self.reference : reference // ignore: cast_nullable_to_non_nullable
 as String?,district: null == district ? _self.district : district // ignore: cast_nullable_to_non_nullable
 as String,isDefault: null == isDefault ? _self.isDefault : isDefault // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,latitude: freezed == latitude ? _self.latitude : latitude // ignore: cast_nullable_to_non_nullable
+as double?,longitude: freezed == longitude ? _self.longitude : longitude // ignore: cast_nullable_to_non_nullable
+as double?,
   ));
 }
 

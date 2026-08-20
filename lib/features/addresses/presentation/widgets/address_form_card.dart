@@ -1,15 +1,25 @@
 import 'package:celtas_mobile/core/theme/app_theme.dart';
+import 'package:celtas_mobile/features/addresses/presentation/widgets/address_location_picker.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_text_field.dart';
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 
 /// Formulario de dirección (alias, dirección completa, distrito, referencia
-/// opcional) compartido entre el checkout (módulo 5, alta mínima inline) y la
-/// pantalla de direcciones guardadas (módulo 6, alta y edición completas).
+/// opcional, ubicación en mapa) compartido entre el checkout (módulo 5, alta
+/// mínima inline) y la pantalla de direcciones guardadas (módulo 6, alta y
+/// edición completas).
 ///
 /// El toggle "Marcar como principal" es opcional: el checkout no lo pasa
 /// (`onIsDefaultChanged == null` oculta el toggle), la pantalla de
 /// direcciones sí.
+///
+/// El campo "DIRECCIÓN COMPLETA" original se extendió con
+/// `AddressLocationPicker` (autocompletado + GPS + mapa con pin, ver skill
+/// `geoapify-direcciones`) en vez de reemplazarse: sigue siendo el mismo
+/// `fullAddressController` de siempre, la única diferencia es que ahora
+/// también puede llenarse solo (sugerencia elegida, GPS, o reverse geocoding
+/// al soltar el pin) y expone `latitude`/`longitude`.
 class AddressFormCard extends StatelessWidget {
   const AddressFormCard({
     super.key,
@@ -31,6 +41,9 @@ class AddressFormCard extends StatelessWidget {
     this.submitButtonKey,
     this.isDefault,
     this.onIsDefaultChanged,
+    this.latitude,
+    this.longitude,
+    this.onLocationChanged,
   });
 
   final String title;
@@ -54,6 +67,18 @@ class AddressFormCard extends StatelessWidget {
   /// `null` oculta el toggle (caso del checkout). No-`null` lo muestra.
   final bool? isDefault;
   final ValueChanged<bool>? onIsDefaultChanged;
+
+  /// Coordenadas ya resueltas (ej. al editar una dirección existente).
+  /// `null` es un valor válido — el formulario se puede guardar sin pasar
+  /// por el mapa/autocompletado/GPS (ver skill `geoapify-direcciones`).
+  final double? latitude;
+  final double? longitude;
+
+  /// Se llama cuando el usuario confirma una ubicación nueva desde el mapa,
+  /// el autocompletado, o el GPS. El caller (dueño del estado del
+  /// formulario) es responsable de guardar `latitude`/`longitude` para el
+  /// submit — mismo criterio que ya usa para los `TextEditingController`.
+  final ValueChanged<LatLng>? onLocationChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -89,15 +114,16 @@ class AddressFormCard extends StatelessWidget {
                   (v ?? '').trim().isEmpty ? 'Ingresa un alias' : null,
             ),
             const SizedBox(height: 12),
-            CeltasTextField(
+            KeyedSubtree(
               key: fullAddressFieldKey,
-              label: 'DIRECCIÓN COMPLETA',
-              controller: fullAddressController,
-              hintText: 'Av. Los Álamos 123',
-              textInputAction: TextInputAction.next,
-              validator: (v) => (v ?? '').trim().isEmpty
-                  ? 'Ingresa la dirección completa'
-                  : null,
+              child: AddressLocationPicker(
+                fullAddressController: fullAddressController,
+                districtController: districtController,
+                latitude: latitude,
+                longitude: longitude,
+                onLocationChanged:
+                    onLocationChanged ?? (_) {},
+              ),
             ),
             const SizedBox(height: 12),
             CeltasTextField(

@@ -8,6 +8,7 @@ import 'package:celtas_mobile/shared/widgets/svg_stroke_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:latlong2/latlong.dart';
 
 /// Direcciones guardadas (mockup 09 · DIRECCIONES GUARDADAS).
 ///
@@ -29,6 +30,8 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
   final _referenceController = TextEditingController();
   final _districtController = TextEditingController();
   bool _formIsDefault = false;
+  double? _formLatitude;
+  double? _formLongitude;
 
   /// `'new'` para el alta, el `id` de la dirección para edición, `null` sin
   /// formulario abierto. Alta y edición son mutuamente excluyentes: un solo
@@ -56,6 +59,8 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
     setState(() {
       _activeFormId = 'new';
       _formIsDefault = false;
+      _formLatitude = null;
+      _formLongitude = null;
       _formError = null;
       _actionError = null;
     });
@@ -69,8 +74,17 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
     setState(() {
       _activeFormId = address.id;
       _formIsDefault = address.isDefault;
+      _formLatitude = address.latitude;
+      _formLongitude = address.longitude;
       _formError = null;
       _actionError = null;
+    });
+  }
+
+  void _onFormLocationChanged(LatLng point) {
+    setState(() {
+      _formLatitude = point.latitude;
+      _formLongitude = point.longitude;
     });
   }
 
@@ -103,6 +117,8 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
           reference: reference,
           district: district,
           isDefault: _formIsDefault,
+          latitude: _formLatitude,
+          longitude: _formLongitude,
         );
       } else {
         await notifier.addAddress(
@@ -110,6 +126,8 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
           fullAddress: fullAddress,
           reference: reference,
           district: district,
+          latitude: _formLatitude,
+          longitude: _formLongitude,
         );
       }
       if (!mounted) return;
@@ -275,6 +293,9 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
                           isDefault: _formIsDefault,
                           onIsDefaultChanged: (v) =>
                               setState(() => _formIsDefault = v),
+                          latitude: _formLatitude,
+                          longitude: _formLongitude,
+                          onLocationChanged: _onFormLocationChanged,
                         )
                       else
                         _AddressListCard(
@@ -310,6 +331,9 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
                         isDefault: _formIsDefault,
                         onIsDefaultChanged: (v) =>
                             setState(() => _formIsDefault = v),
+                        latitude: _formLatitude,
+                        longitude: _formLongitude,
+                        onLocationChanged: _onFormLocationChanged,
                       ),
                   ],
                 ),

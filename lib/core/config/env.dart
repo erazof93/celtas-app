@@ -19,4 +19,12 @@ class AppConfig {
   /// SHA-1 (google-services.json), no se pega en código.
   static final String? googleServerClientId =
       dotenv.env['GOOGLE_SERVER_CLIENT_ID'];
+
+  /// API key de Geoapify (Address Autocomplete/Geocoding/Reverse
+  /// Geocoding/Map Tiles) — una sola key compartida por toda la app, rate
+  /// limit de 5 req/seg TOTAL (ver skill `geoapify-direcciones`). `null`/
+  /// vacía si todavía no se pegó en `.env`: `GeoapifyRepository` lo trata
+  /// como "sin autocompletado disponible" en vez de lanzar, mismo criterio
+  /// "nunca rompe la pantalla" que el resto de esta feature.
+  static final String? geoapifyApiKey = dotenv.env['GEOAPIFY_API_KEY'];
 }

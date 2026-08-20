@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Checkout (mockup 07 · CHECKOUT).
@@ -44,6 +45,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   final _districtController = TextEditingController();
   bool _addingAddress = false;
   String? _addAddressError;
+  double? _addAddressLatitude;
+  double? _addAddressLongitude;
 
   bool _confirming = false;
   String? _orderError;
@@ -72,6 +75,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ? null
                 : _referenceController.text.trim(),
             district: _districtController.text.trim(),
+            latitude: _addAddressLatitude,
+            longitude: _addAddressLongitude,
           );
       if (!mounted) return;
       _aliasController.clear();
@@ -82,6 +87,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         _addingAddress = false;
         _showAddForm = false;
         _selectedAddressId = created.id;
+        _addAddressLatitude = null;
+        _addAddressLongitude = null;
       });
     } on ApiException catch (e) {
       if (mounted) {
@@ -99,6 +106,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         });
       }
     }
+  }
+
+  void _onAddAddressLocationChanged(LatLng point) {
+    setState(() {
+      _addAddressLatitude = point.latitude;
+      _addAddressLongitude = point.longitude;
+    });
   }
 
   Future<void> _confirmOrder(CartState cart) async {
@@ -318,6 +332,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           const ValueKey('checkout-address-reference'),
                       submitButtonKey:
                           const ValueKey('checkout-address-save'),
+                      latitude: _addAddressLatitude,
+                      longitude: _addAddressLongitude,
+                      onLocationChanged: _onAddAddressLocationChanged,
                     ),
                   ),
                   const SizedBox(height: 22),

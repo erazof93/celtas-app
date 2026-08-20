@@ -15,7 +15,10 @@ class CeltasTextField extends StatelessWidget {
     this.textInputAction,
     this.validator,
     this.onFieldSubmitted,
+    this.onChanged,
     this.errorText,
+    this.suffixIcon,
+    this.focusNode,
   });
 
   final String label;
@@ -26,7 +29,10 @@ class CeltasTextField extends StatelessWidget {
   final TextInputAction? textInputAction;
   final String? Function(String?)? validator;
   final void Function(String)? onFieldSubmitted;
+  final void Function(String)? onChanged;
   final String? errorText;
+  final Widget? suffixIcon;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -38,11 +44,13 @@ class CeltasTextField extends StatelessWidget {
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
+          focusNode: focusNode,
           obscureText: obscureText,
           keyboardType: keyboardType,
           textInputAction: textInputAction,
           validator: validator,
           onFieldSubmitted: onFieldSubmitted,
+          onChanged: onChanged,
           style: textTheme.bodyLarge?.copyWith(fontSize: 15),
           decoration: InputDecoration(
             hintText: hintText,
@@ -50,6 +58,7 @@ class CeltasTextField extends StatelessWidget {
             errorStyle: textTheme.bodySmall?.copyWith(
               color: CeltasColors.redLight,
             ),
+            suffixIcon: suffixIcon,
           ),
         ),
       ],

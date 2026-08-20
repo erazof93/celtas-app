@@ -4,6 +4,11 @@
          notificaciones en background/terminated tampoco se muestran en API
          33+ aunque el usuario nunca vea el diálogo de permiso. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Ubicación para el botón "Usar mi ubicación actual" del formulario de
+         direcciones (feature Geoapify) — solo mientras la app está en uso,
+         nunca en background. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <application
         android:label="Celtas FastFood"
         android:name="${applicationName}"

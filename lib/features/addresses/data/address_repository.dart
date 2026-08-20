@@ -4,12 +4,15 @@ import 'package:dio/dio.dart';
 
 /// Repositorio de direcciones contra el backend real.
 ///
-/// Endpoints (contrato verificado contra `celtas-backend/src/modules/users/
-/// users.controller.ts` + `addresses.service.ts` + DTOs de create/update):
+/// Endpoints (contrato verificado contra `backend-celtas/src/modules/users/
+/// users.controller.ts` + `addresses.service.ts` + DTOs de create/update,
+/// rama `feature/direcciones-geoapify`):
 ///   - `GET /users/me/addresses` → lista de direcciones (principal primero,
 ///     el backend ordena `isDefault DESC, createdAt ASC`).
 ///   - `POST /users/me/addresses` con `{ alias, fullAddress, reference?,
-///     district, isDefault? }` → 201 con la dirección creada.
+///     district, isDefault?, latitude?, longitude? }` → 201 con la dirección
+///     creada. `latitude`/`longitude` son opcionales y nullable — el backend
+///     las valida con `@IsLatitude`/`@IsLongitude` solo si vienen presentes.
 ///   - `PATCH /users/me/addresses/:id` (el `id` va en la URL, nunca en el
 ///     body) con cualquier subconjunto de esos mismos campos → 200 con la
 ///     dirección actualizada.
@@ -41,6 +44,8 @@ class AddressRepository {
     String? reference,
     required String district,
     bool isDefault = false,
+    double? latitude,
+    double? longitude,
   }) async {
     try {
       final response = await _dio.post<Map<String, dynamic>>(
@@ -52,6 +57,8 @@ class AddressRepository {
             'reference': reference,
           'district': district,
           if (isDefault) 'isDefault': isDefault,
+          'latitude': ?latitude,
+          'longitude': ?longitude,
         },
       );
       return Address.fromJson(response.data ?? const {});
@@ -83,6 +90,8 @@ class AddressRepository {
     String? reference,
     String? district,
     bool? isDefault,
+    double? latitude,
+    double? longitude,
   }) async {
     try {
       await _dio.patch<void>(
@@ -93,6 +102,8 @@ class AddressRepository {
           'reference': ?reference,
           'district': ?district,
           'isDefault': ?isDefault,
+          'latitude': ?latitude,
+          'longitude': ?longitude,
         },
       );
     } on DioException catch (e) {

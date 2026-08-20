@@ -28,12 +28,16 @@ class AddressListNotifier extends AsyncNotifier<List<Address>> {
     required String fullAddress,
     String? reference,
     required String district,
+    double? latitude,
+    double? longitude,
   }) async {
     final created = await ref.read(addressRepositoryProvider).createAddress(
           alias: alias,
           fullAddress: fullAddress,
           reference: reference,
           district: district,
+          latitude: latitude,
+          longitude: longitude,
         );
     final current = state.valueOrNull ?? const [];
     state = AsyncData([...current, created]);
@@ -52,6 +56,8 @@ class AddressListNotifier extends AsyncNotifier<List<Address>> {
     String? reference,
     String? district,
     bool? isDefault,
+    double? latitude,
+    double? longitude,
   }) async {
     final repository = ref.read(addressRepositoryProvider);
     await repository.updateAddress(
@@ -61,6 +67,8 @@ class AddressListNotifier extends AsyncNotifier<List<Address>> {
       reference: reference,
       district: district,
       isDefault: isDefault,
+      latitude: latitude,
+      longitude: longitude,
     );
     state = AsyncData(await repository.getAddresses());
   }

@@ -947,6 +947,150 @@ mutación.
 - [ ] CRUD de direcciones con verificación de que pertenecen al usuario (aunque esto lo
       garantiza el backend, confirmar que la UI no intente operar sobre IDs ajenos)
 
+### Direcciones con Geoapify (autocompletado + GPS + mapa con pin arrastrable) — ⚠️ LISTO CON OBSERVACIONES
+
+Rama `feature/direcciones-geoapify`, no comiteada todavía al momento de esta auditoría. Archivos
+nuevos: `address_location_picker.dart`, `address_map_picker.dart`, `geoapify_repository.dart`,
+`location_repository.dart`, `geoapify_providers.dart`, `current_location_controller.dart`,
+`location_permission_action.dart`, `location_resolution_failure.dart`,
+`geoapify_suggestion.dart`; `Address`/`address_repository.dart`/`address_providers.dart`/
+`addresses_screen.dart` ajustados para `latitude`/`longitude`.
+
+`flutter analyze`: `No issues found! (ran in 26.6s)` (salida cruda propia). `flutter test` (suite
+completa): `440: Some tests failed.` — la única falla es
+`test/features/coupons/presentation/coupons_screen_test.dart: cupón con minPurchaseAmount > 0 →
+muestra "Pedido mínimo: S/X.XX"...`, **no relacionada con esta feature** (no toca `coupons/` en
+absoluto — confirmado con `git diff --stat` sin cambios en ese módulo). Causa raíz confirmada por
+lectura del propio test: usa `expiresAt: DateTime(2026, 8, 20)` hardcodeado — la fecha real del
+sistema hoy es exactamente 2026-08-20, y el cálculo de "activo vs. expirado" compara contra
+`DateTime.now()` (que ya incluye la hora del día, no solo la fecha), así que un cupón que vence
+"hoy a medianoche" ya cuenta como vencido en cualquier momento posterior a las 00:00 de hoy — un
+test con fecha fija que coincide con la fecha real de ejecución ("date bomb"), no un bug de esta
+feature. Aislado y reproducido corriendo solo ese archivo (`flutter test
+test/features/coupons/presentation/coupons_screen_test.dart`): mismo resultado. Reportado para
+que se corrija en la sesión principal (ej. calcular `expiresAt` relativo a `DateTime.now()` en
+vez de una fecha absoluta), no corregido acá.
+`dart run build_runner build --delete-conflicting-outputs`: `Built with build_runner/aot in 11s;
+wrote 0 outputs` — `address.freezed.dart`/`address.g.dart` ya comiteados (sin comitear todavía)
+son byte-idénticos a lo que generaría el toolchain real, sin drift a mano.
+
+✅ Pasó:
+- **Contrato de API verificado contra el código fuente real del backend**, no asumido:
+  `backend-celtas/src/modules/users/entities/address.entity.ts` (rama también
+  `feature/direcciones-geoapify` en ese repo) — `latitude`/`longitude` son
+  `@Column({ type: 'double precision', nullable: true })`, `number | null`; `create-address.dto.ts`/
+  `update-address.dto.ts` los declaran `@IsOptional() @IsNumber() @IsLatitude()/@IsLongitude()`.
+  Coincide exactamente con el modelo Dart (`double? latitude`/`longitude`, ambos opcionales) y con
+  el `.g.dart` generado (`(json['latitude'] as num?)?.toDouble()`).
+- **Los 3 bugs de parseo de datos (distrito de grano fino, POI en vez de calle, POI sin calle
+  real repitiéndose en `street`) SÍ tienen test que ejercita el caso real, no solo el happy path**
+  — confirmado leyendo `test/features/addresses/data/models/geoapify_suggestion_test.dart`: el
+  grupo `bestDistrict` prueba explícitamente `city: 'San Juan de Miraflores', district: 'El
+  Arenal'` → espera `'San Juan de Miraflores'` (si se revirtiera la prioridad a `district` primero,
+  este test fallaría con `'El Arenal'`); el grupo `bestFullAddress` prueba tanto el caso POI-antes-
+  que-calle (`formatted` con "Institución Educativa..." vs. `street`+`housenumber` reales) como el
+  caso borde `street == name` (Parque Cáceres) cayendo a `formatted` — ambos con fixtures que
+  reproducen los valores reales mencionados en el encargo (no inventados), y con
+  aserciones que exigen el string exacto post-fix (no solo `isNotEmpty` o similar, que pasaría
+  igual sin el fix).
+- **429 (rate limit compartido) a nivel repositorio nunca lanza y nunca bloquea**: confirmado con
+  test explícito en `geoapify_repository_test.dart` (`'429 (rate limit compartido) → NUNCA lanza,
+  devuelve [] silenciosamente'`) y por lectura de los 3 métodos (`autocomplete`/`geocode`/
+  `reverseGeocode`), los 3 con el mismo patrón `try/on DioException catch (_) { return
+  const []/null; }`. Por lectura de `addresses_screen.dart`/`checkout_screen.dart`: el submit del
+  formulario nunca depende de que `latitude`/`longitude` estén resueltos — manda lo que haya en
+  `_formLatitude`/`_formLongitude` (posiblemente `null`) sin bloquear ni validar su presencia.
+- **Patrón de permiso de ubicación idéntico al ya construido para notificaciones**: comparado
+  `LocationPermissionAction`/`locationPermissionActionFor` contra
+  `NotificationPermissionAction`/`actionForAuthorizationStatus` — misma forma (enum +
+  función pura sin estado), mismo criterio (`deniedForever`/rechazo permanente → abre
+  Configuración del sistema directo, JAMÁS vuelve a llamar `requestPermission()`). Cubierto con 6
+  tests en `current_location_controller_test.dart` que verifican con `verify()`/`verifyNever()`
+  cada rama (concedido, denegado→acepta, denegado→rechaza de nuevo sin reintentar,
+  `deniedForever`→Configuración sin llamar `requestPermission()`, GPS de sistema apagado sin
+  llamar `getCurrentPosition()`, excepción nativa clasificada como `unknown`) — no solo el
+  happy path.
+- **Contrato de API real, no aproximado**: `AddressRepository` manda `latitude`/`longitude` con
+  la sintaxis null-aware de mapa (`'latitude': ?latitude`) tanto en `create` como en `update`, así
+  que un valor `null` omite la llave del body en vez de mandar `"latitude": null` explícito —
+  consistente con que el DTO del backend los trata como `@IsOptional()` (ausente ≠ error), sin
+  necesidad de mandar `null` a propósito.
+- **Fidelidad de diseño**: la pantalla "09 · DIRECCIONES GUARDADAS" de
+  `design-reference/Celtas App Mockups.dc.html` no incluye ningún GPS/mapa/autocompletado (es UI
+  enteramente nueva de esta feature, sin equivalente en el mockup original de 12 pantallas) — los
+  colores usados en los widgets nuevos (`CeltasColors.orange` = `#E8590C`, `CeltasColors.
+  textSubtle` = `#6B6357`) coinciden con los valores reales ya usados en el resto de la pantalla
+  de direcciones del mockup (confirmado línea por línea contra el HTML/CSS real, no de memoria).
+  Sin `Color(0xFF...)` sueltos en ninguno de los 2 widgets nuevos.
+- **Estados de UI de la pantalla contenedora** (`AddressesScreen`): loading (`SlowBackendNotice`),
+  error con mensaje real + REINTENTAR, y vacío (`_EmptyAddresses`) todos explícitos — confirmado
+  por lectura de código, coincide con el patrón ya usado en el resto de la app.
+- **Permisos nativos declarados en ambas plataformas**: `AndroidManifest.xml`
+  (`ACCESS_FINE_LOCATION`/`ACCESS_COARSE_LOCATION`) e `Info.plist`
+  (`NSLocationWhenInUseUsageDescription` con texto específico mencionando el botón "Usar mi
+  ubicación actual") — ninguno pide ubicación en segundo plano (`always`/`ACCESS_BACKGROUND_
+  LOCATION`), consistente con el uso real (solo al tocar el botón).
+- **`AddressFormCard`/`checkout_screen.dart`**: la integración de `latitude`/`longitude` en
+  ambos callers (pantalla de direcciones y checkout) sigue el mismo patrón — se resetean a `null`
+  tras un alta exitosa, y el widget compartido (`CeltasTextField`, con `onChanged`/`suffixIcon`/
+  `focusNode` nuevos, todos opcionales) no rompe ningún uso existente.
+
+❌ Falló:
+- Ninguno funcional propio de esta feature. (La única falla de `flutter test` es de
+  `coupons_screen_test.dart`, no relacionada — ver arriba.)
+
+⚠️ Riesgos / observaciones — **no bloqueantes para esta auditoría, pero pendientes de cerrar
+antes de dar el módulo por completo verificado**:
+- **Los bugs #1 (dropdown de sugerencias detrás del mapa/botón GPS, z-order) y #2 (debounce del
+  drag del pin) NO tienen ningún test automatizado que los cubra** — confirmado con `grep -rn`
+  sobre todo `test/` buscando `AddressLocationPicker`/`AddressMapPicker`/`_SuggestionsList`/
+  `onPositionChanged`/cualquier referencia a "suggestion": no existe ningún widget test que monte
+  `AddressLocationPicker` o `AddressMapPicker` directamente, y `addresses_screen_test.dart` (el
+  único test que monta el formulario completo) nunca overridea `geoapifyRepositoryProvider` ni
+  configura `GEOAPIFY_API_KEY` en su `.env` de prueba — con `hasApiKey == false`, el dropdown de
+  sugerencias nunca llega a aparecer en ese suite (el único comentario que lo menciona,
+  línea 184, es solo sobre un `pump()` extra por el layout más alto, no sobre su contenido). Esto
+  significa que si alguien revirtiera el fix del `Stack` externo (bug #1) o el debounce del mapa
+  (bug #2) mañana, **ningún test lo detectaría** — a diferencia de los bugs #3/#4/#5, que sí están
+  genuinamente cubiertos con fixtures reales y aserciones exactas. Recomendación para la sesión
+  principal: al menos un widget test que (a) overridee `geoapifyRepositoryProvider` con un stub
+  que resuelva sugerencias, escriba texto, dispare el debounce con `tester.pump(_debounceDuration)`
+  y confirme con `tester.getRect`/orden de pintado que el `_SuggestionsList` queda por encima del
+  mapa/botón; y (b) simule varios `onPositionChanged(hasGesture: true)` seguidos dentro de la
+  ventana de debounce y confirme que `reverseGeocode` se llama una sola vez (`verify(...).called(1)`
+  en vez de una vez por evento).
+- **`.env.example` incluye una API key de Geoapify que parece real** (`GEOAPIFY_API_KEY=
+  99317e665beb4d499fac674d1a92e91b`, formato hex de 32 caracteres, exactamente el formato que
+  emite Geoapify) — confirmado con `git diff HEAD -- .env.example` que es un cambio nuevo, sin
+  comitear todavía, en un archivo que el propio `.gitignore` marca explícitamente para
+  versionarse (`!.env.example`, a diferencia de `.env`/`.env.*`). Si esta key es la real usada en
+  desarrollo (no una de prueba/demo desechable), comitearla expondría una credencial compartida
+  por rate limit a cualquiera con acceso al repo. **No es un bug de código, pero es un hallazgo de
+  seguridad real que vale la pena confirmar antes de comitear** — reemplazar por un placeholder
+  (`GEOAPIFY_API_KEY=tu_api_key_aqui`) si la key es genuina, o rotarla en
+  https://myprojects.geoapify.com/ si ya se comiteó por error en algún punto.
+- No hay test de integración end-to-end contra el backend local (`192.168.18.13:3000`) corrido en
+  esta auditoría — el checklist funcional a mano (backend con la IP local, sugerencias reales,
+  botón GPS, drag+reverse geocoding, guardado persistente con `latitude`/`longitude`) se tomó como
+  ya reportado por el usuario y no se re-ejecutó en vivo; esta auditoría se limitó a análisis
+  estático + tests automatizados + lectura de código/contrato, no a una re-verificación manual en
+  dispositivo real.
+- Precedente de otras secciones de este documento (ej. banners, salsas/cremas) de mutar código a
+  propósito y confirmar que el test correspondiente falla, no se aplicó a los widgets nuevos de
+  esta sección por falta de tests que mutar en primer lugar (ver el punto de arriba) — sí se aplicó
+  al verificar que `build_runner` no genera drift.
+
+**Veredicto: LISTO CON OBSERVACIONES.** Ningún hallazgo es un bug funcional nuevo — el código de
+los 5 fixes reportados es correcto por lectura y, donde hay test, el test genuinamente ejercita el
+bug (confirmado, no solo nominal). Antes de comitear, dos cosas concretas:
+1. Confirmar si la API key en `.env.example` es real y, si lo es, reemplazarla por un placeholder
+   (o rotarla si ya llegó a comitearse antes).
+2. Agregar cobertura automatizada para los bugs #1 (z-order del dropdown) y #2 (debounce del
+   drag), hoy sin ningún test de regresión — el resto del módulo (parseo de datos, permisos,
+   contrato de API, manejo de 429, estados de UI) sí queda cerrado con evidencia real.
+La falla de `coupons_screen_test.dart` (date bomb, no relacionada) debe reportarse aparte a la
+sesión principal — no bloquea este módulo pero sí impide decir "440/440" sin matices.
+
 ### Bloqueo por local cerrado en el checkout (409 de `POST /orders` + aviso preventivo `GET /settings/business-hours`) — ✅ COMPLETO
 
 Feature cross-repo (backend y `celtas-admin` ya auditados con veredicto LISTO en sus propios

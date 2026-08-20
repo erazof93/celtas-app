@@ -180,6 +180,14 @@ void main() {
       find.byKey(const ValueKey('addresses-form-alias')),
       'Casa nueva',
     );
+    // Un `pump()` extra antes de `ensureVisible`: la tarjeta ahora incluye
+    // el selector de ubicación (`AddressLocationPicker`, mapa + botón GPS),
+    // más alta que antes de la feature Geoapify. Sin este pump intermedio,
+    // `ensureVisible` calcula el scroll objetivo contra el layout todavía no
+    // actualizado tras `enterText` y termina dejando el botón fuera del
+    // viewport del test — no reproducible en un dispositivo real, donde el
+    // layout se resuelve en el mismo frame antes del próximo gesto.
+    await tester.pump();
     await tester.ensureVisible(
       find.byKey(const ValueKey('addresses-form-save')),
     );

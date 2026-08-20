@@ -1,0 +1,91 @@
+Launching lib\main.dart on 24117RN76L in debug mode...
+Running Gradle task 'assembleDebug'...                          
+Warning: SDK processing. This version only understands SDK XML versions up to 3 but an SDK XML file of version 4 was encountered. This can happen if you use versions of Android Studio and the command-line tools that were released at different times.
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+warning: [options] source value 8 is obsolete and will be removed in a future release
+warning: [options] target value 8 is obsolete and will be removed in a future release
+warning: [options] To suppress warnings about obsolete options, use -Xlint:-options.
+3 warnings
+warning: [options] source value 8 is obsolete and will be removed in a future release
+warning: [options] target value 8 is obsolete and will be removed in a future release
+warning: [options] To suppress warnings about obsolete options, use -Xlint:-options.
+3 warnings
+Running Gradle task 'assembleDebug'...                            203,4s
+√ Built build\app\outputs\flutter-apk\app-debug.apk
+Installing build\app\outputs\flutter-apk\app-debug.apk...          12,2s
+I/FlutterActivityAndFragmentDelegate(32147): If you are attempting to set --enable-dart-profiling via Intent extras to launch a Flutter component outside of using the Flutter CLI, note that support for setting engine flags on Android via Intent will soon be dropped; see https://github.com/flutter/flutter/issues/180686 for more information on this breaking change. To migrate, set --enable-dart-profiling or any other flags specified via Intent extras on the command line instead or see https://github.com/flutter/flutter/blob/main/docs/engine/Flutter-Android-Engine-Flags.md for alternative methods.
+D/FlutterJNI(32147): Beginning load of flutter...
+D/FlutterJNI(32147): flutter (null) was loaded normally!
+I/flutter (32147): [IMPORTANT:flutter/shell/platform/android/android_context_gl_impeller.cc(104)] Using the Impeller rendering backend (OpenGLES).
+D/FlutterGeolocator(32147): Attaching Geolocator to activity
+D/FlutterRenderer(32147): Width is zero. 0,0
+D/FlutterRenderer(32147): Width is zero. 0,0
+D/FlutterJNI(32147): Sending viewport metrics to the engine.
+I/s.celtas_mobile(32147): Wrote stack traces to tombstoned
+E/s.celtas_mobile(32147): checkIfsupportxIntfps do not binder to joyose
+I/Choreographer(32147): first vsync insert message into MessageQueue Head
+I/Choreographer(32147): Skipped 211 frames!  The application may be doing too much work on its main thread.
+D/SurfaceView(32147): UPDATE Surface(name=SurfaceView[com.celtas.celtas_mobile/com.celtas.celtas_mobile.MainActivity]#75744)/@0x185d71b, mIsProjectionMode = false
+D/FlutterGeolocator(32147): Creating service.
+D/FlutterGeolocator(32147): Binding to location service.
+D/FlutterGeolocator(32147): Geolocator foreground service connected
+D/FlutterGeolocator(32147): Initializing Geolocator services
+D/FlutterGeolocator(32147): Flutter engine connected. Connected engine count 1
+D/FlutterJNI(32147): Sending viewport metrics to the engine.
+I/s.celtas_mobile(32147): Compiler allocated 6807KB to compile void android.view.ViewRootImpl.performTraversals()
+Syncing files to device 24117RN76L...                           
+W/MIUIScout App(32147): Enter APP_SCOUT_SLOW state
+D/ProfileInstaller(32147): Installing profile for com.celtas.celtas_mobile
+Syncing files to device 24117RN76L...                               3,2s
+
+Flutter run key commands.
+r Hot reload. 
+R Hot restart.
+h List all available interactive commands.
+d Detach (terminate "flutter run" but leave application running).
+c Clear the screen
+q Quit (terminate the application on the device).
+
+A Dart VM Service on 24117RN76L is available at: http://127.0.0.1:50477/TZOMbn5pOpE=/
+The Flutter DevTools debugger and profiler on 24117RN76L is available at: http://127.0.0.1:50477/TZOMbn5pOpE=/devtools/?uri=ws://127.0.0.1:50477/TZOMbn5pOpE=/ws
+D/SecurityManager(32147): checkAccessControl flag0
+D/VRI[MainActivity](32147): vri.reportNextDraw android.view.ViewRootImpl.performTraversals:4936 android.view.ViewRootImpl.doTraversal:3546 android.view.ViewRootImpl$TraversalRunnable.run:11690 android.view.Choreographer$CallbackRecord.run:1763 android.view.Choreographer$CallbackRecord.run:1772 
+W/BpBinder(32147): Slow Binder: BpBinder transact took 270 ms, interface=android.system.keystore2.IKeystoreSecurityLevel, code=2 oneway=false
+W/libc    (32147): Access denied finding property "ro.vendor.magt.mtk_magt_support"
+D/MAGT_SYNC_FRAME(32147): MAGT Sync: MAGT is not supported. Disabling Sync.
+I/Choreographer(32147): Skipped 163 frames!  The application may be doing too much work on its main thread.
+E/LB      (32147): fail to open file: No such file or directory
+E/LB      (32147): fail to open node: No such file or directory
+E/LB      (32147): fail to open node: No such file or directory
+I/GrallocExtra(32147): gralloc_extra_query:is_SW3D 0
+W/libc    (32147): Access denied finding property "ro.vendor.display.iris_x7.support"
+D/BLASTBufferQueue(32147): [SurfaceView[com.celtas.celtas_mobile/com.celtas.celtas_mobile.MainActivity]#1](f:0,a:1) acquireNextBufferLocked size=1080x2400 mFrameNumber=1 applyTransaction=true mTimestamp=321823434418102(auto) mPendingTransactions.size=0 graphicBufferId=138070313664512 transform=0
+D/LibMBrainProxy(32147): Init Paramters
+I/Choreographer(32147): Skipped 82 frames!  The application may be doing too much work on its main thread.
+D/VRI[MainActivity](32147): Setup new sync=wmsSync-VRI[MainActivity]#1
+I/gralloc4(32147): @set_metadata: update dataspace from GM (0x00000000 -> 0x08010000)
+D/HWUI    (32147): makeCurrent grContext:0xb4000072f5dcfe90 reset mTextureAvailable
+D/s.celtas_mobile(32147): MiuiProcessManagerServiceStub setSchedFifo
+I/MiuiProcessManagerImpl(32147): setSchedFifo pid:32147, mode:3
+W/libc    (32147): Access denied finding property "ro.vendor.display.iris_x7.support"
+D/BLASTBufferQueue(32147): [VRI[MainActivity]#0](f:0,a:1) acquireNextBufferLocked size=1080x2400 mFrameNumber=1 applyTransaction=true mTimestamp=321824150989871(auto) mPendingTransactions.size=0 graphicBufferId=138070313664514 transform=0
+D/VRI[MainActivity](32147): vri.reportDrawFinished
+I/HWUI    (32147): Davey! duration=723ms; Flags=1, FrameTimelineVsyncId=76767203, IntendedVsync=321823428991463, Vsync=321824112324769, InputEventId=0, HandleInputStart=321824118328640, AnimationStart=321824118329871, PerformTraversalsStart=321824118330486, DrawStart=321824120859948, FrameDeadline=321823448991463, FrameInterval=321824117995332, FrameStartTime=8333333, SyncQueued=321824122322102, SyncStart=321824122462179, IssueDrawCommandsStart=321824125420256, SwapBuffers=321824147161179, FrameCompleted=321824152320948, DequeueBufferDuration=1560923, QueueBufferDuration=896923, GpuCompleted=321824152183640, SwapBuffersCompleted=321824152320948, DisplayPresentTime=0, CommandSubmissionCompleted=321824147161179, 
+I/HandWritingStubImpl(32147): refreshLastKeyboardType: 1
+I/HandWritingStubImpl(32147): getCurrentKeyboardType: 1
+I/HandWritingStubImpl(32147): getCurrentKeyboardType: 1
+I/gralloc4(32147): @set_metadata: update dataspace from GM (0x00000000 -> 0x08010000)
+I/gralloc4(32147): @set_metadata: update dataspace from GM (0x00000000 -> 0x08010000)
+E/s.celtas_mobile(32147): DynamicFPS DF open fail: No such file or directory
+E/s.celtas_mobile(32147): FrameInsert open fail: No such file or directory
+I/gralloc4(32147): @set_metadata: update dataspace from GM (0x00000000 -> 0x08010000)
+D/VRI[MainActivity](32147): visibilityChanged oldVisibility=true newVisibility=false
+D/BLASTBufferQueue(32147): [SurfaceView[com.celtas.celtas_mobile/com.celtas.celtas_mobile.MainActivity]#1](f:0,a:1) destructor()
+D/BufferQueueConsumer(32147): [SurfaceView[com.celtas.celtas_mobile/com.celtas.celtas_mobile.MainActivity]#1(BLAST Consumer)1](id:7d9300000001,api:0,p:-1,c:32147) disconnect
+W/libc    (32147): Access denied finding property "ro.vendor.display.iris_x7.support"
+D/BLASTBufferQueue(32147): [VRI[MainActivity]#0](f:0,a:1) destructor()
+D/BufferQueueConsumer(32147): [VRI[MainActivity]#0(BLAST Consumer)0](id:7d9300000000,api:0,p:-1,c:32147) disconnect
+D/FlutterGeolocator(32147): Detaching Geolocator from activity
+D/FlutterGeolocator(32147): Flutter engine disconnected. Connected engine count 0
+Lost connection to device.
