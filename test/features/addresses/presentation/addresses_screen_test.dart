@@ -4,12 +4,14 @@ import 'package:celtas_mobile/features/addresses/application/address_providers.d
 import 'package:celtas_mobile/features/addresses/data/address_repository.dart';
 import 'package:celtas_mobile/features/addresses/data/models/address.dart';
 import 'package:celtas_mobile/features/addresses/presentation/addresses_screen.dart';
+import 'package:celtas_mobile/features/addresses/presentation/widgets/address_map_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:mocktail/mocktail.dart';
 
 class MockAddressRepository extends Mock implements AddressRepository {}
@@ -68,6 +70,18 @@ void main() {
     return container;
   }
 
+  /// Simula "tocar el mapa": invoca directamente el callback de
+  /// `AddressMapPicker` (mismo patrón que `address_location_picker_test.dart`)
+  /// en vez de un drag real — no depende de `GEOAPIFY_API_KEY` porque no pasa
+  /// por el `FlutterMap` real, solo dispara la función que el picker ya le
+  /// pasó a la ubicación elegida.
+  Future<void> touchMap(WidgetTester tester, [LatLng? point]) async {
+    final mapPicker =
+        tester.widget<AddressMapPicker>(find.byType(AddressMapPicker));
+    mapPicker.onCenterChanged(point ?? const LatLng(-12.1633, -76.9718));
+    await tester.pump();
+  }
+
   testWidgets('sin direcciones → estado vacío', (tester) async {
     final repository = MockAddressRepository();
     when(() => repository.getAddresses()).thenAnswer((_) async => []);
@@ -110,12 +124,57 @@ void main() {
       alias: 'Depto',
       fullAddress: 'Jr. Nueva 456',
       district: 'Surco',
+      latitude: -12.1633,
+      longitude: -76.9718,
     );
     when(() => repository.createAddress(
           alias: 'Depto',
           fullAddress: 'Jr. Nueva 456',
           district: 'Surco',
+          latitude: -12.1633,
+          longitude: -76.9718,
         )).thenAnswer((_) async => created);
+
+    await pumpScreen(tester, repository: repository);
+
+    await tester.tap(find.byKey(const ValueKey('addresses-add-new')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('addresses-form-alias')),
+      'Depto',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('addresses-form-full')),
+      'Jr. Nueva 456',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('addresses-form-district')),
+      'Surco',
+    );
+    await touchMap(tester);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('addresses-form-save')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('addresses-form-save')));
+    await tester.pumpAndSettle();
+
+    verify(() => repository.createAddress(
+          alias: 'Depto',
+          fullAddress: 'Jr. Nueva 456',
+          district: 'Surco',
+          latitude: -12.1633,
+          longitude: -76.9718,
+        )).called(1);
+    expect(find.text('Depto'), findsOneWidget);
+  });
+
+  testWidgets(
+      'agregar nueva dirección sin tocar el mapa → error claro, no llama al '
+      'backend', (tester) async {
+    final repository = MockAddressRepository();
+    when(() => repository.getAddresses()).thenAnswer((_) async => [home]);
 
     await pumpScreen(tester, repository: repository);
 
@@ -141,12 +200,18 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('addresses-form-save')));
     await tester.pumpAndSettle();
 
-    verify(() => repository.createAddress(
-          alias: 'Depto',
-          fullAddress: 'Jr. Nueva 456',
-          district: 'Surco',
-        )).called(1);
-    expect(find.text('Depto'), findsOneWidget);
+    expect(
+      find.text('Toca el mapa para marcar la ubicación de tu dirección'),
+      findsOneWidget,
+    );
+    verifyNever(() => repository.createAddress(
+          alias: any(named: 'alias'),
+          fullAddress: any(named: 'fullAddress'),
+          reference: any(named: 'reference'),
+          district: any(named: 'district'),
+          latitude: any(named: 'latitude'),
+          longitude: any(named: 'longitude'),
+        ));
   });
 
   testWidgets('editar dirección existente → PATCH con el id en el path',
@@ -159,6 +224,8 @@ void main() {
       fullAddress: 'Av. Los Álamos 123',
       district: 'San Juan de Miraflores',
       isDefault: true,
+      latitude: -12.1633,
+      longitude: -76.9718,
     );
     when(() => repository.updateAddress(
           'addr-1',
@@ -166,6 +233,8 @@ void main() {
           fullAddress: 'Av. Los Álamos 123',
           district: 'San Juan de Miraflores',
           isDefault: true,
+          latitude: -12.1633,
+          longitude: -76.9718,
         )).thenAnswer((_) async => updated);
 
     await pumpScreen(tester, repository: repository);
@@ -180,6 +249,11 @@ void main() {
       find.byKey(const ValueKey('addresses-form-alias')),
       'Casa nueva',
     );
+    // `home` (fixture) no tiene coordenadas guardadas (dirección "vieja",
+    // anterior a esta feature — la regla de coordenadas obligatorias aplica
+    // solo hacia adelante, sin migración) — así que editarla sigue exigiendo
+    // tocar el mapa como cualquier alta nueva.
+    await touchMap(tester);
     // Un `pump()` extra antes de `ensureVisible`: la tarjeta ahora incluye
     // el selector de ubicación (`AddressLocationPicker`, mapa + botón GPS),
     // más alta que antes de la feature Geoapify. Sin este pump intermedio,
@@ -201,6 +275,8 @@ void main() {
           fullAddress: 'Av. Los Álamos 123',
           district: 'San Juan de Miraflores',
           isDefault: true,
+          latitude: -12.1633,
+          longitude: -76.9718,
         )).called(1);
   });
 

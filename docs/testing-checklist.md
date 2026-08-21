@@ -2094,6 +2094,287 @@ verificable de config de `flutter_launcher_icons`/`flutter_native_splash` + asse
       código) y riesgos menores ya cubiertos por verificación visual previa en dispositivo real
       reportada por la sesión principal.
 
+### Costo de delivery por distancia — preview en checkout + coordenadas obligatorias — ⚠️ LISTO CON OBSERVACIONES
+
+**Tercera ronda (fix de UX sobre `_PhoneRequiredDialog`, hallazgo en dispositivo físico, todavía
+sin commitear)**: bug real encontrado probando en dispositivo real, no en los widget tests — el
+diálogo de teléfono obligatorio tenía un solo paso: tocar "CONFIRMAR" validaba el formato Y
+guardaba el teléfono (`PATCH /users/me`) Y dejaba seguir con la creación del pedido, todo en el
+mismo toque, sin ninguna oportunidad de corregir un typo con formato válido pero dígitos
+equivocados antes de que el pedido ya se hubiera disparado.
+
+Fix verificado por lectura completa de `_PhoneRequiredDialogState` en `checkout_screen.dart`: el
+diálogo ahora tiene 2 pasos internos (`_reviewing`), mismo `AlertDialog`/mismo key
+`checkout-phone-required-dialog`, contenido condicional. Paso 1 (`_reviewPhone`, botón
+`checkout-phone-confirm`) SOLO valida `_peruvianPhoneRegExp` y pasa a `_reviewing = true` — no
+toca `_saving` ni llama a `updateProfile` en ningún branch (confirmado leyendo el método completo,
+su único efecto en caso válido es `setState(() { _reviewing = true; _error = null; })`). Paso 2
+(`_confirmAndSave`, botón `checkout-phone-confirm-final`) es el único call site de
+`ref.read(profileProvider.notifier).updateProfile(phone: value)` en todo el archivo (confirmado
+con `grep -n "updateProfile" checkout_screen.dart` → una sola ocurrencia real, dentro de
+`_confirmAndSave`) — recién ahí, con éxito, hace `Navigator.of(context).pop(true)`. "EDITAR"
+(`_editPhone`, botón `checkout-phone-edit`) solo hace `setState(() { _reviewing = false; _error =
+null; })`, sin tocar `_phoneController` — el texto tipeado se conserva, confirmado también por el
+test dedicado que lee `field.controller!.text` tras volver del paso de revisión y encuentra el
+mismo valor. El número mostrado en la pregunta de confirmación
+(`_formatted(_phoneController.text.trim())`, en `_buildReviewContent`) y el que realmente se
+guarda (`_phoneController.text.trim()`, en `_confirmAndSave`) leen exactamente el mismo `.text`
+del mismo controller en el mismo momento — `_formatted` solo inserta espacios sobre una copia
+local, no muta ni trunca el valor real; no hay ninguna transformación intermedia que pueda hacer
+que lo mostrado difiera de lo guardado.
+
+`flutter analyze`: `No issues found! (ran in 3.7s)` (salida cruda propia). `flutter test` (suite
+completa): `+458: All tests passed!` (salida cruda propia) — coincide exactamente con el conteo
+esperado (458/458, +1 neto sobre el 457/457 de la ronda anterior).
+
+`git diff --stat` de esta ronda confirma que el resto del archivo no tiene ningún diff inesperado:
+solo aparecen, además del diálogo de teléfono, los cambios ya auditados en rondas previas
+(`estimateDeliveryFee`/fila "Envío", coordenadas obligatorias en `_submitNewAddress`) — sin tocar
+`register_screen.dart` (`git diff` vacío, confirmado de nuevo con salida cruda propia).
+
+Tests tocados en `checkout_screen_test.dart`, grupo "gate de teléfono obligatorio al confirmar":
+los 2 tests que antes tocaban `checkout-phone-confirm` esperando guardado inmediato ("teléfono
+válido..." y "falla el guardado...") ahora pasan primero por el paso de revisión
+(`checkout-phone-confirm`) y recién tocan `checkout-phone-confirm-final` para disparar el guardado
+— confirmado leyendo ambos tests completos, incluido el `verifyNever(() =>
+profileRepo.updateProfile(...))` intermedio en el primero, que confirma que el primer toque de
+"CONFIRMAR" (paso 1) todavía no guardó nada antes de pasar al paso 2. El test nuevo dedicado al
+paso de revisión (`'paso de revisión: número válido → ...'`) cubre las 3 afirmaciones pedidas en
+un solo flujo: número formateado visible (`'¿Confirmas que tu número es 987 654 321?'`), EDITAR
+conserva el valor tipeado (verificado leyendo `TextFormField.controller!.text` directamente, no
+solo que el campo esté visible), y "SÍ, CONFIRMAR" es lo único que dispara `updateProfile`
+(`verifyNever` antes de tocarlo, en dos puntos distintos del flujo — tras llegar a la revisión y
+tras volver de EDITAR y volver a llegar — y `verify(...).called(1)` después de tocarlo). Los
+matchers de `updateProfile` (`fullName`/`phone`, 2 named args) y `createOrder`
+(`items`/`addressId`/`couponCode`, 3 named args) usados en `verify`/`verifyNever` de este grupo
+completo son los mismos ya validados empíricamente en la ronda anterior (ver la nota extensa más
+abajo sobre el mecanismo real de `noSuchMethod`/mocktail) — sin necesidad de repetir esa prueba
+acá, el keyset coincide exactamente con la firma real de ambos métodos.
+
+⚠️ Observación nueva de esta ronda (no bloqueante): el hallazgo del bug en esta ronda vino de
+probar en dispositivo físico, no de los widget tests — es un recordatorio de que el flujo
+"validar → mutar" en un solo toque es un patrón de riesgo real en esta app (ya se vio antes con
+otras confirmaciones), y vale la pena que la sesión principal revise si hay algún otro modal en el
+proyecto con el mismo patrón de un solo paso para una mutación irreversible o costosa de deshacer,
+antes de considerar cerrado el barrido de este patrón.
+
+**Veredicto de esta ronda: LISTO.** El fix resuelve el bug real reportado (typo sin oportunidad de
+corregir antes de crear el pedido) sin introducir ningún efecto secundario en el resto del archivo,
+`analyze`/`test` limpios con el conteo esperado, y los tests nuevos/tocados verifican el
+comportamiento con matchers estrictos y `verifyNever` en los puntos intermedios correctos, no solo
+al final del flujo. Se mantienen las mismas observaciones no bloqueantes ya documentadas en la
+ronda anterior (sin test e2e contra el backend real, sin ítem propio en `ROADMAP.md`, el modal no
+re-lee `authControllerProvider` tras guardar) — ninguna nueva salvo la de arriba.
+
+---
+
+**Segunda ronda (re-auditoría de corrección, sobre la misma auditoría de abajo, todavía sin
+commitear)**: la sesión principal corrigió los 2 `verifyNever` con matcher incompleto señalados
+la vez pasada (`checkout_screen_test.dart`/`addresses_screen_test.dart`, ahora con los 6 named
+args reales de `createAddress`: `alias`, `fullAddress`, `reference`, `district`, `latitude`,
+`longitude`), y revirtió por completo la pieza "teléfono obligatorio en el registro" que esta
+misma auditoría había dado por buena — correspondía a un diseño descartado por el dueño del
+producto. En su lugar movió ese gate al checkout: `checkout_screen.dart::_confirmOrder` lee
+`authControllerProvider.user?.phone` antes de crear el pedido y, si falta, bloquea con
+`_PhoneRequiredDialog` (`checkout-phone-required-dialog`), que valida formato peruano
+(`_peruvianPhoneRegExp = RegExp(r'^9\d{8}$')`) y guarda con
+`profileProvider.notifier.updateProfile(phone: ...)` antes de dejar continuar.
+
+`git diff -- lib/features/auth/presentation/register_screen.dart`: **vacío** (confirmado con
+salida cruda propia, sin ningún residuo del validator revertido) y
+`test/features/auth/presentation/register_screen_test.dart` **ya no existe** (confirmado con
+`ls` del directorio) — la reversión es completa, no parcial.
+
+`flutter analyze`: `No issues found! (ran in 3.7s)` (salida cruda propia). `flutter test` (suite
+completa): `+457: All tests passed!` (salida cruda propia) — coincide con el conteo esperado
+(457/457, neto +5 sobre el 452/452 de la ronda anterior: −2 por eliminar
+`register_screen_test.dart`, +7 por el grupo nuevo "gate de teléfono obligatorio al confirmar" en
+`checkout_screen_test.dart`).
+
+Lectura completa de `_confirmOrder`/`_PhoneRequiredDialog` en `checkout_screen.dart` y de los 7
+tests nuevos: el gate bloquea la creación del pedido en los 3 casos donde debe (sin teléfono →
+modal sin crear pedido; formato inválido → error inline sin llamar a `updateProfile` ni a
+`createOrder`; cancelar → `return` limpio, sin pedido, sigue en checkout) y deja pasar
+correctamente en los 2 casos donde debe (teléfono ya existía → nunca aparece el modal; teléfono
+válido guardado con éxito → cierra el modal y sigue con la creación normal del pedido, verificado
+con `addressId` real, no un `any()` genérico). La validación de formato ocurre estrictamente antes
+de la mutación: `_submit()` retorna temprano en el `if (!_peruvianPhoneRegExp.hasMatch(value))`
+sin tocar `_saving`/`updateProfile` — confirmado por lectura y por el test de formato inválido, que
+verifica `verifyNever(() => profileRepo.updateProfile(...))`. Aplica igual para `local` y `google`
+(ninguna rama en el código distingue por `provider`, solo mira `phone`), confirmado por el test
+dedicado con `UserProvider.google`. El regex (`^9\d{8}$`: 9 dígitos, empieza en 9) es razonable
+para el formato peruano de celular.
+
+**Re-verificación de los `verifyNever` corregidos, con hallazgo técnico no bloqueante**: se
+revisaron los 2 matchers de 6 named args y también los 3 `verifyNever`/`verify` nuevos del gate de
+teléfono (`createOrder` con 3 named args, `updateProfile` con 2). Los 2 de `createOrder`
+(`items`/`addressId`/`couponCode`) y el de `updateProfile` (`fullName`/`phone`) coinciden
+exactamente con el único call site real de cada método en este flujo (`_confirmOrder` /
+`ProfileNotifier.updateProfile`, que siempre pasan ese mismo set de keys) — sin problema. Para los
+2 de `createAddress`, se hizo una prueba empírica directa (script descartable en
+`test/`, corrido y borrado en esta sesión, sin dejar residuo) para confirmar el mecanismo real de
+mocktail, y el resultado contradice parcialmente la explicación técnica que esta misma auditoría
+había escrito la ronda pasada: **el forwarder que Dart genera para clases que satisfacen una
+interfaz solo vía `noSuchMethod` (el mecanismo de `Mock` de mocktail) siempre incluye TODOS los
+named params del método real en el `Invocation`, rellenando con el valor por defecto cualquiera
+que se omita en el call site** — no es cierto que "ninguna invocación real calificaría jamás como
+coincidente" por tener menos keys explícitas; los keysets de `Invocation.namedArguments` siempre
+son el set completo de parámetros del método, sin importar cuántos se escriban literalmente en el
+call site. Confirmado con un `noSuchMethod` crudo sin mocktail de por medio
+(`invocation.namedArguments.keys` siempre trae los 4 params de un método de prueba de 4 params,
+aunque el call site solo escriba 2), y luego replicado con `MockAddressRepository` real: el
+matcher original de 3 keys (`alias`/`fullAddress`/`district`, sin `reference`/`latitude`/
+`longitude`) SÍ matcheaba la llamada real cuando esos 3 quedan en `null` (que es exactamente el
+escenario que ese test protege — el guard roto sin tocar el mapa), porque el forwarder de la
+propia expresión `verify()` también rellena esos 3 con su default (`null`), y `null == null`
+coincide. Dicho de otro modo: **el `verifyNever` original de la ronda pasada no era una red de
+seguridad vacía como se documentó entonces** — si el guard se hubiera roto en el escenario exacto
+que ese test ejercita, sí lo habría detectado. El matcher de 6 keys con `any()` explícito para
+`reference`/`latitude`/`longitude` sigue siendo una mejora real y válida, no innecesaria: a
+diferencia del original, matchea sin importar el VALOR de esos 3 campos (no solo cuando son
+`null`), así que también detectaría una variante del bug donde el guard roto dejara pasar un
+valor residual no-nulo (ej. coordenadas de una selección anterior sin limpiar) — un caso que el
+matcher original, por construcción, no habría cubierto. Conclusión: la corrección aplicada es
+correcta y es una mejora de robustez, aunque el motivo original documentado para pedirla (keyset
+que "nunca podría coincidir") era técnicamente impreciso — se deja esta nota para que no se repita
+esa explicación en futuras auditorías de este mismo patrón mocktail.
+
+Sin commitear todavía al momento de esta re-auditoría (`git status`/`git diff` muestran el estado
+real completo, sin nada movido a `ROADMAP.md`). El resto de esta sección (auditoría original, sin
+re-verificar a fondo salvo lo ya reconfirmado arriba) queda documentado abajo tal cual se escribió
+entonces, con el conteo de tests y el hallazgo de `verifyNever` ya superados por lo anterior.
+
+---
+
+Backend y `celtas-admin` ya cerrados en sus propios repos — esta ronda es exclusivamente mobile.
+Archivos tocados: `lib/features/checkout/data/order_repository.dart` (método nuevo
+`estimateDeliveryFee`), `lib/features/checkout/application/checkout_providers.dart`
+(`deliveryFeeEstimateProvider`), `lib/features/checkout/presentation/checkout_screen.dart` (fila
+"Envío" + total mostrado), `lib/features/addresses/presentation/addresses_screen.dart` y
+`lib/features/checkout/presentation/checkout_screen.dart` (chequeo manual de coordenadas antes de
+guardar), `lib/features/addresses/presentation/widgets/address_form_card.dart`/
+`address_location_picker.dart` (doc actualizada, ya no dicen "opcional"),
+`.claude/skills/geoapify-direcciones/SKILL.md` actualizada. Tests nuevos/tocados:
+`order_repository_test.dart` (+2), `checkout_screen_test.dart` (+5, +7 más en la ronda de
+corrección de arriba), `addresses_screen_test.dart` (+1).
+
+`flutter analyze` (auditoría original): `No issues found! (ran in 3.4s)` (salida cruda propia).
+`flutter test` (auditoría original): `+452: All tests passed!` — superado por el `+457` de la
+ronda de corrección de arriba.
+
+✅ Pasó:
+- **Contrato de `POST /orders/estimate-delivery-fee` verificado contra el código fuente real del
+  backend** (`backend-celtas/src/modules/orders/orders.controller.ts` +
+  `orders.service.ts::estimateDeliveryFee`/`computeDelivery` + `estimate-delivery-fee.dto.ts`):
+  body `{ addressId: string }` (UUID), response
+  `{ deliveryFee: number, isFarOrder: boolean, distanceMeters: number | null }`. La capa Dart
+  (`OrderRepository.estimateDeliveryFee`) manda exactamente `{ addressId }` y solo lee
+  `data['deliveryFee']` — coincide con el contrato real, no uno asumido.
+- **`isFarOrder`/`distanceMeters` nunca se exponen al cliente**: `grep -rn
+  "isFarOrder|distanceMeters"` sobre todo `lib/` y `test/` solo encuentra menciones en
+  comentarios (documentando por qué se ignoran a propósito) y en el fixture del test que confirma
+  que se ignoran — ningún lugar del código los parsea, guarda ni muestra.
+- **Orden `whenData` → watch del provider de delivery fee**: confirmado por lectura de
+  `checkout_screen.dart` build() — el callback de `addressesAsync.whenData(...)` que auto-
+  selecciona la dirección principal muta `_selectedAddressId` de forma síncrona dentro del mismo
+  `build()`, y la línea `final selectedAddressId = _selectedAddressId;` que alimenta el watch de
+  `deliveryFeeEstimateProvider` está efectivamente después de ese bloque. No hay regresión de
+  timing: en la primera pasada de build con direcciones recién cargadas, el watch ya lee el
+  `_selectedAddressId` actualizado, no el `null` inicial.
+- **La fila "Envío" nunca aparece sin una dirección seleccionada real**: `deliveryFee` se computa
+  como `selectedAddressId == null ? null : ref.watch(...)`, corto-circuitando antes de siquiera
+  crear el provider — confirmado también por el test `'sin dirección seleccionada → no llama al
+  estimate ni muestra la fila'`, con `verifyNever(() => orderRepo.estimateDeliveryFee(any()))`
+  (matcher completo y válido: el método real tiene un solo parámetro posicional, sin named args
+  adicionales que puedan producir un falso negativo — a diferencia de otros `verifyNever` de este
+  mismo diff, ver más abajo).
+- **`cart.total` nunca se toca**: el backend real (`POST /orders`) lo sigue calculando; el preview
+  solo suma `cart.total + (deliveryFee ?? 0)` en una variable local (`displayTotal`) para mostrar,
+  confirmado por lectura y por el test `'con dirección seleccionada → ... nunca toca cart.total'`
+  (`expect(container.read(cartProvider).total, 15.5)` tras verificar que el total mostrado sí
+  incluye el envío).
+- **Best-effort real, sin bloquear ni filtrar errores feos**: `deliveryFeeEstimateProvider` atrapa
+  cualquier excepción y devuelve `null` — confirmado con el test que hace `thenThrow(const
+  ApiException(...))` y verifica que ni la fila "Envío" ni el mensaje de error aparecen, y que el
+  botón de confirmar sigue habilitado (mismo patrón ya usado por `businessHoursProvider`).
+- **Coordenadas obligatorias bloquean el submit en los dos formularios** (`checkout_screen.dart`
+  `_submitNewAddress`, `addresses_screen.dart` `_submitForm`), con el mismo texto de error exacto
+  ("Toca el mapa para marcar la ubicación de tu dirección", tuteo) y el mismo patrón (chequeo
+  manual después de `Form.validate()`, porque `latitude`/`longitude` no viven en un
+  `TextFormField`). Confirmado tanto por lectura como por 2 tests nuevos (uno por pantalla) que
+  llenan el formulario completo sin tocar el mapa y confirman el mensaje de error.
+- **Sin excepción para direcciones viejas al editar**: `_openEditForm` en `addresses_screen.dart`
+  precarga `_formLatitude`/`_formLongitude` directo desde `address.latitude`/`address.longitude`
+  (`null` si la dirección es anterior a esta feature) — el mismo chequeo de `_submitForm` aplica
+  igual al editar, sin ninguna rama especial. Confirmado con el test `'editar dirección
+  existente'`, que usa la fixture `home` sin coordenadas y verifica que también exige tocar el
+  mapa antes de poder guardar el cambio.
+- **Las 3 fuentes de coordenadas (autocompletado, GPS, drag del pin) alimentan el mismo
+  callback**: los 3 call sites de `widget.onLocationChanged(point)` en
+  `address_location_picker.dart` desembocan en el mismo setter (`_onFormLocationChanged`/
+  `_onAddAddressLocationChanged`), así que no hay una ruta que deje pasar el submit sin marcar
+  ninguna de las tres.
+- **Fidelidad de diseño**: la fila "Envío" reutiliza `_SummaryRow` con `CeltasColors.textMuted`, el
+  mismo color/estilo ya usado para "Subtotal" en la misma pantalla — no se introduce ningún color
+  nuevo (`Color(0xFF...)` suelto) para esta feature.
+- `dart format --set-exit-if-changed` reporta drift en los archivos tocados, pero también en
+  archivos completamente ajenos a este diff (`lib/main.dart`, `lib/features/cart/application/
+  cart_provider.dart`, sin cambios en `git status`) — confirmado que es un desfase de versión de
+  `dart format` preexistente en todo el repo, no una regresión de este trabajo.
+
+❌ Falló:
+- Ninguno funcional.
+
+⚠️ Riesgos / observaciones — **no bloqueantes**:
+- ~~`verifyNever` vacío en 2 tests (`checkout_screen_test.dart`/`addresses_screen_test.dart`)~~ —
+  **corregido en la ronda de corrección** (ver arriba): ambos matchers ahora usan los 6 named args
+  reales de `createAddress`. Además, la re-verificación de esta ronda encontró que la premisa
+  técnica original de este hallazgo (que el matcher de 3 keys "nunca podría coincidir") era
+  imprecisa — ver la nota extensa de arriba sobre el mecanismo real de `noSuchMethod`/mocktail. La
+  corrección aplicada sigue siendo válida como mejora de robustez, solo se corrige el motivo
+  documentado.
+- No hay test unitario dedicado para `deliveryFeeEstimateProvider` en aislamiento (equivalente a
+  como sí existe, por ejemplo, para el interceptor de refresh de `dio`) — la cobertura real viene
+  entera de los 4 tests del grupo "preview de envío" en `checkout_screen_test.dart`, que sí
+  ejercitan el provider de punta a punta (éxito, cambio de dirección, sin dirección, error). Es
+  cobertura suficiente para el comportamiento observable, pero no aísla el provider de la UI si en
+  el futuro se reutiliza en otra pantalla.
+- Sin test de integración end-to-end contra el backend real (`https://backend-celtas.onrender.com`)
+  corrido en esta auditoría para `estimate-delivery-fee` — esta auditoría se limitó a análisis
+  estático + tests automatizados + lectura de código/contrato, igual que la ronda anterior de
+  Geoapify.
+- No existe ningún ítem de checklist en `ROADMAP.md` para esta feature ("costo de delivery por
+  distancia" no aparece mencionada ahí) — no hay ningún checkbox que marcar como completo en ese
+  archivo para este trabajo. Tampoco lo hay para el gate de teléfono en checkout (movido desde el
+  registro), que igual carece de ítem propio.
+- **Gate de teléfono obligatorio en checkout, sin test de integración end-to-end**: al igual que
+  `estimateDeliveryFee`, esta pieza nueva (`_PhoneRequiredDialog` + `PATCH /users/me` vía
+  `profileProvider`) solo se verificó con widget tests mockeados en esta ronda, no contra el
+  backend real.
+- El modal de teléfono no re-lee `authControllerProvider` después de guardar para confirmar que
+  `phone` efectivamente quedó actualizado en el estado de auth antes de continuar — confía en que
+  `ProfileNotifier.updateProfile` haya llamado a `authControllerProvider.notifier.updateUser`
+  (que si) y en que el `Navigator.pop(context, true)` sea la única señal de éxito. Es el mismo
+  patrón ya usado por `profile_screen.dart`, no una inconsistencia introducida acá, pero vale la
+  pena tenerlo presente si en el futuro se agrega algún otro punto que dependa de leer
+  `user.phone` inmediatamente después de este flujo.
+
+**Veredicto: LISTO CON OBSERVACIONES** (se mantiene sobre la base de la auditoría original, con la
+corrección de esta ronda plenamente verificada). Ningún bug funcional encontrado en ninguna de las
+2 rondas: el contrato de API coincide con el backend real, `isFarOrder`/`distanceMeters` nunca se
+filtran al cliente, el bloqueo por coordenadas obligatorias funciona sin excepciones, y el nuevo
+gate de teléfono en checkout bloquea/deja pasar correctamente en los 5 casos verificados (sin
+teléfono, vacío, formato inválido, cancelar, falla de guardado) tanto para cuentas `local` como
+`google`. La reversión de "teléfono obligatorio en registro" es completa y verificable
+(`git diff` vacío + archivo de test eliminado). El hallazgo de calidad de test de la ronda anterior
+(`verifyNever` con matcher incompleto) está corregido y confirmado funcionalmente correcto — con
+la salvedad de que la explicación técnica original de por qué fallaba resultó imprecisa (ver nota
+arriba), sin impacto en el veredicto. Quedan pendientes las mismas observaciones no bloqueantes de
+siempre (sin test aislado del provider, sin e2e contra el backend real, sin ítem en `ROADMAP.md`),
+más una equivalente nueva para el gate de teléfono — ninguna bloquea dar el módulo por
+funcionalmente correcto, pero conviene cerrarlas antes de considerar esta feature 100% verificada
+de punta a punta.
+
 ---
 
 ## Reporte de auditoría (formato esperado del @tester)

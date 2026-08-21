@@ -447,4 +447,75 @@ void main() {
       expect(exception.statusCode, 409);
     });
   });
+
+  group('estimateDeliveryFee — POST /orders/estimate-delivery-fee', () {
+    test(
+      'manda { addressId } y devuelve SOLO deliveryFee (ignora isFarOrder/'
+      'distanceMeters, aunque vengan en la respuesta)',
+      () async {
+        when(
+          () => dio.post<Map<String, dynamic>>(
+            '/orders/estimate-delivery-fee',
+            data: any(named: 'data'),
+          ),
+        ).thenAnswer(
+          (_) async => Response<Map<String, dynamic>>(
+            requestOptions:
+                RequestOptions(path: '/orders/estimate-delivery-fee'),
+            data: const {
+              'deliveryFee': 6.5,
+              'isFarOrder': true,
+              'distanceMeters': 8200,
+            },
+          ),
+        );
+
+        final fee = await repository.estimateDeliveryFee('addr-1');
+
+        expect(fee, 6.5);
+        final captured = verify(
+          () => dio.post<Map<String, dynamic>>(
+            '/orders/estimate-delivery-fee',
+            data: captureAny(named: 'data'),
+          ),
+        ).captured.single as Map<String, dynamic>;
+        expect(captured, {'addressId': 'addr-1'});
+      },
+    );
+
+    test('error del backend → ApiException con el mensaje real', () async {
+      when(
+        () => dio.post<Map<String, dynamic>>(
+          '/orders/estimate-delivery-fee',
+          data: any(named: 'data'),
+        ),
+      ).thenThrow(
+        DioException(
+          requestOptions:
+              RequestOptions(path: '/orders/estimate-delivery-fee'),
+          response: Response<Map<String, dynamic>>(
+            requestOptions:
+                RequestOptions(path: '/orders/estimate-delivery-fee'),
+            statusCode: 404,
+            data: const {
+              'success': false,
+              'message': 'Dirección no encontrada',
+              'statusCode': 404,
+            },
+          ),
+          type: DioExceptionType.badResponse,
+        ),
+      );
+
+      Object? caught;
+      try {
+        await repository.estimateDeliveryFee('addr-inexistente');
+      } catch (e) {
+        caught = e;
+      }
+
+      expect(caught, isA<ApiException>());
+      expect((caught as ApiException).message, 'Dirección no encontrada');
+    });
+  });
 }

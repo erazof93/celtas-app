@@ -95,6 +95,15 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
 
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
+    // `latitude`/`longitude` vienen del pin del mapa, no de un
+    // `TextFormField` — `Form.validate()` no los cubre, así que el chequeo va
+    // aparte.
+    if (_formLatitude == null || _formLongitude == null) {
+      setState(() {
+        _formError = 'Toca el mapa para marcar la ubicación de tu dirección';
+      });
+      return;
+    }
     setState(() {
       _submitting = true;
       _formError = null;

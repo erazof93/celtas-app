@@ -109,4 +109,24 @@ class OrderRepository {
       throw apiExceptionFromDio(e);
     }
   }
+
+  /// `POST /orders/estimate-delivery-fee` — solo de lectura, nunca crea un
+  /// pedido. Contrato ya confirmado: body `{ addressId }`, response
+  /// `{ deliveryFee, isFarOrder, distanceMeters }`. Esta capa usa
+  /// EXCLUSIVAMENTE `deliveryFee` — el cliente nunca debe enterarse de
+  /// `isFarOrder`/`distanceMeters` (decisión de producto: no desalentar
+  /// pedidos que el negocio en la práctica sí puede cubrir), así que ni
+  /// siquiera se parsean.
+  Future<double> estimateDeliveryFee(String addressId) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/orders/estimate-delivery-fee',
+        data: {'addressId': addressId},
+      );
+      final data = response.data ?? const {};
+      return (data['deliveryFee'] as num).toDouble();
+    } on DioException catch (e) {
+      throw apiExceptionFromDio(e);
+    }
+  }
 }

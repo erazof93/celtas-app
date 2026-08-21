@@ -23,11 +23,13 @@ const _defaultCenter = LatLng(-12.1633, -76.9718);
 /// de texto, botón GPS, mapa con pin arrastrable) sobre el campo "DIRECCIÓN
 /// COMPLETA" ya existente del formulario — ver skill `geoapify-direcciones`.
 ///
-/// Nunca lanza ni bloquea el guardado: si Geoapify no tiene API key
-/// configurada, o cualquier request falla, el usuario igual puede escribir la
-/// dirección a mano y guardarla sin coordenadas (`latitude`/`longitude`
-/// quedan `null`, un valor válido — ver skill, "direcciones sin lat/lng
-/// siguen siendo válidas").
+/// Este widget en sí nunca lanza ni bloquea nada (si Geoapify no tiene API
+/// key configurada, o cualquier request falla, el usuario igual puede
+/// escribir la dirección a mano). Pero desde la feature de costo de envío
+/// por distancia, `latitude`/`longitude` SON obligatorias para guardar — el
+/// chequeo vive en el caller (`_submitNewAddress`/`_submitForm`, ver
+/// `AddressFormCard`), no acá, porque este widget no sabe cuándo se intenta
+/// el submit.
 class AddressLocationPicker extends ConsumerStatefulWidget {
   const AddressLocationPicker({
     super.key,
@@ -302,7 +304,7 @@ class _AddressLocationPickerState
               _hasInteracted
                   ? 'Arrastra el mapa para ajustar el pin sobre tu dirección exacta.'
                   : 'Busca tu dirección, usa el GPS, o arrastra el mapa para ubicarte '
-                      '(opcional — puedes guardar la dirección sin hacerlo).',
+                      '(obligatorio para calcular el costo de envío).',
               style: textTheme.bodySmall?.copyWith(
                 fontSize: 11.5,
                 color: CeltasColors.textSubtle,

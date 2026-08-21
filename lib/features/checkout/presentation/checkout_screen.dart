@@ -3,12 +3,15 @@ import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/addresses/application/address_providers.dart';
 import 'package:celtas_mobile/features/addresses/data/models/address.dart';
 import 'package:celtas_mobile/features/addresses/presentation/widgets/address_form_card.dart';
+import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
 import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
 import 'package:celtas_mobile/features/checkout/application/checkout_providers.dart';
 import 'package:celtas_mobile/features/orders/application/order_history_providers.dart';
+import 'package:celtas_mobile/features/profile/application/profile_providers.dart';
 import 'package:celtas_mobile/features/settings/application/settings_providers.dart';
 import 'package:celtas_mobile/shared/widgets/business_closed_notice.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
+import 'package:celtas_mobile/shared/widgets/celtas_text_field.dart';
 import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
 import 'package:celtas_mobile/shared/widgets/svg_path.dart';
 import 'package:flutter/material.dart';
@@ -63,6 +66,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   Future<void> _submitNewAddress() async {
     if (!_addressFormKey.currentState!.validate()) return;
+    // `latitude`/`longitude` vienen del pin del mapa, no de un
+    // `TextFormField` — `Form.validate()` no los cubre, así que el chequeo va
+    // aparte.
+    if (_addAddressLatitude == null || _addAddressLongitude == null) {
+      setState(() {
+        _addAddressError =
+            'Toca el mapa para marcar la ubicación de tu dirección';
+      });
+      return;
+    }
     setState(() {
       _addingAddress = true;
       _addAddressError = null;
@@ -117,6 +130,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   Future<void> _confirmOrder(CartState cart) async {
     final addressId = _selectedAddressId!;
+    // El teléfono se pide recién acá, no en el registro (decisión de
+    // producto) — aplica igual para cuentas de Google y de registro
+    // tradicional, sin distinguir por `provider`. Si el modal se cancela, no
+    // pasa nada: se queda en el checkout, sin pedido creado.
+    final user = ref.read(authControllerProvider).user;
+    if (user?.phone == null || user!.phone!.trim().isEmpty) {
+      final phoneSaved = await _promptForPhone();
+      if (!phoneSaved) return;
+    }
     setState(() {
       _confirming = true;
       _orderError = null;
@@ -207,6 +229,17 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     );
   }
 
+  /// Devuelve `true` si el teléfono quedó guardado (`PATCH /users/me`), o
+  /// `false` si el usuario canceló el modal — en ambos casos SIN crear el
+  /// pedido acá, eso lo decide el caller (`_confirmOrder`).
+  Future<bool> _promptForPhone() async {
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => const _PhoneRequiredDialog(),
+    );
+    return saved ?? false;
+  }
+
   Future<void> _retryOpenWhatsapp() async {
     final url = _pendingWhatsappUrl;
     if (url == null) return;
@@ -261,6 +294,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         _selectedAddressId = addresses.first.id;
       }
     });
+
+    // Preview de envío: solo hay algo que estimar con una dirección real
+    // seleccionada — leído DESPUÉS del `whenData` de arriba a propósito, que
+    // puede mutar `_selectedAddressId` de forma síncrona en este mismo build
+    // (selección automática de la principal). Best-effort, igual criterio
+    // que `businessHoursAsync`: en error o mientras carga, `deliveryFee`
+    // queda `null` y simplemente no se muestra la fila, sin bloquear nada.
+    final selectedAddressId = _selectedAddressId;
+    final deliveryFee = selectedAddressId == null
+        ? null
+        : ref.watch(deliveryFeeEstimateProvider(selectedAddressId)).valueOrNull;
+    final displayTotal = cart.total + (deliveryFee ?? 0);
 
     return Scaffold(
       body: SafeArea(
@@ -363,10 +408,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       color: CeltasColors.gold,
                     ),
                   ],
+                  if (deliveryFee != null) ...[
+                    const SizedBox(height: 6),
+                    _SummaryRow(
+                      label: 'Envío',
+                      value: 'S/ ${deliveryFee.toStringAsFixed(2)}',
+                      color: CeltasColors.textMuted,
+                    ),
+                  ],
                   const SizedBox(height: 6),
                   _SummaryRow(
                     label: 'Total',
-                    value: 'S/ ${cart.total.toStringAsFixed(2)}',
+                    value: 'S/ ${displayTotal.toStringAsFixed(2)}',
                     weight: FontWeight.w800,
                     fontSize: 18,
                   ),
@@ -666,6 +719,219 @@ class _MissingAddressNotice extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+// ─── Modal de teléfono obligatorio (al confirmar, no en el registro) ──────
+
+/// Formato peruano: 9 dígitos, el primero '9' — no hay un validador
+/// reusable ya en el proyecto para esto (el que existía en el registro era
+/// solo "no vacío", y esa pieza completa quedó revertida: el teléfono ya no
+/// se pide ahí).
+final _peruvianPhoneRegExp = RegExp(r'^9\d{8}$');
+
+/// Bloqueante: se muestra cuando el usuario intenta confirmar un pedido sin
+/// tener `phone` guardado (cuentas de Google o registro tradicional por
+/// igual, sin distinguir por `provider`). Mismo estilo de `AlertDialog` que
+/// `_showClosedDialog` (`CeltasColors.card`, mismo estilo de título), pero
+/// con su propio campo + guardado — a diferencia de ese diálogo, este SÍ
+/// hace una mutación real (`PATCH /users/me` vía `profileProvider`) antes de
+/// poder cerrarse con éxito.
+///
+/// Dos pasos dentro del mismo diálogo (`_reviewing`), no uno solo: **hallazgo
+/// real en dispositivo** — con un solo paso, tocar "CONFIRMAR" guardaba el
+/// teléfono Y disparaba el pedido en el mismo toque; un typo en el número
+/// (formato válido pero dígitos equivocados, ej. "987654320" en vez del
+/// número real) se guardaba sin ninguna oportunidad de corregirlo antes de
+/// que el pedido ya se hubiera creado. Ahora "CONFIRMAR" solo valida el
+/// formato y pasa a una pantalla de revisión ("¿Confirmas que tu número es
+/// …?"); la mutación real (`updateProfile`) recién ocurre al tocar "SÍ,
+/// CONFIRMAR" en ese segundo paso — "EDITAR" vuelve al campo con el valor ya
+/// tipeado, sin perderlo.
+class _PhoneRequiredDialog extends ConsumerStatefulWidget {
+  const _PhoneRequiredDialog();
+
+  @override
+  ConsumerState<_PhoneRequiredDialog> createState() =>
+      _PhoneRequiredDialogState();
+}
+
+class _PhoneRequiredDialogState extends ConsumerState<_PhoneRequiredDialog> {
+  final _phoneController = TextEditingController();
+  bool _reviewing = false;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  /// Paso 1 → 2: SOLO valida el formato acá, todavía no guarda nada.
+  void _reviewPhone() {
+    final value = _phoneController.text.trim();
+    if (!_peruvianPhoneRegExp.hasMatch(value)) {
+      setState(() {
+        _error = 'Ingresa un teléfono válido: 9 dígitos, empieza en 9';
+      });
+      return;
+    }
+    setState(() {
+      _reviewing = true;
+      _error = null;
+    });
+  }
+
+  /// "EDITAR": vuelve al campo, con el valor que ya había tipeado — el
+  /// controller nunca se limpia entre pasos.
+  void _editPhone() {
+    setState(() {
+      _reviewing = false;
+      _error = null;
+    });
+  }
+
+  /// "SÍ, CONFIRMAR": recién acá se guarda de verdad.
+  Future<void> _confirmAndSave() async {
+    final value = _phoneController.text.trim();
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await ref.read(profileProvider.notifier).updateProfile(phone: value);
+      if (mounted) Navigator.of(context).pop(true);
+    } on ApiException catch (e) {
+      if (mounted) setState(() { _saving = false; _error = e.message; });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = 'No se pudo guardar tu teléfono. Inténtalo de nuevo.';
+        });
+      }
+    }
+  }
+
+  /// `value` ya viene validado por `_peruvianPhoneRegExp` (9 dígitos exactos)
+  /// antes de poder llegar a la pantalla de revisión — el `substring` fijo es
+  /// seguro.
+  String _formatted(String value) =>
+      '${value.substring(0, 3)} ${value.substring(3, 6)} ${value.substring(6, 9)}';
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return AlertDialog(
+      key: const ValueKey('checkout-phone-required-dialog'),
+      backgroundColor: CeltasColors.card,
+      title: Text(
+        _reviewing ? 'Confirma tu teléfono' : 'Falta tu teléfono',
+        style: textTheme.titleMedium?.copyWith(
+          color: CeltasColors.cream,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      content: _reviewing
+          ? _buildReviewContent(textTheme)
+          : _buildFormContent(textTheme),
+      actions: _reviewing ? _buildReviewActions() : _buildFormActions(),
+    );
+  }
+
+  Widget _buildFormContent(TextTheme textTheme) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Necesitamos un teléfono de contacto para tu pedido.',
+          style: textTheme.bodyMedium?.copyWith(
+            color: CeltasColors.textMuted,
+          ),
+        ),
+        const SizedBox(height: 14),
+        CeltasTextField(
+          key: const ValueKey('checkout-phone-input'),
+          label: 'TELÉFONO',
+          controller: _phoneController,
+          hintText: '999 999 999',
+          keyboardType: TextInputType.phone,
+          textInputAction: TextInputAction.done,
+          errorText: _error,
+          onFieldSubmitted: (_) => _reviewPhone(),
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _buildFormActions() {
+    return [
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(false),
+        style: TextButton.styleFrom(foregroundColor: CeltasColors.textMuted),
+        child: const Text('CANCELAR'),
+      ),
+      TextButton(
+        key: const ValueKey('checkout-phone-confirm'),
+        onPressed: _reviewPhone,
+        style: TextButton.styleFrom(foregroundColor: CeltasColors.orange),
+        child: const Text('CONFIRMAR'),
+      ),
+    ];
+  }
+
+  Widget _buildReviewContent(TextTheme textTheme) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '¿Confirmas que tu número es '
+          '${_formatted(_phoneController.text.trim())}?',
+          style: textTheme.bodyMedium?.copyWith(
+            color: CeltasColors.textMuted,
+          ),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 10),
+          Text(
+            _error!,
+            style: textTheme.bodySmall?.copyWith(
+              color: CeltasColors.redLight,
+              fontSize: 12.5,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  List<Widget> _buildReviewActions() {
+    return [
+      TextButton(
+        key: const ValueKey('checkout-phone-edit'),
+        onPressed: _saving ? null : _editPhone,
+        style: TextButton.styleFrom(foregroundColor: CeltasColors.textMuted),
+        child: const Text('EDITAR'),
+      ),
+      TextButton(
+        key: const ValueKey('checkout-phone-confirm-final'),
+        onPressed: _saving ? null : _confirmAndSave,
+        style: TextButton.styleFrom(foregroundColor: CeltasColors.orange),
+        child: _saving
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: CeltasColors.orange,
+                ),
+              )
+            : const Text('SÍ, CONFIRMAR'),
+      ),
+    ];
   }
 }
 

@@ -69,8 +69,14 @@ class AddressFormCard extends StatelessWidget {
   final ValueChanged<bool>? onIsDefaultChanged;
 
   /// Coordenadas ya resueltas (ej. al editar una dirección existente).
-  /// `null` es un valor válido — el formulario se puede guardar sin pasar
-  /// por el mapa/autocompletado/GPS (ver skill `geoapify-direcciones`).
+  /// `null` mientras no se tocó el mapa/autocompletado/GPS todavía — este
+  /// widget no valida el par (no viven en un `TextFormField`, así que
+  /// `Form.validate()` no los cubre): el caller debe chequearlos a mano antes
+  /// de guardar y bloquear el submit si siguen `null` (ver
+  /// `_submitNewAddress`/`_submitForm` de las dos pantallas que usan este
+  /// formulario). Coordenadas obligatorias desde la feature de costo de
+  /// envío por distancia — solo hacia adelante, direcciones viejas sin
+  /// coordenadas no se migran.
   final double? latitude;
   final double? longitude;
 

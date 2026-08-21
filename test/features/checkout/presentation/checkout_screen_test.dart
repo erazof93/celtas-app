@@ -3,6 +3,11 @@ import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/addresses/application/address_providers.dart';
 import 'package:celtas_mobile/features/addresses/data/address_repository.dart';
 import 'package:celtas_mobile/features/addresses/data/models/address.dart';
+import 'package:celtas_mobile/features/addresses/presentation/widgets/address_map_picker.dart';
+import 'package:celtas_mobile/features/auth/application/auth_controller.dart';
+import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
+import 'package:celtas_mobile/features/auth/application/auth_state.dart';
+import 'package:celtas_mobile/features/auth/data/models/user.dart';
 import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
 import 'package:celtas_mobile/features/cart/data/models/cart_item.dart';
 import 'package:celtas_mobile/features/checkout/application/checkout_providers.dart';
@@ -13,6 +18,8 @@ import 'package:celtas_mobile/features/coupons/data/models/validated_coupon.dart
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
 import 'package:celtas_mobile/features/orders/application/order_history_providers.dart';
 import 'package:celtas_mobile/features/orders/data/order_history_repository.dart';
+import 'package:celtas_mobile/features/profile/application/profile_providers.dart';
+import 'package:celtas_mobile/features/profile/data/profile_repository.dart';
 import 'package:celtas_mobile/features/settings/application/settings_providers.dart';
 import 'package:celtas_mobile/features/settings/data/models/business_hours.dart';
 import 'package:celtas_mobile/features/settings/data/settings_repository.dart';
@@ -24,6 +31,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
@@ -36,6 +44,21 @@ class MockOrderHistoryRepository extends Mock
     implements OrderHistoryRepository {}
 
 class MockSettingsRepository extends Mock implements SettingsRepository {}
+
+class MockProfileRepository extends Mock implements ProfileRepository {}
+
+/// Controller de auth "de mentira" para tests: se salta por completo el
+/// `build()` real (que se registra como `ApiClient.instance.session` y
+/// dispara `bootstrap()` — innecesario y potencialmente ruidoso en un widget
+/// test) y arranca directo con el `AuthState` que le pasemos.
+class _FakeAuthController extends AuthController {
+  _FakeAuthController(this._initial);
+
+  final AuthState _initial;
+
+  @override
+  AuthState build() => _initial;
+}
 
 /// Fake del canal de plataforma de `url_launcher` — sin esto, `launchUrl`
 /// lanza `MissingPluginException` en widget tests (no hay un dispositivo real
@@ -77,6 +100,19 @@ void main() {
     district: 'Surco',
   );
 
+  User userWith({String? phone, UserProvider provider = UserProvider.local}) =>
+      User(
+        id: 'user-1',
+        email: 'ragnar@email.com',
+        fullName: 'Ragnar Andersen',
+        provider: provider,
+        phone: phone,
+        totalSpent: 0,
+        role: UserRole.cliente,
+        createdAt: DateTime.utc(2026, 1, 15),
+        updatedAt: DateTime.utc(2026, 1, 15),
+      );
+
   late FakeUrlLauncherPlatform fakeUrlLauncher;
 
   setUpAll(() {
@@ -112,8 +148,16 @@ void main() {
     required MockOrderRepository orderRepository,
     MockOrderHistoryRepository? orderHistoryRepository,
     MockSettingsRepository? settingsRepository,
+    MockProfileRepository? profileRepository,
     List<PublicMenuItem> items = const [],
     ValidatedCoupon? coupon,
+    // Por default el usuario de prueba YA tiene teléfono guardado, para que
+    // la mayoría de los tests de este archivo (que no se ocupan del modal de
+    // teléfono) no lo vean aparecer sin pedirlo — mismo criterio que
+    // `settingsRepository`/local abierto arriba. Pasar `null` para los tests
+    // que sí ejercitan el gate.
+    String? userPhone = '987654321',
+    UserProvider userProvider = UserProvider.local,
   }) async {
     final historyRepo = orderHistoryRepository ?? MockOrderHistoryRepository();
     if (orderHistoryRepository == null) {
@@ -131,12 +175,31 @@ void main() {
         ),
       );
     }
+    final profileRepo = profileRepository ?? MockProfileRepository();
+    if (profileRepository == null) {
+      // `ProfileNotifier.build()` corre en cuanto algo lee
+      // `profileProvider`/`.notifier` (ej. al abrir el modal de teléfono) —
+      // stub por default para que ningún test que no se ocupa de esto tenga
+      // que pensar en `GET /users/me`.
+      when(() => profileRepo.getProfile()).thenAnswer(
+        (_) async => userWith(phone: userPhone, provider: userProvider),
+      );
+    }
     final container = ProviderContainer(
       overrides: [
         addressRepositoryProvider.overrideWithValue(addressRepository),
         orderRepositoryProvider.overrideWithValue(orderRepository),
         orderHistoryRepositoryProvider.overrideWithValue(historyRepo),
         settingsRepositoryProvider.overrideWithValue(settingsRepo),
+        profileRepositoryProvider.overrideWithValue(profileRepo),
+        authControllerProvider.overrideWith(
+          () => _FakeAuthController(
+            AuthState.authenticated(
+              user: userWith(phone: userPhone, provider: userProvider),
+              accessToken: 'test-token',
+            ),
+          ),
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -158,6 +221,16 @@ void main() {
     );
     await tester.pumpAndSettle();
     return container;
+  }
+
+  /// Simula "tocar el mapa": invoca directamente el callback de
+  /// `AddressMapPicker` (mismo patrón que `address_location_picker_test.dart`
+  /// / `addresses_screen_test.dart`) en vez de un drag real.
+  Future<void> touchMap(WidgetTester tester, [LatLng? point]) async {
+    final mapPicker =
+        tester.widget<AddressMapPicker>(find.byType(AddressMapPicker));
+    mapPicker.onCenterChanged(point ?? const LatLng(-12.1633, -76.9718));
+    await tester.pump();
   }
 
   group('selector de dirección', () {
@@ -208,11 +281,15 @@ void main() {
         alias: 'Depto',
         fullAddress: 'Jr. Nueva 456',
         district: 'Surco',
+        latitude: -12.1633,
+        longitude: -76.9718,
       );
       when(() => addressRepo.createAddress(
             alias: 'Depto',
             fullAddress: 'Jr. Nueva 456',
             district: 'Surco',
+            latitude: -12.1633,
+            longitude: -76.9718,
           )).thenAnswer((_) async => created);
 
       final orderRepo = MockOrderRepository();
@@ -250,6 +327,7 @@ void main() {
         find.byKey(const ValueKey('checkout-address-district')),
         'Surco',
       );
+      await touchMap(tester);
       await tester.ensureVisible(
         find.byKey(const ValueKey('checkout-address-save')),
       );
@@ -261,6 +339,8 @@ void main() {
             alias: 'Depto',
             fullAddress: 'Jr. Nueva 456',
             district: 'Surco',
+            latitude: -12.1633,
+            longitude: -76.9718,
           )).called(1);
       expect(find.text('Nueva dirección'), findsNothing);
       expect(find.text('Depto'), findsOneWidget);
@@ -274,6 +354,55 @@ void main() {
             addressId: 'addr-new',
             couponCode: any(named: 'couponCode'),
           )).called(1);
+    });
+
+    testWidgets(
+        'agregar nueva dirección sin tocar el mapa → error claro, no llama '
+        'al backend', (tester) async {
+      final addressRepo = MockAddressRepository();
+      when(() => addressRepo.getAddresses()).thenAnswer((_) async => [home]);
+
+      await pumpCheckout(
+        tester,
+        addressRepository: addressRepo,
+        orderRepository: MockOrderRepository(),
+        items: [burger],
+      );
+
+      await tester.tap(find.byKey(const ValueKey('checkout-add-address-toggle')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('checkout-address-alias')),
+        'Depto',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('checkout-address-full')),
+        'Jr. Nueva 456',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('checkout-address-district')),
+        'Surco',
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('checkout-address-save')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('checkout-address-save')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Toca el mapa para marcar la ubicación de tu dirección'),
+        findsOneWidget,
+      );
+      verifyNever(() => addressRepo.createAddress(
+            alias: any(named: 'alias'),
+            fullAddress: any(named: 'fullAddress'),
+            reference: any(named: 'reference'),
+            district: any(named: 'district'),
+            latitude: any(named: 'latitude'),
+            longitude: any(named: 'longitude'),
+          ));
     });
 
     testWidgets('error al cargar direcciones → mensaje y REINTENTAR',
@@ -320,6 +449,116 @@ void main() {
       expect(find.text('Cupón VIKINGO10'), findsOneWidget);
       expect(find.text('-S/ 1.55'), findsOneWidget);
       expect(find.text('S/ 13.95'), findsOneWidget); // total con descuento
+    });
+  });
+
+  group('preview de envío (POST /orders/estimate-delivery-fee)', () {
+    testWidgets(
+        'con dirección seleccionada → llama al estimate y suma la fila '
+        '"Envío" entre el resumen y el total (nunca toca cart.total)',
+        (tester) async {
+      final addressRepo = MockAddressRepository();
+      when(() => addressRepo.getAddresses())
+          .thenAnswer((_) async => [home]);
+
+      final orderRepo = MockOrderRepository();
+      when(() => orderRepo.estimateDeliveryFee('addr-1'))
+          .thenAnswer((_) async => 6.5);
+
+      final container = await pumpCheckout(
+        tester,
+        addressRepository: addressRepo,
+        orderRepository: orderRepo,
+        items: [burger],
+      );
+
+      verify(() => orderRepo.estimateDeliveryFee('addr-1')).called(1);
+      expect(find.text('Envío'), findsOneWidget);
+      expect(find.text('S/ 6.50'), findsOneWidget);
+      // Total mostrado = cart.total + deliveryFee; cart.total en sí no
+      // cambia (lo sigue calculando el backend real en POST /orders, esto es
+      // puramente de preview).
+      expect(find.text('S/ 22.00'), findsOneWidget); // 15.50 + 6.50
+      expect(container.read(cartProvider).total, 15.5);
+    });
+
+    testWidgets('cambiar de dirección seleccionada → vuelve a pedir el estimate '
+        'con el nuevo addressId', (tester) async {
+      final addressRepo = MockAddressRepository();
+      when(() => addressRepo.getAddresses())
+          .thenAnswer((_) async => [home, work]);
+
+      final orderRepo = MockOrderRepository();
+      when(() => orderRepo.estimateDeliveryFee('addr-1'))
+          .thenAnswer((_) async => 5);
+      when(() => orderRepo.estimateDeliveryFee('addr-2'))
+          .thenAnswer((_) async => 12);
+
+      await pumpCheckout(
+        tester,
+        addressRepository: addressRepo,
+        orderRepository: orderRepo,
+        items: [burger],
+      );
+
+      verify(() => orderRepo.estimateDeliveryFee('addr-1')).called(1);
+      expect(find.text('S/ 5.00'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('checkout-address-addr-2')));
+      await tester.pumpAndSettle();
+
+      verify(() => orderRepo.estimateDeliveryFee('addr-2')).called(1);
+      expect(find.text('S/ 12.00'), findsOneWidget);
+    });
+
+    testWidgets(
+        'sin dirección seleccionada → no llama al estimate ni muestra la fila',
+        (tester) async {
+      final addressRepo = MockAddressRepository();
+      when(() => addressRepo.getAddresses()).thenAnswer((_) async => []);
+
+      final orderRepo = MockOrderRepository();
+
+      await pumpCheckout(
+        tester,
+        addressRepository: addressRepo,
+        orderRepository: orderRepo,
+        items: [burger],
+      );
+
+      verifyNever(() => orderRepo.estimateDeliveryFee(any()));
+      expect(find.text('Envío'), findsNothing);
+    });
+
+    testWidgets(
+        'el estimate falla (red/timeout) → sin fila de envío, sin error '
+        'visible, el checkout sigue usable con el total normal',
+        (tester) async {
+      final addressRepo = MockAddressRepository();
+      when(() => addressRepo.getAddresses())
+          .thenAnswer((_) async => [home]);
+
+      final orderRepo = MockOrderRepository();
+      when(() => orderRepo.estimateDeliveryFee('addr-1'))
+          .thenThrow(const ApiException('No se pudo conectar'));
+
+      await pumpCheckout(
+        tester,
+        addressRepository: addressRepo,
+        orderRepository: orderRepo,
+        items: [burger],
+      );
+
+      expect(find.text('Envío'), findsNothing);
+      expect(find.text('No se pudo conectar'), findsNothing);
+      // El total mostrado cae de vuelta al de cart.total, sin envío (el
+      // ítem, el subtotal y el total coinciden en "S/ 15.50" porque no hay
+      // cupón ni envío — 3 apariciones esperadas, no una).
+      expect(find.text('S/ 15.50'), findsNWidgets(3));
+      final button = tester.widget<CeltasButton>(
+        find.byKey(const ValueKey('checkout-confirm')),
+      );
+      expect(button.onPressed, isNotNull);
     });
   });
 
@@ -554,6 +793,380 @@ void main() {
     });
   });
 
+  group('gate de teléfono obligatorio al confirmar (no en el registro)', () {
+    testWidgets(
+        'usuario sin teléfono → confirmar muestra el modal bloqueante, NO '
+        'crea el pedido todavía', (tester) async {
+      final addressRepo = MockAddressRepository();
+      when(() => addressRepo.getAddresses())
+          .thenAnswer((_) async => [home]);
+
+      final orderRepo = MockOrderRepository();
+
+      await pumpCheckout(
+        tester,
+        addressRepository: addressRepo,
+        orderRepository: orderRepo,
+        items: [burger],
+        userPhone: null,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('checkout-confirm')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('checkout-phone-required-dialog')),
+        findsOneWidget,
+      );
+      expect(find.text('Falta tu teléfono'), findsOneWidget);
+      verifyNever(() => orderRepo.createOrder(
+            items: any(named: 'items'),
+            addressId: any(named: 'addressId'),
+            couponCode: any(named: 'couponCode'),
+          ));
+    });
+
+    testWidgets(
+        'teléfono vacío ("") cuenta como sin teléfono, igual que null',
+        (tester) async {
+      final addressRepo = MockAddressRepository();
+      when(() => addressRepo.getAddresses())
+          .thenAnswer((_) async => [home]);
+
+      await pumpCheckout(
+        tester,
+        addressRepository: addressRepo,
+        orderRepository: MockOrderRepository(),
+        items: [burger],
+        userPhone: '',
+      );
+
+      await tester.tap(find.byKey(const ValueKey('checkout-confirm')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('checkout-phone-required-dialog')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets(
+        'formato inválido (no 9 dígitos empezando en 9) → error inline, no '
+        'guarda ni confirma', (tester) async {
+      final addressRepo = MockAddressRepository();
+      when(() => addressRepo.getAddresses())
+          .thenAnswer((_) async => [home]);
+
+      final profileRepo = MockProfileRepository();
+      when(() => profileRepo.getProfile())
+          .thenAnswer((_) async => userWith());
+
+      final orderRepo = MockOrderRepository();
+
+      await pumpCheckout(
+        tester,
+        addressRepository: addressRepo,
+        orderRepository: orderRepo,
+        profileRepository: profileRepo,
+        items: [burger],
+        userPhone: null,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('checkout-confirm')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('checkout-phone-input')),
+        '123456789', // no empieza en 9
+      );
+      await tester.tap(find.byKey(const ValueKey('checkout-phone-confirm')));
+      await tester.pump();
+
+      expect(
+        find.text('Ingresa un teléfono válido: 9 dígitos, empieza en 9'),
+        findsOneWidget,
+      );
+      verifyNever(() => profileRepo.updateProfile(
+            fullName: any(named: 'fullName'),
+            phone: any(named: 'phone'),
+          ));
+      verifyNever(() => orderRepo.createOrder(
+            items: any(named: 'items'),
+            addressId: any(named: 'addressId'),
+            couponCode: any(named: 'couponCode'),
+          ));
+    });
+
+    testWidgets(
+        'teléfono válido → PATCH /users/me vía profileProvider y sigue con '
+        'la creación normal del pedido', (tester) async {
+      final addressRepo = MockAddressRepository();
+      when(() => addressRepo.getAddresses())
+          .thenAnswer((_) async => [home]);
+
+      final profileRepo = MockProfileRepository();
+      when(() => profileRepo.getProfile())
+          .thenAnswer((_) async => userWith());
+      when(() => profileRepo.updateProfile(
+            fullName: any(named: 'fullName'),
+            phone: '987654321',
+          )).thenAnswer((_) async => userWith(phone: '987654321'));
+
+      final orderRepo = MockOrderRepository();
+      when(() => orderRepo.createOrder(
+            items: any(named: 'items'),
+            addressId: any(named: 'addressId'),
+            couponCode: any(named: 'couponCode'),
+          )).thenAnswer(
+        (_) async => const OrderResult(
+          id: 'order-1',
+          total: 15.5,
+          whatsappUrl: 'https://wa.me/51999999999?text=hola',
+        ),
+      );
+
+      await pumpCheckout(
+        tester,
+        addressRepository: addressRepo,
+        orderRepository: orderRepo,
+        profileRepository: profileRepo,
+        items: [burger],
+        userPhone: null,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('checkout-confirm')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('checkout-phone-input')),
+        '987654321',
+      );
+      // Primer "CONFIRMAR": solo valida el formato y pasa al paso de
+      // revisión — todavía NO guarda nada.
+      await tester.tap(find.byKey(const ValueKey('checkout-phone-confirm')));
+      await tester.pumpAndSettle();
+      verifyNever(() => profileRepo.updateProfile(
+            fullName: any(named: 'fullName'),
+            phone: any(named: 'phone'),
+          ));
+      expect(
+        find.text('¿Confirmas que tu número es 987 654 321?'),
+        findsOneWidget,
+      );
+
+      // Recién "SÍ, CONFIRMAR" en el paso de revisión guarda de verdad.
+      await tester
+          .tap(find.byKey(const ValueKey('checkout-phone-confirm-final')));
+      await tester.pumpAndSettle();
+
+      verify(() => profileRepo.updateProfile(
+            fullName: any(named: 'fullName'),
+            phone: '987654321',
+          )).called(1);
+      // El modal se cerró y el flujo normal de creación del pedido siguió.
+      expect(
+        find.byKey(const ValueKey('checkout-phone-required-dialog')),
+        findsNothing,
+      );
+      verify(() => orderRepo.createOrder(
+            items: any(named: 'items'),
+            addressId: 'addr-1',
+            couponCode: any(named: 'couponCode'),
+          )).called(1);
+      expect(find.text('HOME'), findsOneWidget);
+    });
+
+    testWidgets(
+        'paso de revisión: número válido → muestra la confirmación con el '
+        'número formateado; EDITAR vuelve al campo con el valor conservado; '
+        'SÍ, CONFIRMAR recién ahí llama a updateProfile (no antes)',
+        (tester) async {
+      final addressRepo = MockAddressRepository();
+      when(() => addressRepo.getAddresses())
+          .thenAnswer((_) async => [home]);
+
+      final profileRepo = MockProfileRepository();
+      when(() => profileRepo.getProfile())
+          .thenAnswer((_) async => userWith());
+      when(() => profileRepo.updateProfile(
+            fullName: any(named: 'fullName'),
+            phone: '987654321',
+          )).thenAnswer((_) async => userWith(phone: '987654321'));
+
+      await pumpCheckout(
+        tester,
+        addressRepository: addressRepo,
+        orderRepository: MockOrderRepository(),
+        profileRepository: profileRepo,
+        items: [burger],
+        userPhone: null,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('checkout-confirm')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('checkout-phone-input')),
+        '987654321',
+      );
+      await tester.tap(find.byKey(const ValueKey('checkout-phone-confirm')));
+      await tester.pumpAndSettle();
+
+      // Paso de revisión visible, con el número formateado, y NADA guardado
+      // todavía.
+      expect(find.text('Confirma tu teléfono'), findsOneWidget);
+      expect(
+        find.text('¿Confirmas que tu número es 987 654 321?'),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('checkout-phone-input')), findsNothing);
+      verifyNever(() => profileRepo.updateProfile(
+            fullName: any(named: 'fullName'),
+            phone: any(named: 'phone'),
+          ));
+
+      // "EDITAR" vuelve al campo, con el valor ya tipeado conservado (no se
+      // limpia el controller entre pasos).
+      await tester.tap(find.byKey(const ValueKey('checkout-phone-edit')));
+      await tester.pumpAndSettle();
+      expect(find.text('Falta tu teléfono'), findsOneWidget);
+      final field = tester.widget<TextFormField>(
+        find.descendant(
+          of: find.byKey(const ValueKey('checkout-phone-input')),
+          matching: find.byType(TextFormField),
+        ),
+      );
+      expect(field.controller!.text, '987654321');
+      verifyNever(() => profileRepo.updateProfile(
+            fullName: any(named: 'fullName'),
+            phone: any(named: 'phone'),
+          ));
+
+      // Vuelve a "CONFIRMAR" → mismo paso de revisión de nuevo → "SÍ,
+      // CONFIRMAR" recién ahí guarda.
+      await tester.tap(find.byKey(const ValueKey('checkout-phone-confirm')));
+      await tester.pumpAndSettle();
+      await tester
+          .tap(find.byKey(const ValueKey('checkout-phone-confirm-final')));
+      await tester.pumpAndSettle();
+
+      verify(() => profileRepo.updateProfile(
+            fullName: any(named: 'fullName'),
+            phone: '987654321',
+          )).called(1);
+    });
+
+    testWidgets('cancelar el modal → no crea el pedido, se queda en checkout',
+        (tester) async {
+      final addressRepo = MockAddressRepository();
+      when(() => addressRepo.getAddresses())
+          .thenAnswer((_) async => [home]);
+
+      final orderRepo = MockOrderRepository();
+
+      await pumpCheckout(
+        tester,
+        addressRepository: addressRepo,
+        orderRepository: orderRepo,
+        items: [burger],
+        userPhone: null,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('checkout-confirm')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('CANCELAR'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('checkout-phone-required-dialog')),
+        findsNothing,
+      );
+      expect(find.text('HOME'), findsNothing);
+      verifyNever(() => orderRepo.createOrder(
+            items: any(named: 'items'),
+            addressId: any(named: 'addressId'),
+            couponCode: any(named: 'couponCode'),
+          ));
+    });
+
+    testWidgets(
+        'falla el guardado del teléfono → error real del backend en el '
+        'modal, no crea el pedido', (tester) async {
+      final addressRepo = MockAddressRepository();
+      when(() => addressRepo.getAddresses())
+          .thenAnswer((_) async => [home]);
+
+      final profileRepo = MockProfileRepository();
+      when(() => profileRepo.getProfile())
+          .thenAnswer((_) async => userWith());
+      when(() => profileRepo.updateProfile(
+            fullName: any(named: 'fullName'),
+            phone: '987654321',
+          )).thenThrow(const ApiException('No se pudo conectar'));
+
+      final orderRepo = MockOrderRepository();
+
+      await pumpCheckout(
+        tester,
+        addressRepository: addressRepo,
+        orderRepository: orderRepo,
+        profileRepository: profileRepo,
+        items: [burger],
+        userPhone: null,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('checkout-confirm')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('checkout-phone-input')),
+        '987654321',
+      );
+      await tester.tap(find.byKey(const ValueKey('checkout-phone-confirm')));
+      await tester.pumpAndSettle();
+      await tester
+          .tap(find.byKey(const ValueKey('checkout-phone-confirm-final')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('No se pudo conectar'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('checkout-phone-required-dialog')),
+        findsOneWidget,
+      );
+      verifyNever(() => orderRepo.createOrder(
+            items: any(named: 'items'),
+            addressId: any(named: 'addressId'),
+            couponCode: any(named: 'couponCode'),
+          ));
+    });
+
+    testWidgets(
+        'aplica igual para cuentas de Google — sin distinguir por provider, '
+        'solo mira si phone está vacío', (tester) async {
+      final addressRepo = MockAddressRepository();
+      when(() => addressRepo.getAddresses())
+          .thenAnswer((_) async => [home]);
+
+      await pumpCheckout(
+        tester,
+        addressRepository: addressRepo,
+        orderRepository: MockOrderRepository(),
+        items: [burger],
+        userPhone: null,
+        userProvider: UserProvider.google,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('checkout-confirm')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('checkout-phone-required-dialog')),
+        findsOneWidget,
+      );
+    });
+  });
+
   group('aviso de dirección faltante', () {
     testWidgets(
         'sin dirección seleccionada → aviso visible y botón deshabilitado; '
@@ -566,11 +1179,15 @@ void main() {
         alias: 'Depto',
         fullAddress: 'Jr. Nueva 456',
         district: 'Surco',
+        latitude: -12.1633,
+        longitude: -76.9718,
       );
       when(() => addressRepo.createAddress(
             alias: 'Depto',
             fullAddress: 'Jr. Nueva 456',
             district: 'Surco',
+            latitude: -12.1633,
+            longitude: -76.9718,
           )).thenAnswer((_) async => created);
 
       final orderRepo = MockOrderRepository();
@@ -618,6 +1235,7 @@ void main() {
         find.byKey(const ValueKey('checkout-address-district')),
         'Surco',
       );
+      await touchMap(tester);
       await tester.ensureVisible(
         find.byKey(const ValueKey('checkout-address-save')),
       );

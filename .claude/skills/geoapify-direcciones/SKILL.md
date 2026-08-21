@@ -96,18 +96,23 @@ Vía variable de entorno (`flutter_dotenv`, mismo mecanismo que `API_BASE_URL` �
 
 ## Contrato con el backend — verificar antes de asumir campos
 
-El backend (`../celtas-backend`) va a sumar `latitude`/`longitude` (nullable) a la entidad
-`Address` y sus DTOs como parte de esta misma feature, pero puede que todavía no esté
-implementado cuando arranques del lado de mobile. **Antes de escribir el modelo Dart o el
-request de guardado, confirmá el contrato real** —
-`../celtas-backend/src/modules/users/entities/address.entity.ts` y los DTOs correspondientes, o
-`/docs-json` una vez migrado — no asumas los nombres de campo por este doc. Si el backend
-todavía no expone lat/lng, decilo explícitamente en vez de inventar el contrato o bloquearte:
-avisá que hace falta coordinar con esa parte antes de guardar coordenadas.
+El backend (`../backend-celtas`) ya tiene `latitude`/`longitude` (nullable) en la entidad
+`Address` y sus DTOs, y ya expone `POST /orders/estimate-delivery-fee` (body `{ addressId }`,
+response `{ deliveryFee, isFarOrder, distanceMeters }`) para el cálculo de envío por distancia —
+toda la parte backend/admin de esta feature ya está cerrada y en producción. Si necesitás
+confirmar algún detalle del contrato de todos modos, no asumas los nombres de campo por este
+doc — revisá `../backend-celtas/src/modules/users/entities/address.entity.ts` y los DTOs
+correspondientes, o `/docs-json`.
 
-Direcciones viejas sin lat/lng siguen siendo válidas (`null`) — el formulario debe poder guardar
-una dirección sin coordenadas si el usuario nunca interactuó con el mapa/autocompletado (ej. una
-edición rápida de un alias existente).
+**Actualizado por la feature "costo de delivery por distancia" (`POST /orders/estimate-delivery-fee`,
+que necesita `latitude`/`longitude` reales para calcular la distancia): coordenadas ahora
+OBLIGATORIAS para guardar cualquier dirección nueva o editada** — el formulario NO debe poder
+enviarse si `latitude`/`longitude` siguen `null` (chequeo manual en `_submitNewAddress`/
+`_submitForm`, ya que no viven en un `TextFormField` y `Form.validate()` no los cubre), con un
+mensaje de error claro pidiendo tocar el mapa. Direcciones viejas que ya existían sin
+coordenadas NO se migran (la regla aplica solo hacia adelante) — pero si el usuario las vuelve a
+abrir para editar cualquier campo, la misma validación aplica: debe tocar el mapa esa vez para
+poder guardar el cambio.
 
 ## Antes de escribir código de parseo de respuestas de Geoapify
 
