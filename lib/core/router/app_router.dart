@@ -14,6 +14,8 @@ import 'package:celtas_mobile/features/notifications/presentation/notifications_
 import 'package:celtas_mobile/features/orders/presentation/order_detail_screen.dart';
 import 'package:celtas_mobile/features/orders/presentation/orders_screen.dart';
 import 'package:celtas_mobile/features/profile/presentation/profile_screen.dart';
+import 'package:celtas_mobile/features/rewards/presentation/reward_redeem_screen.dart';
+import 'package:celtas_mobile/features/rewards/presentation/rewards_screen.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_bottom_nav.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_snackbar.dart';
 import 'package:flutter/material.dart';
@@ -29,6 +31,7 @@ const _protectedPaths = [
   '/home',
   '/orders',
   '/coupons',
+  '/rewards',
   '/profile',
   '/product',
   '/cart',
@@ -43,9 +46,10 @@ bool _isProtectedPath(String location) =>
 /// Router de la app.
 ///
 /// Módulo 2: shell route con bottom nav persistente (Inicio, Pedidos, Cupones,
-/// Perfil) usando `StatefulShellRoute.indexedStack` — cada tab mantiene su
-/// propio stack de navegación (Home → detalle de producto, Pedidos → detalle
-/// de pedido, etc.), que es lo que necesitan los módulos 3-8.
+/// Estrellas, Perfil) usando `StatefulShellRoute.indexedStack` — cada tab
+/// mantiene su propio stack de navegación (Home → detalle de producto,
+/// Pedidos → detalle de pedido, etc.), que es lo que necesitan los módulos
+/// 3-8 y la feature de Estrellas.
 ///
 /// Guard de sesión: mientras el estado es `unknown` (bootstrap en curso) el
 /// Splash decide; autenticado → se bloquea Login/Registro y se va a /home;
@@ -135,6 +139,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           orderId: state.pathParameters['id']!,
         ),
       ),
+      // Canje de un premio ya desbloqueado: empujada desde el botón
+      // "Canjear" de `RewardsScreen`, sin bottom nav — mismo patrón que
+      // `/product/:id`. `/rewards` (abajo) ya cubre este prefijo en
+      // `_isProtectedPath`, no hace falta una entrada separada.
+      GoRoute(
+        path: '/rewards/redeem/:redemptionId',
+        builder: (context, state) => RewardRedeemScreen(
+          redemptionId: state.pathParameters['redemptionId']!,
+        ),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) => _ShellScaffold(
           navigationShell: navigationShell,
@@ -161,6 +175,19 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/coupons',
                 builder: (context, state) => const CouponsScreen(),
+              ),
+            ],
+          ),
+          // Orden confirmado en el mockup aprobado: Inicio - Pedidos -
+          // Cupones - Estrellas - Perfil. Esta rama tiene que estar en la
+          // misma posición que `CeltasNavItem.rewards` en el enum (índice 3)
+          // — `StatefulShellBranch` número `i` corresponde a
+          // `CeltasNavItem.values[i]`.
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/rewards',
+                builder: (context, state) => const RewardsScreen(),
               ),
             ],
           ),

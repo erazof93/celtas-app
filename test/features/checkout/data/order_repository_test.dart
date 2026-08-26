@@ -332,6 +332,102 @@ void main() {
       },
     );
 
+    test(
+      'ítem sin rewardRedemptionId → no manda la llave "rewardRedemptionId"',
+      () async {
+        mockPostSuccess();
+
+        await repository.createOrder(
+          items: const [
+            CartItem(
+              menuItemId: 'i-1',
+              name: 'Berserker Burger',
+              unitPrice: 15.5,
+              quantity: 1,
+            ),
+          ],
+          addressId: 'addr-1',
+        );
+
+        final captured = verify(
+          () => dio.post<Map<String, dynamic>>(
+            '/orders',
+            data: captureAny(named: 'data'),
+          ),
+        ).captured.single as Map<String, dynamic>;
+        final item = (captured['items'] as List).single as Map<String, dynamic>;
+        expect(item.containsKey('rewardRedemptionId'), isFalse);
+      },
+    );
+
+    test(
+      'ítem de premio canjeado → manda "rewardRedemptionId", nunca '
+      '"unitPrice" (el backend fuerza el precio, el cliente no lo decide)',
+      () async {
+        mockPostSuccess();
+
+        await repository.createOrder(
+          items: const [
+            CartItem(
+              menuItemId: 'i-1',
+              name: 'Berserker Burger',
+              unitPrice: 0,
+              quantity: 1,
+              rewardRedemptionId: 'reward-1',
+            ),
+          ],
+          addressId: 'addr-1',
+        );
+
+        final captured = verify(
+          () => dio.post<Map<String, dynamic>>(
+            '/orders',
+            data: captureAny(named: 'data'),
+          ),
+        ).captured.single as Map<String, dynamic>;
+        final item = (captured['items'] as List).single as Map<String, dynamic>;
+        expect(item['rewardRedemptionId'], 'reward-1');
+        expect(item.containsKey('unitPrice'), isFalse);
+      },
+    );
+
+    test(
+      'varios ítems: cada uno manda su propio rewardRedemptionId de forma '
+      'independiente',
+      () async {
+        mockPostSuccess();
+
+        await repository.createOrder(
+          items: const [
+            CartItem(
+              menuItemId: 'i-1',
+              name: 'Berserker Burger',
+              unitPrice: 0,
+              quantity: 1,
+              rewardRedemptionId: 'reward-1',
+            ),
+            CartItem(
+              menuItemId: 'i-2',
+              name: 'Arroz Chaufa',
+              unitPrice: 18,
+              quantity: 1,
+            ),
+          ],
+          addressId: 'addr-1',
+        );
+
+        final captured = verify(
+          () => dio.post<Map<String, dynamic>>(
+            '/orders',
+            data: captureAny(named: 'data'),
+          ),
+        ).captured.single as Map<String, dynamic>;
+        final items = (captured['items'] as List).cast<Map<String, dynamic>>();
+        expect(items[0]['rewardRedemptionId'], 'reward-1');
+        expect(items[1].containsKey('rewardRedemptionId'), isFalse);
+      },
+    );
+
     test('parsea id/total/whatsappUrl de la respuesta', () async {
       mockPostSuccess();
 

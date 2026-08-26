@@ -2,6 +2,7 @@ import 'package:celtas_mobile/features/cart/data/models/cart_item.dart';
 import 'package:celtas_mobile/features/coupons/data/models/validated_coupon.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
 import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
+import 'package:celtas_mobile/features/rewards/data/models/reward_catalog_item.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
@@ -170,6 +171,30 @@ class CartNotifier extends Notifier<CartState> {
         ],
       );
     }
+  }
+
+  /// Agrega un ítem de premio canjeado con estrellas: precio forzado a 0,
+  /// cantidad SIEMPRE 1 (el backend lo exige — `quantity !== 1` se rechaza
+  /// con 400). Si el mismo `rewardRedemptionId` ya está en el carrito, no
+  /// hace nada (evita duplicar el mismo premio si el usuario toca "Canjear"
+  /// dos veces): el backend además rechazaría un pedido con el mismo
+  /// `rewardRedemptionId` en dos ítems.
+  void addRewardItem(RewardCatalogItem item, {required String rewardRedemptionId}) {
+    final lineKey = 'reward::$rewardRedemptionId';
+    if (state.items.any((i) => i.lineKey == lineKey)) return;
+    state = state.copyWith(
+      items: [
+        ...state.items,
+        CartItem(
+          menuItemId: item.id,
+          name: item.name,
+          unitPrice: 0,
+          quantity: 1,
+          image: item.image,
+          rewardRedemptionId: rewardRedemptionId,
+        ),
+      ],
+    );
   }
 
   /// Suma 1 unidad. Si la fila no existe, no hace nada.

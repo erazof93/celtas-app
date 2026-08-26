@@ -37,6 +37,12 @@ abstract class CartItem with _$CartItem {
     // comentario — se normaliza a `null` al agregar/editar la fila (ver
     // `CartNotifier`), nunca se guarda como string vacío o solo espacios.
     String? comment,
+    // `id` del `RewardRedemption` que este ítem canjea, si es un premio del
+    // programa de Estrellas agregado desde `RewardRedeemScreen`
+    // (`CartNotifier.addRewardItem`). `null` = ítem normal del menú. Se manda
+    // tal cual al backend en `POST /orders` (ver `order_repository.dart`), que
+    // fuerza `unitPrice` a 0 y exige `quantity == 1` para estos ítems.
+    String? rewardRedemptionId,
   }) = _CartItem;
 
   const CartItem._();
@@ -60,7 +66,14 @@ abstract class CartItem with _$CartItem {
   /// key tampoco cambia respecto a antes de este agregado (`menuItemId::
   /// idsOrdenados`) — el comentario solo agrega un segmento extra cuando
   /// hay uno, en vez de ensuciar la key con un separador vacío de más.
+  ///
+  /// Un ítem de premio (`rewardRedemptionId != null`) corta ANTES de esta
+  /// lógica: cada `RewardRedemption` es una entidad real separada, así que
+  /// nunca se fusiona con una fila normal del mismo producto (aunque
+  /// coincidan `menuItemId`/salsas/comentario) ni con otro premio distinto —
+  /// la cantidad de su fila queda siempre en 1.
   String get lineKey {
+    if (rewardRedemptionId != null) return 'reward::$rewardRedemptionId';
     if (selectedSauces.isEmpty && comment == null) return menuItemId;
     final parts = [menuItemId];
     if (selectedSauces.isNotEmpty) {

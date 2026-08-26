@@ -286,7 +286,13 @@ class _CartItemRow extends ConsumerWidget {
   /// rápido del Home antes de este cambio, o con todas las salsas
   /// deseleccionadas a propósito). Un producto sin salsas (ej. arroz
   /// chaufa) no tiene nada que editar acá — la fila se queda como está.
+  ///
+  /// Un ítem de premio (`rewardRedemptionId != null`) nunca ofrece este
+  /// ícono: `ProductDetailScreen` no tiene un modo de edición para premios
+  /// (cantidad fija en 1, sin selector de salsas propio), así que empujarlo
+  /// ahí solo rompería el flujo de canje.
   bool _offersSauces(WidgetRef ref) {
+    if (item.rewardRedemptionId != null) return false;
     if (item.selectedSauces.isNotEmpty) return true;
     final categories = ref.watch(publicMenuProvider).valueOrNull;
     if (categories == null) return false;
@@ -384,29 +390,83 @@ class _CartItemRow extends ConsumerWidget {
                         ),
                   ),
                 ],
-                const SizedBox(height: 2),
-                Text(
-                  'S/ ${item.unitPrice.toStringAsFixed(2)} c/u',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontSize: 12,
-                        color: CeltasColors.textMuted,
-                      ),
-                ),
+                // Ítem de premio canjeado: precio siempre 0, cantidad
+                // siempre 1 — sin stepper (nada que incrementar/decrementar),
+                // solo un botón de quitar. Ver `CartNotifier.addRewardItem`.
+                if (item.rewardRedemptionId == null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'S/ ${item.unitPrice.toStringAsFixed(2)} c/u',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontSize: 12,
+                          color: CeltasColors.textMuted,
+                        ),
+                  ),
+                ],
                 const SizedBox(height: 6),
-                _CartStepper(item: item),
+                item.rewardRedemptionId != null
+                    ? _RewardRemoveButton(lineKey: item.lineKey)
+                    : _CartStepper(item: item),
               ],
             ),
           ),
           const SizedBox(width: 12),
           Text(
-            'S/ ${item.lineTotal.toStringAsFixed(2)}',
+            item.rewardRedemptionId != null
+                ? 'GRATIS'
+                : 'S/ ${item.lineTotal.toStringAsFixed(2)}',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  fontSize: 15,
+                  fontSize: item.rewardRedemptionId != null ? 13 : 15,
                   fontWeight: FontWeight.w800,
                   color: CeltasColors.gold,
                 ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Botón "Quitar" para una fila de premio canjeado: sin stepper (cantidad
+/// fija en 1), la única acción posible es sacarlo del carrito —
+/// `CartNotifier.removeItem` ya identifica la fila por `lineKey`, no hace
+/// falta lógica nueva en el notifier.
+class _RewardRemoveButton extends ConsumerWidget {
+  const _RewardRemoveButton({required this.lineKey});
+
+  final String lineKey;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return GestureDetector(
+      key: ValueKey('cart-reward-remove-$lineKey'),
+      onTap: () => ref.read(cartProvider.notifier).removeItem(lineKey),
+      child: Container(
+        decoration: BoxDecoration(
+          color: CeltasColors.surface,
+          border: Border.all(color: CeltasColors.border),
+          borderRadius: BorderRadius.circular(CeltasRadii.control),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.delete_outline,
+              size: 14,
+              color: CeltasColors.redLight,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'Quitar',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: CeltasColors.redLight,
+                  ),
+            ),
+          ],
+        ),
       ),
     );
   }

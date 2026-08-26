@@ -2,6 +2,7 @@ import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
 import 'package:celtas_mobile/features/coupons/data/models/validated_coupon.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
 import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
+import 'package:celtas_mobile/features/rewards/data/models/reward_catalog_item.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -845,6 +846,99 @@ void main() {
         expect(state.coupon, isNull);
         expect(state.couponRemovedNotice, isNull);
       });
+    });
+  });
+
+  group('addRewardItem (premio canjeado con estrellas)', () {
+    const rewardItem = RewardCatalogItem(
+      id: 'i-1',
+      name: 'Berserker Burger',
+      price: 15.5,
+    );
+
+    test('agrega el ítem con unitPrice 0, cantidad 1 y rewardRedemptionId',
+        () {
+      final container = createContainer();
+      container
+          .read(cartProvider.notifier)
+          .addRewardItem(rewardItem, rewardRedemptionId: 'r-1');
+
+      final item = container.read(cartProvider).items.single;
+      expect(item.menuItemId, 'i-1');
+      expect(item.name, 'Berserker Burger');
+      expect(item.unitPrice, 0);
+      expect(item.quantity, 1);
+      expect(item.rewardRedemptionId, 'r-1');
+      expect(item.lineKey, 'reward::r-1');
+    });
+
+    test(
+      'tocar "Canjear" dos veces con el mismo rewardRedemptionId no '
+      'duplica la fila',
+      () {
+        final container = createContainer();
+        final notifier = container.read(cartProvider.notifier);
+        notifier.addRewardItem(rewardItem, rewardRedemptionId: 'r-1');
+        notifier.addRewardItem(rewardItem, rewardRedemptionId: 'r-1');
+
+        final state = container.read(cartProvider);
+        expect(state.items, hasLength(1));
+        expect(state.items.single.quantity, 1);
+      },
+    );
+
+    test(
+      'dos premios distintos del mismo producto quedan en filas separadas '
+      '(cada RewardRedemption es una entidad real aparte)',
+      () {
+        final container = createContainer();
+        final notifier = container.read(cartProvider.notifier);
+        notifier.addRewardItem(rewardItem, rewardRedemptionId: 'r-1');
+        notifier.addRewardItem(rewardItem, rewardRedemptionId: 'r-2');
+
+        final state = container.read(cartProvider);
+        expect(state.items, hasLength(2));
+        expect(state.items.map((i) => i.lineKey), [
+          'reward::r-1',
+          'reward::r-2',
+        ]);
+      },
+    );
+
+    test(
+      'un ítem de premio NUNCA se fusiona con una fila normal del mismo '
+      'producto, aunque coincidan menuItemId/salsas/comentario',
+      () {
+        final container = createContainer();
+        final notifier = container.read(cartProvider.notifier);
+        notifier.addItem(burger); // fila normal, lineKey 'i-1'
+        notifier.addRewardItem(rewardItem, rewardRedemptionId: 'r-1');
+
+        final state = container.read(cartProvider);
+        expect(state.items, hasLength(2));
+        expect(
+          state.items.map((i) => i.lineKey),
+          containsAll(['i-1', 'reward::r-1']),
+        );
+      },
+    );
+
+    test('removeItem quita la fila de premio por su lineKey', () {
+      final container = createContainer();
+      final notifier = container.read(cartProvider.notifier);
+      notifier.addRewardItem(rewardItem, rewardRedemptionId: 'r-1');
+      notifier.removeItem('reward::r-1');
+
+      expect(container.read(cartProvider).items, isEmpty);
+    });
+
+    test('un ítem de premio no suma al subtotal (precio forzado a 0)', () {
+      final container = createContainer();
+      final notifier = container.read(cartProvider.notifier);
+      notifier.addItem(wings); // 7.2
+      notifier.addRewardItem(rewardItem, rewardRedemptionId: 'r-1');
+
+      expect(container.read(cartProvider).subtotal, 7.2);
     });
   });
 }

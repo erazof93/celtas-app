@@ -55,6 +55,11 @@ class AddressSnapshotInput {
 ///     manda una llave irrelevante. El backend también trimea y trata
 ///     vacío/solo-espacios como ausente (`resolveComment`), así que este
 ///     `trim()` del lado del cliente es una garantía extra, no la única.
+///     `rewardRedemptionId` (opcional) se manda solo si el ítem es un premio
+///     canjeado del programa de Estrellas (`CartNotifier.addRewardItem`); el
+///     backend fuerza `unitPrice` a 0 y valida pertenencia/uso/vigencia
+///     dentro de la misma transacción, con lock pesimista — nunca se manda
+///     `unitPrice`, el cliente nunca decide el monto real.
 ///   - `addressId` O `addressSnapshot` (JSON string) — nunca ambos, nunca
 ///     ninguno (el backend responde 400).
 ///   - `couponCode` opcional: se valida y canjea en la MISMA transacción del
@@ -95,6 +100,8 @@ class OrderRepository {
                   'sauceIds': const <String>[],
                 if (item.comment != null && item.comment!.trim().isNotEmpty)
                   'comment': item.comment!.trim(),
+                if (item.rewardRedemptionId != null)
+                  'rewardRedemptionId': item.rewardRedemptionId,
               },
           ],
           'addressId': ?addressId,

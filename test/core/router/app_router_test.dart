@@ -11,6 +11,8 @@ import 'package:celtas_mobile/features/home/data/models/public_menu_category.dar
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
 import 'package:celtas_mobile/features/notifications/data/models/notification_history_item.dart';
 import 'package:celtas_mobile/features/notifications/data/notification_history_repository.dart';
+import 'package:celtas_mobile/features/rewards/application/reward_providers.dart';
+import 'package:celtas_mobile/features/rewards/data/models/reward_progress.dart';
 import 'package:celtas_mobile/features/settings/application/settings_providers.dart';
 import 'package:celtas_mobile/features/settings/data/models/business_hours.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_bottom_nav.dart';
@@ -70,6 +72,16 @@ void main() {
       (ref) async =>
           const BusinessHours(open: true, message: null, nextChangeAt: null),
     ),
+    // El tab Estrellas (RewardsScreen) llama a `GET /rewards/progress` al
+    // construirse — sin este override golpearía la red real en el entorno
+    // de test.
+    rewardProgressProvider.overrideWith(
+      (ref) async => const RewardProgress(
+        estrellasParaProximoPremio: 4,
+        estrellasPorPremio: 10,
+        premiosDisponibles: [],
+      ),
+    ),
   ];
 
   /// Login rápido de punta a punta (Splash → Login → sesión activa).
@@ -128,14 +140,21 @@ void main() {
     expect(find.text('COMENZAR'), findsNothing);
   });
 
-  testWidgets('bottom nav con los 4 tabs y navegación entre ellos', (
+  testWidgets('bottom nav con los 5 tabs y navegación entre ellos', (
     tester,
   ) async {
     final repository = MockAuthRepository();
     await login(tester, repository);
 
-    // Los 4 labels están en el bottom nav.
-    for (final label in ['Inicio', 'Pedidos', 'Cupones', 'Perfil']) {
+    // Los 5 labels están en el bottom nav (orden del mockup: Inicio -
+    // Pedidos - Cupones - Estrellas - Perfil).
+    for (final label in [
+      'Inicio',
+      'Pedidos',
+      'Cupones',
+      'Estrellas',
+      'Perfil',
+    ]) {
       expect(
         find.descendant(
           of: find.byType(CeltasBottomNav),
@@ -165,7 +184,17 @@ void main() {
     await tester.pumpAndSettle();
     expect(activeTabIndex(tester), 2);
 
-    // Cupones → Perfil.
+    // Cupones → Estrellas.
+    await tester.tap(
+      find.descendant(
+        of: find.byType(CeltasBottomNav),
+        matching: find.text('Estrellas'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(activeTabIndex(tester), 3);
+
+    // Estrellas → Perfil.
     await tester.tap(
       find.descendant(
         of: find.byType(CeltasBottomNav),
@@ -173,7 +202,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(activeTabIndex(tester), 3);
+    expect(activeTabIndex(tester), 4);
 
     // Perfil → Inicio (vuelta al primer tab).
     await tester.tap(
