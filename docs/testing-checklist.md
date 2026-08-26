@@ -2377,6 +2377,182 @@ de punta a punta.
 
 ---
 
+## Estrellas (Rewards)
+
+Sección nueva — el programa de fidelización "Estrellas" (`lib/features/rewards/`, commits
+`e43fa86`/`2fb671b` + la migración de esta auditoría) nunca había tenido una entrada propia en
+este checklist ni en `ROADMAP.md` (no hay ítem "Estrellas"/"Rewards" en ningún módulo 0-10 del
+roadmap pese a llevar 3 rondas de trabajo) — se crea acá siguiendo el mismo formato del resto del
+documento. **Pendiente para la sesión principal**: agregar un módulo/ítem propio en `ROADMAP.md`
+para esta feature (no es algo que `@tester` deba decidir por su cuenta).
+
+- [x] `flutter analyze` sin errores ni warnings nuevos
+- [x] `flutter test` pasa (suite completa)
+- [x] Colores usados coinciden con `CeltasColors` (sin `Color(0xFF...)` sueltos en
+      `lib/features/rewards/` — confirmado con `grep -rn "Color(0x" lib/features/rewards/`, 0
+      resultados)
+- [x] Toda pantalla que llama a la API maneja loading, error y vacío explícitos
+      (`RewardsScreen`/`RewardRedeemScreen`, ambas con `SlowBackendNotice` en `loading`, error con
+      REINTENTAR, y estado vacío explícito en el catálogo de canje)
+- [x] Ningún texto de UI en inglés
+- [ ] Verificación en dispositivo/emulador real del flujo completo (progreso → premio
+      desbloqueado → canje → WhatsApp) — no verificado en esta auditoría ni, hasta donde
+      muestra el historial de commits, en ninguna ronda anterior de esta feature
+
+### Migración del esquema fijo "cada N estrellas = 1 premio" al esquema de HITOS configurables (ej. 5, 8, 15 + premio especial)
+
+Alcance: los cambios sin commitear sobre `HEAD` (`2fb671b`) descritos en el encargo — modelos
+(`reward_progress.dart` + `.freezed.dart`/`.g.dart` regenerados), `reward_repository.dart`
+(`getCatalog(especial: bool)`), `reward_providers.dart` (`rewardCatalogProvider.family<...,
+bool>`), `app_router.dart` (query param `especial` en `/rewards/redeem/:redemptionId`),
+`reward_redeem_screen.dart` (`isSpecial`), `rewards_screen.dart` (tablero dinámico de hitos +
+overlay de celebración normal/especial/tanda mixta), `reward_terms_sheet.dart`.
+
+`flutter analyze` (salida cruda propia): `No issues found! (ran in 5.3s)`. `flutter test` (suite
+completa, salida cruda propia): `00:22 +505: All tests passed!`. `dart run build_runner build`
+(salida cruda propia): `Built with build_runner/aot in 10s; wrote 0 outputs.` — confirma que
+`reward_progress.freezed.dart`/`.g.dart` ya escritos en el working tree son byte-idénticos a lo
+que generaría el toolchain real, sin drift a mano (revisé también el diff de esos dos archivos
+generados: `RewardSlot.esEspecial` y `RewardMilestoneProgress` completo aparecen con el patrón
+estándar de `freezed` — `copyWith`, `==`, `hashCode`, `toString()`, `fromJson`/`toJson` —, no
+escritos a mano). `dart format --set-exit-if-changed` sobre `lib/features/rewards/` y
+`test/features/rewards/`: `Formatted 18 files (0 changed)`.
+
+**Contrato de API verificado por lectura directa del backend real** (no por el resumen del
+encargo): `backend-celtas/src/modules/rewards/rewards.service.ts` (`getProgress`/`getCatalog`) y
+`rewards.controller.ts`. Coincide exactamente con los modelos Dart: `GET /rewards/progress` →
+`{ estrellasDelMes: number, hitos: [{estrellasRequeridas, alcanzado, esEspecial}],
+premiosDisponibles: [{id, expiresAt, esEspecial}], promocionActiva: {...} | null }`; `GET
+/rewards/catalog?especial=true` compara `especial === 'true'` como **string** en el controller
+(`getCatalog(@Query('especial') especial?: string)`), no como bool — el repositorio Dart lo
+respeta mandando `{'especial': 'true'}` explícito y omitiendo el parámetro por completo cuando es
+`false`, cubierto con 2 tests que verifican `queryParameters: null` en ese caso (no
+`{'especial': 'false'}`, que también funcionaría del lado del backend pero no es lo que manda el
+código). `especial=false` y `especial=true` son catálogos EXCLUYENTES (`redeemableWithStars` vs.
+`specialReward`, nunca una unión) — reflejado 1:1 en el comentario del repositorio y verificado
+con el test de `reward_redeem_screen_test.dart` que confirma que el catálogo especial nunca
+mezcla ítems del normal.
+
+✅ Pasó (verificado por mí, no solo por lectura del diff):
+
+- **Numeración "Premio N" con distintas combinaciones de hitos, confirmada con mutación real, no
+  solo porque los tests ya estaban en verde**: reverté `_premioNumbers` (quité el filtro
+  `!h.esEspecial`, así que los hitos especiales también consumían un número) y corrí la suite de
+  `rewards_screen_test.dart` — fallan exactamente los 2 tests que dependen de la numeración
+  correcta ("especial en el MEDIO" y "4 combinaciones"), con el patrón de evidencia esperado
+  (`Expected: exactly one matching candidate / Actual: Found 0 widgets with text "Premio 2"`);
+  los demás tests del archivo (incluidos los de overlay/premios disponibles, que no dependen de
+  `_premioNumbers`) siguen en verde. Revertido con `Copy-Item` desde una copia de respaldo hecha
+  antes de mutar, confirmado `git diff --stat` idéntico al estado previo y `flutter analyze`
+  limpio de nuevo. La lógica real (`hitos.where((h) => !h.esEspecial).toList()..sort(...)`,
+  índice `+1` por posición) numera SOLO los hitos no-especiales por su umbral ascendente,
+  ignorando en qué posición del tablero completo cae el especial — correcto para los 3
+  escenarios pedidos: 2 hitos normales sin especial, 4 hitos con el especial en el medio (2, 4,
+  [6-especial], 8, 10 → "Premio 1/2/3/4" para 2/4/8/10, "★ Especial" para 6, nunca "Premio 5"), y
+  el caso original de 3 hitos.
+- **`hitos: []` no crashea la pantalla, confirmado con mutación real (no solo con el test ya
+  existente)**: cambié el guard `if (hitos.isEmpty)` por `if (false)` en `_ProgressCard.build` —
+  el test `'hitos vacío...'` no solo falla la aserción esperada, sino que Flutter reporta
+  "Multiple exceptions (2) were detected... at least one was unexpected", confirmando que sin el
+  guard `hitos.map((h) => h.estrellasRequeridas).reduce(max)` sobre una lista vacía lanza un
+  `StateError` real (`Bad state: No element`), no solo un valor incorrecto — el guard es
+  genuinamente necesario, no defensivo de más. Revertido y reconfirmado limpio de la misma forma
+  que el punto anterior.
+- **El query param `especial` viaja correctamente en las 3 etapas del flujo**, verificado en
+  código y con test, no solo en una etapa suelta:
+  1. `_RewardSlotCard` (`rewards_screen.dart`) → `context.push('/rewards/redeem/${slot.id}${special
+     ? '?especial=true' : ''}')` — solo agrega el query param cuando `slot.esEspecial` es `true`,
+     nunca `especial=false` explícito.
+  2. `app_router.dart` → `isSpecial: state.uri.queryParameters['especial'] == 'true'` — comparación
+     exacta contra el string `'true'` (no `??`/truthy genérico), consistente con cómo lo lee el
+     backend real para el otro extremo del mismo parámetro.
+  3. `RewardRedeemScreen` → `ref.watch(rewardCatalogProvider(isSpecial))` — el `isSpecial` recibido
+     por constructor decide el `.family` sin reinterpretarlo.
+     Cubierto end-to-end con navegación real de `go_router` en `rewards_screen_test.dart`
+     (tap en una tarjeta de premio especial → captura el query param real que le llega a la ruta
+     de canje, `capturedEspecialParam == 'true'`; el caso normal confirma que NO viaja el param,
+     `isNull`, no `'false'`) y con `reward_redeem_screen_test.dart` (`isSpecial: true/false` →
+     `rewardCatalogProvider(true)`/`rewardCatalogProvider(false)`, con overrides independientes por
+     cada valor del `.family` que confirman que nunca se mezclan las dos listas).
+- **`_syncAnimations()` revisado línea por línea, no solo por los tests**: `hasTrophy =
+  hitos.any((h) => h.alcanzado)` controla el trofeo+confetti (arrancan en loop SOLO si hay al
+  menos un hito alcanzado); `hasPendingSpecial = hitos.any((h) => h.esEspecial && !h.alcanzado)`
+  se suma para el glow (arranca también si hay un especial pendiente, aunque nada esté alcanzado
+  todavía) — coincide exactamente con lo que `_MilestoneCell` realmente anima: la celda
+  "alcanzado" (normal o especial) usa `trophyScale`+`glowOpacity`+confetti; la celda "especial
+  pendiente" usa solo `glowOpacity`; la celda "normal pendiente" no anima nada. Cada rama chequea
+  `isAnimating` antes de llamar `repeat()` (evita reiniciar la animación desde cero en cada
+  rebuild/refresh si ya estaba en loop) y llama `stop()` explícito en el caso contrario (evita
+  dejar un controller corriendo sin una celda real que lo necesite). `hitos: []` → las 3
+  condiciones dan `false` → los 3 controllers se detienen, consistente con el early-return de
+  `build()` que ni siquiera construye `_MilestoneCell`. Sin loop infinito innecesario en ningún
+  caso alcanzable.
+- **`_highestReachedSpecialThreshold`** usa el umbral REAL (`reduce(max)` sobre los hitos
+  `esEspecial && alcanzado`) para el copy del overlay dorado — nunca un número hardcodeado,
+  confirmado con el test que usa `estrellasRequeridas: 12` (no el 15 del ejemplo original del
+  comentario del modelo) y espera el texto "Completaste las 12 estrellas del mes...".
+- **Celebración de tanda mixta (normal + especial simultáneos) no pierde ningún premio**: `_pendingNormal`/
+  `_pendingSpecial` se calculan una sola vez por tanda nueva (guardados con `_seenStorage.markSeen`
+  antes de mostrar el overlay, para no repetir en el próximo refresh), se muestra primero el normal
+  y, recién al cerrarlo, aparece el especial — cubierto con test que simula el ciclo completo
+  (tap "Ver mis premios" del overlay normal → aparece el especial → tap de nuevo → ambos
+  desaparecen).
+- **Contrato de `RewardSlot.expiresAt`/`RewardCatalogItem` sin cambios de forma en esta migración**
+  (solo ganaron/perdieron el campo `esEspecial` donde correspondía) — no se reintrodujo el bug de
+  clase "id en el body de un PATCH" porque no hay ningún PATCH en este módulo, solo `GET` con
+  query params.
+- **Barrido propio de todo `lib/` y `test/`** buscando referencias sueltas a los nombres viejos
+  (`estrellasParaProximoPremio`, `estrellasPorPremio`): el único resultado es un comentario de
+  `reward_progress.dart` que documenta a propósito el cálculo VIEJO del backend (`% estrellasPorPremio`)
+  para contrastarlo con el esquema nuevo — no es código muerto ni una referencia rota.
+
+❌ Falló (no bloqueante para el veredicto, pero real, a corregir):
+
+- **`reward_terms_sheet.dart`, punto "La meta más alta del tablero entrega, además, un premio
+  especial distinto del resto."**: esta frase asume que el hito especial es siempre el de mayor
+  `estrellasRequeridas`, pero eso no es una regla del backend — `RewardMilestonesService.create`/
+  `update` no restringen `isSpecial` a un único hito ni a la posición más alta (cualquier hito
+  puede marcarse especial desde el admin, y el propio código de `rewards_screen.dart` está
+  preparado para eso: hay un test dedicado, `'especial en el MEDIO'`, que ejercita exactamente
+  este caso). Si el admin configura el hito especial en una posición intermedia (como en el
+  ejemplo `2 (normal) / 4 (normal) / 6 (ESPECIAL) / 8 (normal) / 10 (normal)` que ya prueba el
+  propio código), este texto le muestra al cliente una regla que no es cierta ese mes. Sugerencia:
+  "Una de las metas del tablero (marcada por el admin) entrega, además, un premio especial
+  distinto del resto." — sin asumir posición, igual que ya se cuidó de no hardcodear el número de
+  estrellas.
+
+⚠️ Riesgos / casos borde no cubiertos, no bloqueantes:
+
+- Si el admin configurara **más de un hito** como `isSpecial: true` alcanzados en la misma tanda,
+  `_highestReachedSpecialThreshold` usa el umbral MÁS ALTO de los especiales recién alcanzados
+  para el copy del overlay — funciona sin crashear, pero el texto no distingue cuál de los dos
+  especiales corresponde a cuál `RewardSlot` de `premiosDisponibles`. Caso borde teórico (nada en
+  el schema de `RewardMilestone` impide 2+ hitos especiales), no cubierto por ningún test, sin
+  evidencia de que el admin lo configure así en la práctica.
+- El comentario de la ruta `/rewards/redeem/:redemptionId` en `app_router.dart` referencia un
+  mockup `/product/:id` como patrón — correcto — pero el propio `RewardRedeemScreen` menciona en
+  su docstring un mockup `estrellas-03-canje.png` que no existe en `design-reference/` (solo están
+  `estrellas01progreso.*`, `estrellas02desbloqueo*.*`, `estrellas04terminos.png`) — no es parte de
+  esta migración (el comentario es anterior), pero es una referencia rota menor que vale la pena
+  limpiar si se vuelve a tocar ese archivo.
+- No hay verificación en dispositivo/emulador real de esta migración específica (tablero dinámico,
+  overlay dorado, canje del catálogo especial) — mismo pendiente general ya declarado arriba para
+  todo el módulo Estrellas.
+- `ROADMAP.md` no tiene ninguna entrada para el módulo/feature "Estrellas" (ni en los módulos 0-10
+  numerados ni como mejora post-cierre de otro módulo) — no se puede "marcar como completo" un
+  ítem que no existe; queda para la sesión principal decidir dónde ubicarlo.
+
+**Veredicto: LISTO** (para el alcance de esta auditoría — la migración al esquema de hitos
+configurables + premio especial). No se marca ningún checkbox de `ROADMAP.md` porque no existe
+ninguna entrada de "Estrellas" ahí para marcar; queda pendiente que la sesión principal cree esa
+entrada. El único hallazgo real (copy de términos asumiendo que el especial es siempre la meta más
+alta) es de contenido/UX, no funcional, y no bloquea: la lógica de negocio real (numeración,
+tablero, celebración, catálogo, animaciones) maneja correctamente un especial en cualquier
+posición — solo el texto estático del bottom sheet de términos quedó desalineado con esa
+flexibilidad.
+
+---
+
 ## Reporte de auditoría (formato esperado del @tester)
 
 ```

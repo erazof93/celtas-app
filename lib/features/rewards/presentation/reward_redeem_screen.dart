@@ -10,17 +10,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-/// Canje de un premio ya desbloqueado (mockup `estrellas-03-canje.png`).
+/// Canje de un premio ya desbloqueado. Sin mockup propio en
+/// `design-reference/` — diseño nuevo, consistente con el resto de la app.
 ///
 /// Ruta `/rewards/redeem/:redemptionId`, empujada sobre el shell (sin bottom
 /// nav, mismo patrón que `/product/:id`). Muestra TODOS los productos reales
-/// de `GET /rewards/catalog` — sin tarjetas "Próximamente" ni ningún
-/// placeholder (esas del mockup solo comunicaban el concepto de catálogo
-/// editable en la maqueta, no van en producción).
+/// de `GET /rewards/catalog` (o `?especial=true` según `isSpecial`), sin
+/// tarjetas "Próximamente" ni ningún placeholder.
 class RewardRedeemScreen extends ConsumerWidget {
-  const RewardRedeemScreen({super.key, required this.redemptionId});
+  const RewardRedeemScreen({
+    super.key,
+    required this.redemptionId,
+    required this.isSpecial,
+  });
 
   final String redemptionId;
+
+  /// `true` cuando el premio que se canjea (`slot.esEspecial`) reparte del
+  /// catálogo especial (`GET /rewards/catalog?especial=true`), llegado por el
+  /// query param `especial` de la ruta — nunca inferido acá.
+  final bool isSpecial;
 
   Future<void> _redeem(
     BuildContext context,
@@ -46,38 +55,78 @@ class RewardRedeemScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final catalogAsync = ref.watch(rewardCatalogProvider);
+    final catalogAsync = ref.watch(rewardCatalogProvider(isSpecial));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Canjear premio')),
       body: SafeArea(
         top: false,
-        child: catalogAsync.when(
-          loading: () => const Padding(
-            padding: EdgeInsets.all(24),
-            child: SlowBackendNotice(),
-          ),
-          error: (error, _) => Padding(
-            padding: const EdgeInsets.all(24),
-            child: _RedeemError(
-              message: error is ApiException
-                  ? error.message
-                  : 'No se pudo cargar el catálogo de premios.',
-              onRetry: () => ref.invalidate(rewardCatalogProvider),
-            ),
-          ),
-          data: (items) => items.isEmpty
-              ? const _EmptyCatalog()
-              : ListView.separated(
+        child: Column(
+          children: [
+            if (isSpecial) const _SpecialCatalogBadge(),
+            Expanded(
+              child: catalogAsync.when(
+                loading: () => const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: SlowBackendNotice(),
+                ),
+                error: (error, _) => Padding(
                   padding: const EdgeInsets.all(24),
-                  itemCount: items.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) => _CatalogCard(
-                    item: items[index],
-                    onTap: () => _redeem(context, ref, items[index]),
+                  child: _RedeemError(
+                    message: error is ApiException
+                        ? error.message
+                        : 'No se pudo cargar el catálogo de premios.',
+                    onRetry: () =>
+                        ref.invalidate(rewardCatalogProvider(isSpecial)),
                   ),
                 ),
+                data: (items) => items.isEmpty
+                    ? const _EmptyCatalog()
+                    : ListView.separated(
+                        padding: const EdgeInsets.all(24),
+                        itemCount: items.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 12),
+                        itemBuilder: (context, index) => _CatalogCard(
+                          item: items[index],
+                          onTap: () => _redeem(context, ref, items[index]),
+                        ),
+                      ),
+              ),
+            ),
+          ],
         ),
+      ),
+    );
+  }
+}
+
+/// Indicador simple de que este canje pide el catálogo especial
+/// (`rewardCatalogProvider(true)`), debajo del AppBar — no rediseña toda la
+/// pantalla, solo deja claro que no es el catálogo normal.
+class _SpecialCatalogBadge extends StatelessWidget {
+  const _SpecialCatalogBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('reward-redeem-special-badge'),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+      color: CeltasColors.surfaceSelected,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.star_rounded, size: 16, color: CeltasColors.gold),
+          const SizedBox(width: 6),
+          Text(
+            '★ Premio especial',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: CeltasColors.gold,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -217,11 +266,8 @@ class _CatalogImage extends StatelessWidget {
         memCacheWidth: cacheDimension,
         memCacheHeight: cacheDimension,
         fit: BoxFit.cover,
-        placeholder: (context, url) => Container(
-          width: 56,
-          height: 56,
-          color: CeltasColors.surface,
-        ),
+        placeholder: (context, url) =>
+            Container(width: 56, height: 56, color: CeltasColors.surface),
         errorWidget: (context, url, error) => Container(
           width: 56,
           height: 56,
@@ -294,9 +340,9 @@ class _EmptyCatalog extends StatelessWidget {
             Text(
               'No hay premios disponibles para canjear por ahora',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: CeltasColors.textMuted,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: CeltasColors.textMuted),
             ),
           ],
         ),

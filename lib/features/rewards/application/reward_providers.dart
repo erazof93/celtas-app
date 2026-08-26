@@ -15,7 +15,11 @@ final rewardProgressProvider = FutureProvider<RewardProgress>(
   (ref) => ref.read(rewardRepositoryProvider).getProgress(),
 );
 
-/// Catálogo de productos canjeables (`GET /rewards/catalog`).
-final rewardCatalogProvider = FutureProvider<List<RewardCatalogItem>>(
-  (ref) => ref.read(rewardRepositoryProvider).getCatalog(),
-);
+/// Catálogo de productos canjeables (`GET /rewards/catalog`). `.family` por
+/// `especial`: `false` pide el catálogo normal, `true` el del premio
+/// especial — dos providers/consultas independientes, nunca la misma lista.
+final rewardCatalogProvider =
+    FutureProvider.family<List<RewardCatalogItem>, bool>(
+      (ref, especial) =>
+          ref.read(rewardRepositoryProvider).getCatalog(especial: especial),
+    );

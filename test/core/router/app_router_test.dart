@@ -93,8 +93,8 @@ void main() {
       // de test.
       rewardProgressProvider.overrideWith(
         (ref) async => const RewardProgress(
-          estrellasParaProximoPremio: 4,
-          estrellasPorPremio: 10,
+          estrellasDelMes: 4,
+          hitos: [],
           premiosDisponibles: [],
         ),
       ),
@@ -238,54 +238,51 @@ void main() {
     expect(find.text('Entregar en'), findsOneWidget);
   });
 
-  testWidgets(
-    'volver a la pestaña Estrellas refresca el progreso (regresión: '
-    'RewardsScreen vive en un StatefulShellBranch siempre montado, así que '
-    'sin invalidar rewardProgressProvider al tocar el tab el progreso viejo '
-    'se quedaba pegado hasta un pull-to-refresh manual)',
-    (tester) async {
-      final repository = MockAuthRepository();
-      final rewardRepository = MockRewardRepository();
-      when(() => rewardRepository.getProgress()).thenAnswer(
-        (_) async => const RewardProgress(
-          estrellasParaProximoPremio: 4,
-          estrellasPorPremio: 10,
-          premiosDisponibles: [],
-        ),
-      );
-      await login(tester, repository, rewardRepository: rewardRepository);
+  testWidgets('volver a la pestaña Estrellas refresca el progreso (regresión: '
+      'RewardsScreen vive en un StatefulShellBranch siempre montado, así que '
+      'sin invalidar rewardProgressProvider al tocar el tab el progreso viejo '
+      'se quedaba pegado hasta un pull-to-refresh manual)', (tester) async {
+    final repository = MockAuthRepository();
+    final rewardRepository = MockRewardRepository();
+    when(() => rewardRepository.getProgress()).thenAnswer(
+      (_) async => const RewardProgress(
+        estrellasDelMes: 4,
+        hitos: [],
+        premiosDisponibles: [],
+      ),
+    );
+    await login(tester, repository, rewardRepository: rewardRepository);
 
-      // Inicio → Estrellas (primera entrada: una llamada).
-      await tester.tap(
-        find.descendant(
-          of: find.byType(CeltasBottomNav),
-          matching: find.text('Estrellas'),
-        ),
-      );
-      await tester.pumpAndSettle();
-      verify(() => rewardRepository.getProgress()).called(1);
+    // Inicio → Estrellas (primera entrada: una llamada).
+    await tester.tap(
+      find.descendant(
+        of: find.byType(CeltasBottomNav),
+        matching: find.text('Estrellas'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    verify(() => rewardRepository.getProgress()).called(1);
 
-      // Estrellas → Perfil → Estrellas de nuevo: debe volver a pedirlo, no
-      // quedarse con el progreso ya cacheado del `FutureProvider` (sin
-      // `.autoDispose`) de la primera entrada.
-      await tester.tap(
-        find.descendant(
-          of: find.byType(CeltasBottomNav),
-          matching: find.text('Perfil'),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(
-        find.descendant(
-          of: find.byType(CeltasBottomNav),
-          matching: find.text('Estrellas'),
-        ),
-      );
-      await tester.pumpAndSettle();
+    // Estrellas → Perfil → Estrellas de nuevo: debe volver a pedirlo, no
+    // quedarse con el progreso ya cacheado del `FutureProvider` (sin
+    // `.autoDispose`) de la primera entrada.
+    await tester.tap(
+      find.descendant(
+        of: find.byType(CeltasBottomNav),
+        matching: find.text('Perfil'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(CeltasBottomNav),
+        matching: find.text('Estrellas'),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      verify(() => rewardRepository.getProgress()).called(1);
-    },
-  );
+    verify(() => rewardRepository.getProgress()).called(1);
+  });
 
   testWidgets('ruta protegida sin sesión → redirige a /login', (tester) async {
     final repository = MockAuthRepository();
@@ -475,146 +472,149 @@ void main() {
   });
 
   testWidgets(
-      'campana del Home → pantalla de notificaciones (historial vacío)', (
-    tester,
-  ) async {
-    final repository = MockAuthRepository();
-    await login(tester, repository);
+    'campana del Home → pantalla de notificaciones (historial vacío)',
+    (tester) async {
+      final repository = MockAuthRepository();
+      await login(tester, repository);
 
-    await tester.tap(find.byKey(const ValueKey('home-notifications-bell')));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('home-notifications-bell')));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Notificaciones'), findsOneWidget);
-    expect(find.text('No tienes notificaciones todavía'), findsOneWidget);
-    expect(find.byType(CeltasBottomNav), findsNothing);
-  });
-
-  testWidgets(
-      'badge de no leídas de la campana: aparece con historial no leído, '
-      'entrar a Notificaciones lo marca todo como leído, y al volver al '
-      'Home (navegación real de go_router, no un fake) el badge ya no '
-      'aparece', (tester) async {
-    // Historial persistido de antes (2 no leídas, 1 ya leída) — mismo
-    // mecanismo real que usaría `NotificationService` en una sesión previa.
-    await NotificationHistoryRepository().save([
-      NotificationHistoryItem(
-        title: 'Pedido confirmado',
-        body: 'Tu pedido #A1B2 fue confirmado',
-        receivedAt: DateTime.utc(2026, 8, 12, 14, 32),
-        data: const {'orderId': 'order-1', 'status': 'confirmado'},
-      ),
-      NotificationHistoryItem(
-        title: 'Tienes un cupón nuevo',
-        body: 'Usa VIKINGO10 en tu próximo pedido',
-        receivedAt: DateTime.utc(2026, 8, 11, 9, 5),
-        data: const {'couponCode': 'VIKINGO10'},
-      ),
-      NotificationHistoryItem(
-        title: 'Pedido entregado',
-        body: 'Tu pedido #Z9Y8 fue entregado',
-        receivedAt: DateTime.utc(2026, 8, 10, 20),
-        data: const {'orderId': 'order-0', 'status': 'entregado'},
-        read: true,
-      ),
-    ]);
-
-    final repository = MockAuthRepository();
-    await login(tester, repository);
-
-    expect(find.byKey(const ValueKey('home-notifications-badge')), findsOneWidget);
-    expect(find.text('2'), findsOneWidget);
-
-    await tester.tap(find.byKey(const ValueKey('home-notifications-bell')));
-    await tester.pumpAndSettle();
-    expect(find.text('Notificaciones'), findsOneWidget);
-
-    await tester.tap(find.byKey(const ValueKey('notifications-back')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Entregar en'), findsOneWidget); // de vuelta en Home
-    expect(
-      find.byKey(const ValueKey('home-notifications-badge')),
-      findsNothing,
-    );
-  });
+      expect(find.text('Notificaciones'), findsOneWidget);
+      expect(find.text('No tienes notificaciones todavía'), findsOneWidget);
+      expect(find.byType(CeltasBottomNav), findsNothing);
+    },
+  );
 
   testWidgets(
-      'barra de resumen del carrito en Home: oculta sin ítems, aparece con '
-      'ítems y "VER CARRITO" navega a /cart', (tester) async {
-    final repository = MockAuthRepository();
-    await login(
-      tester,
-      repository,
-      menu: const [
-        PublicMenuCategory(
-          id: 'c-1',
-          name: 'Hamburguesas',
-          items: [
-            PublicMenuItem(id: 'i-1', name: 'Berserker Burger', price: 15.5),
-          ],
+    'badge de no leídas de la campana: aparece con historial no leído, '
+    'entrar a Notificaciones lo marca todo como leído, y al volver al '
+    'Home (navegación real de go_router, no un fake) el badge ya no '
+    'aparece',
+    (tester) async {
+      // Historial persistido de antes (2 no leídas, 1 ya leída) — mismo
+      // mecanismo real que usaría `NotificationService` en una sesión previa.
+      await NotificationHistoryRepository().save([
+        NotificationHistoryItem(
+          title: 'Pedido confirmado',
+          body: 'Tu pedido #A1B2 fue confirmado',
+          receivedAt: DateTime.utc(2026, 8, 12, 14, 32),
+          data: const {'orderId': 'order-1', 'status': 'confirmado'},
         ),
-      ],
-    );
+        NotificationHistoryItem(
+          title: 'Tienes un cupón nuevo',
+          body: 'Usa VIKINGO10 en tu próximo pedido',
+          receivedAt: DateTime.utc(2026, 8, 11, 9, 5),
+          data: const {'couponCode': 'VIKINGO10'},
+        ),
+        NotificationHistoryItem(
+          title: 'Pedido entregado',
+          body: 'Tu pedido #Z9Y8 fue entregado',
+          receivedAt: DateTime.utc(2026, 8, 10, 20),
+          data: const {'orderId': 'order-0', 'status': 'entregado'},
+          read: true,
+        ),
+      ]);
 
-    // Sin ítems en el carrito: la barra no se muestra.
-    expect(
-      find.byKey(const ValueKey('home-cart-summary-bar')),
-      findsNothing,
-    );
+      final repository = MockAuthRepository();
+      await login(tester, repository);
 
-    await tester.tap(find.byKey(const ValueKey('add-i-1')));
-    await tester.pump();
+      expect(
+        find.byKey(const ValueKey('home-notifications-badge')),
+        findsOneWidget,
+      );
+      expect(find.text('2'), findsOneWidget);
 
-    // Con 1 ítem: aparece con el resumen correcto.
-    expect(
-      find.byKey(const ValueKey('home-cart-summary-bar')),
-      findsOneWidget,
-    );
-    expect(find.text('1 item · S/ 15.50'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('home-notifications-bell')));
+      await tester.pumpAndSettle();
+      expect(find.text('Notificaciones'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('home-cart-summary-bar')));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('notifications-back')));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Tu carrito'), findsOneWidget);
-    expect(find.byType(CeltasBottomNav), findsNothing);
-  });
+      expect(find.text('Entregar en'), findsOneWidget); // de vuelta en Home
+      expect(
+        find.byKey(const ValueKey('home-notifications-badge')),
+        findsNothing,
+      );
+    },
+  );
 
   testWidgets(
-      'barra de resumen del carrito en Home: transición 1→0 ítems la oculta '
-      'de nuevo', (tester) async {
-    final repository = MockAuthRepository();
-    await login(
-      tester,
-      repository,
-      menu: const [
-        PublicMenuCategory(
-          id: 'c-1',
-          name: 'Hamburguesas',
-          items: [
-            PublicMenuItem(id: 'i-1', name: 'Berserker Burger', price: 15.5),
-          ],
-        ),
-      ],
-    );
+    'barra de resumen del carrito en Home: oculta sin ítems, aparece con '
+    'ítems y "VER CARRITO" navega a /cart',
+    (tester) async {
+      final repository = MockAuthRepository();
+      await login(
+        tester,
+        repository,
+        menu: const [
+          PublicMenuCategory(
+            id: 'c-1',
+            name: 'Hamburguesas',
+            items: [
+              PublicMenuItem(id: 'i-1', name: 'Berserker Burger', price: 15.5),
+            ],
+          ),
+        ],
+      );
 
-    await tester.tap(find.byKey(const ValueKey('add-i-1')));
-    await tester.pump();
-    expect(
-      find.byKey(const ValueKey('home-cart-summary-bar')),
-      findsOneWidget,
-    );
+      // Sin ítems en el carrito: la barra no se muestra.
+      expect(find.byKey(const ValueKey('home-cart-summary-bar')), findsNothing);
 
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(CeltasApp)),
-    );
-    container.read(cartProvider.notifier).clear();
-    await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('add-i-1')));
+      await tester.pump();
 
-    expect(
-      find.byKey(const ValueKey('home-cart-summary-bar')),
-      findsNothing,
-    );
-  });
+      // Con 1 ítem: aparece con el resumen correcto.
+      expect(
+        find.byKey(const ValueKey('home-cart-summary-bar')),
+        findsOneWidget,
+      );
+      expect(find.text('1 item · S/ 15.50'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('home-cart-summary-bar')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Tu carrito'), findsOneWidget);
+      expect(find.byType(CeltasBottomNav), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'barra de resumen del carrito en Home: transición 1→0 ítems la oculta '
+    'de nuevo',
+    (tester) async {
+      final repository = MockAuthRepository();
+      await login(
+        tester,
+        repository,
+        menu: const [
+          PublicMenuCategory(
+            id: 'c-1',
+            name: 'Hamburguesas',
+            items: [
+              PublicMenuItem(id: 'i-1', name: 'Berserker Burger', price: 15.5),
+            ],
+          ),
+        ],
+      );
+
+      await tester.tap(find.byKey(const ValueKey('add-i-1')));
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('home-cart-summary-bar')),
+        findsOneWidget,
+      );
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(CeltasApp)),
+      );
+      container.read(cartProvider.notifier).clear();
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('home-cart-summary-bar')), findsNothing);
+    },
+  );
 
   testWidgets('rutas /product/:id y /cart sin sesión → redirigen a /login', (
     tester,

@@ -85,14 +85,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(
-        path: '/',
-        builder: (context, state) => const SplashScreen(),
-      ),
-      GoRoute(
-        path: '/login',
-        builder: (context, state) => const LoginScreen(),
-      ),
+      GoRoute(path: '/', builder: (context, state) => const SplashScreen()),
+      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(
         path: '/register',
         builder: (context, state) => const RegisterScreen(),
@@ -110,10 +104,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       // Carrito: pantalla completa sobre el shell (mockup 06, sin bottom nav).
-      GoRoute(
-        path: '/cart',
-        builder: (context, state) => const CartScreen(),
-      ),
+      GoRoute(path: '/cart', builder: (context, state) => const CartScreen()),
       // Checkout: dirección + resumen + confirmación por WhatsApp (módulo 5).
       GoRoute(
         path: '/checkout',
@@ -136,9 +127,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       // 7, mockup 11, sin bottom nav — igual que detalle de producto).
       GoRoute(
         path: '/orders/:id',
-        builder: (context, state) => OrderDetailScreen(
-          orderId: state.pathParameters['id']!,
-        ),
+        builder: (context, state) =>
+            OrderDetailScreen(orderId: state.pathParameters['id']!),
       ),
       // Canje de un premio ya desbloqueado: empujada desde el botón
       // "Canjear" de `RewardsScreen`, sin bottom nav — mismo patrón que
@@ -148,12 +138,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/rewards/redeem/:redemptionId',
         builder: (context, state) => RewardRedeemScreen(
           redemptionId: state.pathParameters['redemptionId']!,
+          isSpecial: state.uri.queryParameters['especial'] == 'true',
         ),
       ),
       StatefulShellRoute.indexedStack(
-        builder: (context, state, navigationShell) => _ShellScaffold(
-          navigationShell: navigationShell,
-        ),
+        builder: (context, state, navigationShell) =>
+            _ShellScaffold(navigationShell: navigationShell),
         branches: [
           StatefulShellBranch(
             routes: [

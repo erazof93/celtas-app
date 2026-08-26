@@ -29,11 +29,14 @@ class RewardTermsSheet extends StatelessWidget {
 
   static const _points = [
     'Por cada S/ 10 en compras (sin contar el envío) ganas 1 estrella.',
-    'Al completar tu objetivo del mes, ganas un premio para canjear por '
-        'un producto disponible.',
+    'Cada vez que alcances una de las metas del tablero del mes, ganas '
+        'un premio para canjear por un producto disponible.',
+    'Una de las metas del tablero (marcada por Celtas) entrega, además, '
+        'un premio especial distinto del resto.',
     'Cada premio tiene una vigencia de 15 días desde que lo ganas.',
-    'El conteo de estrellas se reinicia el día 1 de cada mes — los '
-        'premios que ya ganaste no se pierden.',
+    'El conteo de estrellas se reinicia el día 1 de cada mes — las '
+        'estrellas que sobren no se guardan para el mes siguiente, pero '
+        'los premios que ya ganaste no se pierden.',
     'Al canjear un premio, sigues participando normalmente — puedes '
         'ganar más de uno en el mismo mes.',
   ];
@@ -95,20 +98,16 @@ class _TermPoint extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Icon(
-          Icons.check_rounded,
-          size: 18,
-          color: CeltasColors.orange,
-        ),
+        const Icon(Icons.check_rounded, size: 18, color: CeltasColors.orange),
         const SizedBox(width: 10),
         Expanded(
           child: Text(
             text,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontSize: 13.5,
-                  color: CeltasColors.textMuted,
-                  height: 1.4,
-                ),
+              fontSize: 13.5,
+              color: CeltasColors.textMuted,
+              height: 1.4,
+            ),
           ),
         ),
       ],

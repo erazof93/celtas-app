@@ -1260,6 +1260,58 @@ celtas-mobile/
       no se repita en texto nuevo.
 - [ ] Definir distribución: Google Play (pago único ~$25) vs. APK directo mientras se valida
 
+### 11. Programa de Estrellas (fidelización) — ✅ COMPLETO
+- [x] Tab nueva "Estrellas" en el bottom nav (5º tab), `RewardsScreen`: progreso mensual
+      (`GET /rewards/progress`), catálogo de canje (`GET /rewards/catalog`), canje empujado sobre
+      el shell (`RewardRedeemScreen`, agrega el premio al carrito vía `CartNotifier.addRewardItem`
+      — precio forzado a 0, cantidad siempre 1, `POST /orders` manda `rewardRedemptionId`) y
+      celebración de desbloqueo con confeti (`ConfettiWidget` de un solo disparo). Sin push del
+      backend que avise "se generó un premio nuevo": la app lo detecta comparando
+      `premiosDisponibles` contra `SeenRewardsStorage` (persistido local, mismo patrón que el
+      historial de notificaciones) y celebra cada premio una sola vez. Bottom sheet de términos y
+      condiciones. Corrección sobre el mockup: la tarjeta de "premio disponible" nunca nombra un
+      producto específico — el backend no lo expone hasta que se canjea. commit `e43fa86`.
+- [x] **2 bugs reales encontrados y corregidos apenas estabilizado el módulo** (commit
+      `2fb671b`). (1) Estrellas vive en un `StatefulShellBranch` siempre montado (para preservar
+      su estado), así que `rewardProgressProvider` (sin `.autoDispose`) no se refrescaba solo por
+      cambiar de tab — el progreso quedaba pegado hasta un pull-to-refresh manual; corregido
+      invalidando el provider al tocar la pestaña Estrellas. (2) `estrellasParaProximoPremio` es
+      el progreso YA ACUMULADO del ciclo actual (`estrellasDelMes % estrellasPorPremio` en el
+      backend), no lo que falta — el código original lo interpretaba al revés (restándolo del
+      total), dejando la grilla de estrellas mal rellenada; corregido usando el valor directo
+      como `filled`, sin restarlo.
+- [x] **Mejora post-cierre: migración a hitos configurables + premio especial.** Reemplaza el
+      esquema fijo "cada N estrellas = 1 premio" por hitos irregulares configurables desde el
+      admin (ej. 5, 8, 15), donde el hito más alto (o cualquiera marcado `isSpecial`) reparte de
+      un catálogo de premio especial separado (`GET /rewards/catalog?especial=true`, lista
+      EXCLUYENTE de la normal, nunca una unión) — feature cross-repo, backend y `celtas-admin` ya
+      en producción antes de este cambio (commit `69f1dd8`/`d895ce1`). `RewardProgress` cambió
+      `estrellasParaProximoPremio`/`estrellasPorPremio` por `estrellasDelMes` (total del mes, sin
+      módulo) + `hitos: List<RewardMilestoneProgress>` (`estrellasRequeridas`/`alcanzado`/
+      `esEspecial`, 100% dinámico — nunca 3 hitos ni los valores 5/8/15 hardcodeados).
+      `_ProgressCard` pasó de una grilla fija de 15 estrellas en 3 filas a un tablero dinámico
+      (`totalStars = max(estrellasRequeridas)`, filas de 5, numeración "Premio N" calculada por
+      posición entre los hitos NO especiales, ordenados ascendente) con las 4 combinaciones
+      visuales alcanzado×especial del mockup `estrellas01progreso.dc.html`: trofeo con pulso +
+      confetti lateral para los alcanzados, resplandor de espera (sin trofeo) para el especial
+      todavía pendiente. `_RewardSlotCard`/`_RewardUnlockOverlay` ganaron variante dorada para
+      premios especiales (`estrellas02desbloqueodorado.dc.html`), con celebración secuencial
+      (normal primero, especial después) cuando una misma tanda desbloquea ambos tipos a la vez.
+      **Bug real encontrado y corregido durante el desarrollo** (no en la auditoría): los 3
+      `AnimationController` de trofeo/glow/confetti arrancaban en loop infinito siempre, sin
+      importar si el tablero tenía algún hito que realmente los necesitara — rompía
+      `pumpAndSettle` en TODA la app, incluidos tests de navegación sin relación en
+      `app_router_test.dart`; corregido con `_syncAnimations()`, que solo activa cada loop cuando
+      `progress.hitos` lo necesita de verdad (algún hito alcanzado para trofeo/confetti, algún
+      especial pendiente para el glow). 505/505 tests, `flutter analyze` limpio. Auditado por
+      `@tester`, que verificó con mutaciones reales (no solo con los tests ya en verde) que la
+      numeración "Premio N" y el guard de `hitos: []` funcionan de verdad, y que el query param
+      `especial` viaja intacto `_RewardSlotCard` → router → `RewardRedeemScreen` → catálogo
+      correcto — encontró un bug real no bloqueante en `reward_terms_sheet.dart` (el texto de
+      términos asumía que el premio especial siempre es la meta más alta del tablero, cuando en
+      realidad puede configurarse en cualquier hito), corregido antes del veredicto final:
+      **LISTO**.
+
 ---
 
 ## Cómo trabajar con OpenCode

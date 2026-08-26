@@ -10,8 +10,10 @@ import 'package:dio/dio.dart';
 ///   - `GET /rewards/progress` (JWT) → progreso hacia el próximo premio,
 ///     premios disponibles sin usar/sin vencer, y la promoción de estrellas
 ///     dobles vigente hoy si hay alguna.
-///   - `GET /rewards/catalog` (JWT) → productos `redeemableWithStars: true` y
-///     `available: true`, mismo criterio de disponibilidad que el menú
+///   - `GET /rewards/catalog` (JWT) → sin `especial` (o `false`): productos
+///     `redeemableWithStars: true`; con `especial=true`: productos
+///     `specialReward: true` — dos listas EXCLUYENTES, nunca una unión.
+///     Ambas ya filtradas por `available: true`, mismo criterio que el menú
 ///     público.
 class RewardRepository {
   RewardRepository(this._dio);
@@ -29,9 +31,15 @@ class RewardRepository {
     }
   }
 
-  Future<List<RewardCatalogItem>> getCatalog() async {
+  /// `especial`: el controller compara `especial === 'true'` como string, no
+  /// como bool — se manda `'true'` explícito y se omite el parámetro cuando
+  /// es `false` (equivalente a mandar `'false'`, pero más limpio).
+  Future<List<RewardCatalogItem>> getCatalog({bool especial = false}) async {
     try {
-      final response = await _dio.get<List<dynamic>>('/rewards/catalog');
+      final response = await _dio.get<List<dynamic>>(
+        '/rewards/catalog',
+        queryParameters: especial ? {'especial': 'true'} : null,
+      );
       return (response.data ?? const [])
           .cast<Map<String, dynamic>>()
           .map(RewardCatalogItem.fromJson)

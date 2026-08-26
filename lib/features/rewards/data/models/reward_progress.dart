@@ -11,12 +11,15 @@ part 'reward_progress.g.dart';
 /// expone nombre de producto ni precio acá — un premio ganado no está atado
 /// a ningún producto hasta que se canjea (`RewardRedemption.menuItemId`
 /// queda `null` hasta el canje). La UI nunca debe nombrar un producto
-/// específico para un `RewardSlot`, solo copy genérico.
+/// específico para un `RewardSlot`, solo copy genérico. `esEspecial` indica
+/// si este premio reparte del catálogo especial (`GET /rewards/catalog?
+/// especial=true`) o del normal.
 @freezed
 abstract class RewardSlot with _$RewardSlot {
   const factory RewardSlot({
     required String id,
     required DateTime expiresAt,
+    required bool esEspecial,
   }) = _RewardSlot;
 
   factory RewardSlot.fromJson(Map<String, dynamic> json) =>
@@ -39,28 +42,52 @@ abstract class RewardPromotion with _$RewardPromotion {
       _$RewardPromotionFromJson(json);
 }
 
+/// Progreso de un hito individual del tablero del mes, tal como lo devuelve
+/// `GET /rewards/progress` dentro de `hitos`. `estrellasRequeridas`,
+/// `alcanzado` y `esEspecial` los configura el admin — la cantidad de hitos,
+/// sus umbrales y cuál es el especial son 100% dinámicos, nunca hardcodear
+/// 3 hitos ni los valores 5/8/15 (son solo el ejemplo vigente hoy).
+@freezed
+abstract class RewardMilestoneProgress with _$RewardMilestoneProgress {
+  const factory RewardMilestoneProgress({
+    required int estrellasRequeridas,
+    required bool alcanzado,
+    required bool esEspecial,
+  }) = _RewardMilestoneProgress;
+
+  factory RewardMilestoneProgress.fromJson(Map<String, dynamic> json) =>
+      _$RewardMilestoneProgressFromJson(json);
+}
+
 /// Respuesta de `GET /rewards/progress` (JWT), contrato verificado contra
 /// `RewardsService.getProgress`:
 ///
 /// ```json
 /// {
-///   "estrellasParaProximoPremio": 4,
-///   "estrellasPorPremio": 10,
-///   "premiosDisponibles": [{ "id": "uuid", "expiresAt": "..." }],
+///   "estrellasDelMes": 9,
+///   "hitos": [
+///     { "estrellasRequeridas": 5, "alcanzado": true, "esEspecial": false },
+///     { "estrellasRequeridas": 8, "alcanzado": true, "esEspecial": false },
+///     { "estrellasRequeridas": 15, "alcanzado": false, "esEspecial": true }
+///   ],
+///   "premiosDisponibles": [{ "id": "uuid", "expiresAt": "...", "esEspecial": false }],
 ///   "promocionActiva": { "label": "...", "multiplier": 2, "endDate": "..." }
 /// }
 /// ```
 ///
-/// `estrellasParaProximoPremio` es el progreso YA ACUMULADO en el ciclo
-/// actual (`estrellasDelMes % estrellasPorPremio` en el backend), NO lo que
-/// falta — cuidado con el signo al calcular estrellas rellenas para la
-/// grilla (ver `RewardsScreen`). `promocionActiva` es `null` si no hay
+/// Esquema de HITOS irregulares (reemplaza el viejo "cada N estrellas = 1
+/// premio"): `estrellasDelMes` es el total acumulado este mes SIN módulo — el
+/// backend ya no hace `% estrellasPorPremio`, la lógica de "cuáles premios ya
+/// se alcanzaron" vive enteramente en `hitos` (`alcanzado = estrellasDelMes
+/// >= estrellasRequeridas` de cada hito, ya resuelto por el backend). `hitos`
+/// puede venir `[]` en un caso borde (admin sin hitos configurados todavía) —
+/// la UI debe manejarlo sin crashear. `promocionActiva` es `null` si no hay
 /// ninguna vigente hoy; `premiosDisponibles` puede ser `[]`.
 @freezed
 abstract class RewardProgress with _$RewardProgress {
   const factory RewardProgress({
-    required int estrellasParaProximoPremio,
-    required int estrellasPorPremio,
+    required int estrellasDelMes,
+    required List<RewardMilestoneProgress> hitos,
     required List<RewardSlot> premiosDisponibles,
     RewardPromotion? promocionActiva,
   }) = _RewardProgress;

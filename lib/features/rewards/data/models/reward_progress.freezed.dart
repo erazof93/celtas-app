@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$RewardSlot {
 
- String get id; DateTime get expiresAt;
+ String get id; DateTime get expiresAt; bool get esEspecial;
 /// Create a copy of RewardSlot
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +28,16 @@ $RewardSlotCopyWith<RewardSlot> get copyWith => _$RewardSlotCopyWithImpl<RewardS
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is RewardSlot&&(identical(other.id, id) || other.id == id)&&(identical(other.expiresAt, expiresAt) || other.expiresAt == expiresAt));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is RewardSlot&&(identical(other.id, id) || other.id == id)&&(identical(other.expiresAt, expiresAt) || other.expiresAt == expiresAt)&&(identical(other.esEspecial, esEspecial) || other.esEspecial == esEspecial));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,expiresAt);
+int get hashCode => Object.hash(runtimeType,id,expiresAt,esEspecial);
 
 @override
 String toString() {
-  return 'RewardSlot(id: $id, expiresAt: $expiresAt)';
+  return 'RewardSlot(id: $id, expiresAt: $expiresAt, esEspecial: $esEspecial)';
 }
 
 
@@ -48,7 +48,7 @@ abstract mixin class $RewardSlotCopyWith<$Res>  {
   factory $RewardSlotCopyWith(RewardSlot value, $Res Function(RewardSlot) _then) = _$RewardSlotCopyWithImpl;
 @useResult
 $Res call({
- String id, DateTime expiresAt
+ String id, DateTime expiresAt, bool esEspecial
 });
 
 
@@ -65,11 +65,12 @@ class _$RewardSlotCopyWithImpl<$Res>
 
 /// Create a copy of RewardSlot
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? expiresAt = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? expiresAt = null,Object? esEspecial = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,expiresAt: null == expiresAt ? _self.expiresAt : expiresAt // ignore: cast_nullable_to_non_nullable
-as DateTime,
+as DateTime,esEspecial: null == esEspecial ? _self.esEspecial : esEspecial // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 
@@ -154,10 +155,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  DateTime expiresAt)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  DateTime expiresAt,  bool esEspecial)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _RewardSlot() when $default != null:
-return $default(_that.id,_that.expiresAt);case _:
+return $default(_that.id,_that.expiresAt,_that.esEspecial);case _:
   return orElse();
 
 }
@@ -175,10 +176,10 @@ return $default(_that.id,_that.expiresAt);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  DateTime expiresAt)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  DateTime expiresAt,  bool esEspecial)  $default,) {final _that = this;
 switch (_that) {
 case _RewardSlot():
-return $default(_that.id,_that.expiresAt);case _:
+return $default(_that.id,_that.expiresAt,_that.esEspecial);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -195,10 +196,10 @@ return $default(_that.id,_that.expiresAt);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  DateTime expiresAt)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  DateTime expiresAt,  bool esEspecial)?  $default,) {final _that = this;
 switch (_that) {
 case _RewardSlot() when $default != null:
-return $default(_that.id,_that.expiresAt);case _:
+return $default(_that.id,_that.expiresAt,_that.esEspecial);case _:
   return null;
 
 }
@@ -210,11 +211,12 @@ return $default(_that.id,_that.expiresAt);case _:
 @JsonSerializable()
 
 class _RewardSlot implements RewardSlot {
-  const _RewardSlot({required this.id, required this.expiresAt});
+  const _RewardSlot({required this.id, required this.expiresAt, required this.esEspecial});
   factory _RewardSlot.fromJson(Map<String, dynamic> json) => _$RewardSlotFromJson(json);
 
 @override final  String id;
 @override final  DateTime expiresAt;
+@override final  bool esEspecial;
 
 /// Create a copy of RewardSlot
 /// with the given fields replaced by the non-null parameter values.
@@ -229,16 +231,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _RewardSlot&&(identical(other.id, id) || other.id == id)&&(identical(other.expiresAt, expiresAt) || other.expiresAt == expiresAt));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _RewardSlot&&(identical(other.id, id) || other.id == id)&&(identical(other.expiresAt, expiresAt) || other.expiresAt == expiresAt)&&(identical(other.esEspecial, esEspecial) || other.esEspecial == esEspecial));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,expiresAt);
+int get hashCode => Object.hash(runtimeType,id,expiresAt,esEspecial);
 
 @override
 String toString() {
-  return 'RewardSlot(id: $id, expiresAt: $expiresAt)';
+  return 'RewardSlot(id: $id, expiresAt: $expiresAt, esEspecial: $esEspecial)';
 }
 
 
@@ -249,7 +251,7 @@ abstract mixin class _$RewardSlotCopyWith<$Res> implements $RewardSlotCopyWith<$
   factory _$RewardSlotCopyWith(_RewardSlot value, $Res Function(_RewardSlot) _then) = __$RewardSlotCopyWithImpl;
 @override @useResult
 $Res call({
- String id, DateTime expiresAt
+ String id, DateTime expiresAt, bool esEspecial
 });
 
 
@@ -266,11 +268,12 @@ class __$RewardSlotCopyWithImpl<$Res>
 
 /// Create a copy of RewardSlot
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? expiresAt = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? expiresAt = null,Object? esEspecial = null,}) {
   return _then(_RewardSlot(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,expiresAt: null == expiresAt ? _self.expiresAt : expiresAt // ignore: cast_nullable_to_non_nullable
-as DateTime,
+as DateTime,esEspecial: null == esEspecial ? _self.esEspecial : esEspecial // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 
@@ -548,9 +551,278 @@ as String,
 
 
 /// @nodoc
+mixin _$RewardMilestoneProgress {
+
+ int get estrellasRequeridas; bool get alcanzado; bool get esEspecial;
+/// Create a copy of RewardMilestoneProgress
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$RewardMilestoneProgressCopyWith<RewardMilestoneProgress> get copyWith => _$RewardMilestoneProgressCopyWithImpl<RewardMilestoneProgress>(this as RewardMilestoneProgress, _$identity);
+
+  /// Serializes this RewardMilestoneProgress to a JSON map.
+  Map<String, dynamic> toJson();
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is RewardMilestoneProgress&&(identical(other.estrellasRequeridas, estrellasRequeridas) || other.estrellasRequeridas == estrellasRequeridas)&&(identical(other.alcanzado, alcanzado) || other.alcanzado == alcanzado)&&(identical(other.esEspecial, esEspecial) || other.esEspecial == esEspecial));
+}
+
+@JsonKey(includeFromJson: false, includeToJson: false)
+@override
+int get hashCode => Object.hash(runtimeType,estrellasRequeridas,alcanzado,esEspecial);
+
+@override
+String toString() {
+  return 'RewardMilestoneProgress(estrellasRequeridas: $estrellasRequeridas, alcanzado: $alcanzado, esEspecial: $esEspecial)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $RewardMilestoneProgressCopyWith<$Res>  {
+  factory $RewardMilestoneProgressCopyWith(RewardMilestoneProgress value, $Res Function(RewardMilestoneProgress) _then) = _$RewardMilestoneProgressCopyWithImpl;
+@useResult
+$Res call({
+ int estrellasRequeridas, bool alcanzado, bool esEspecial
+});
+
+
+
+
+}
+/// @nodoc
+class _$RewardMilestoneProgressCopyWithImpl<$Res>
+    implements $RewardMilestoneProgressCopyWith<$Res> {
+  _$RewardMilestoneProgressCopyWithImpl(this._self, this._then);
+
+  final RewardMilestoneProgress _self;
+  final $Res Function(RewardMilestoneProgress) _then;
+
+/// Create a copy of RewardMilestoneProgress
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? estrellasRequeridas = null,Object? alcanzado = null,Object? esEspecial = null,}) {
+  return _then(_self.copyWith(
+estrellasRequeridas: null == estrellasRequeridas ? _self.estrellasRequeridas : estrellasRequeridas // ignore: cast_nullable_to_non_nullable
+as int,alcanzado: null == alcanzado ? _self.alcanzado : alcanzado // ignore: cast_nullable_to_non_nullable
+as bool,esEspecial: null == esEspecial ? _self.esEspecial : esEspecial // ignore: cast_nullable_to_non_nullable
+as bool,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [RewardMilestoneProgress].
+extension RewardMilestoneProgressPatterns on RewardMilestoneProgress {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _RewardMilestoneProgress value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _RewardMilestoneProgress() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _RewardMilestoneProgress value)  $default,){
+final _that = this;
+switch (_that) {
+case _RewardMilestoneProgress():
+return $default(_that);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _RewardMilestoneProgress value)?  $default,){
+final _that = this;
+switch (_that) {
+case _RewardMilestoneProgress() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int estrellasRequeridas,  bool alcanzado,  bool esEspecial)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _RewardMilestoneProgress() when $default != null:
+return $default(_that.estrellasRequeridas,_that.alcanzado,_that.esEspecial);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int estrellasRequeridas,  bool alcanzado,  bool esEspecial)  $default,) {final _that = this;
+switch (_that) {
+case _RewardMilestoneProgress():
+return $default(_that.estrellasRequeridas,_that.alcanzado,_that.esEspecial);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int estrellasRequeridas,  bool alcanzado,  bool esEspecial)?  $default,) {final _that = this;
+switch (_that) {
+case _RewardMilestoneProgress() when $default != null:
+return $default(_that.estrellasRequeridas,_that.alcanzado,_that.esEspecial);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+@JsonSerializable()
+
+class _RewardMilestoneProgress implements RewardMilestoneProgress {
+  const _RewardMilestoneProgress({required this.estrellasRequeridas, required this.alcanzado, required this.esEspecial});
+  factory _RewardMilestoneProgress.fromJson(Map<String, dynamic> json) => _$RewardMilestoneProgressFromJson(json);
+
+@override final  int estrellasRequeridas;
+@override final  bool alcanzado;
+@override final  bool esEspecial;
+
+/// Create a copy of RewardMilestoneProgress
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$RewardMilestoneProgressCopyWith<_RewardMilestoneProgress> get copyWith => __$RewardMilestoneProgressCopyWithImpl<_RewardMilestoneProgress>(this, _$identity);
+
+@override
+Map<String, dynamic> toJson() {
+  return _$RewardMilestoneProgressToJson(this, );
+}
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _RewardMilestoneProgress&&(identical(other.estrellasRequeridas, estrellasRequeridas) || other.estrellasRequeridas == estrellasRequeridas)&&(identical(other.alcanzado, alcanzado) || other.alcanzado == alcanzado)&&(identical(other.esEspecial, esEspecial) || other.esEspecial == esEspecial));
+}
+
+@JsonKey(includeFromJson: false, includeToJson: false)
+@override
+int get hashCode => Object.hash(runtimeType,estrellasRequeridas,alcanzado,esEspecial);
+
+@override
+String toString() {
+  return 'RewardMilestoneProgress(estrellasRequeridas: $estrellasRequeridas, alcanzado: $alcanzado, esEspecial: $esEspecial)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$RewardMilestoneProgressCopyWith<$Res> implements $RewardMilestoneProgressCopyWith<$Res> {
+  factory _$RewardMilestoneProgressCopyWith(_RewardMilestoneProgress value, $Res Function(_RewardMilestoneProgress) _then) = __$RewardMilestoneProgressCopyWithImpl;
+@override @useResult
+$Res call({
+ int estrellasRequeridas, bool alcanzado, bool esEspecial
+});
+
+
+
+
+}
+/// @nodoc
+class __$RewardMilestoneProgressCopyWithImpl<$Res>
+    implements _$RewardMilestoneProgressCopyWith<$Res> {
+  __$RewardMilestoneProgressCopyWithImpl(this._self, this._then);
+
+  final _RewardMilestoneProgress _self;
+  final $Res Function(_RewardMilestoneProgress) _then;
+
+/// Create a copy of RewardMilestoneProgress
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? estrellasRequeridas = null,Object? alcanzado = null,Object? esEspecial = null,}) {
+  return _then(_RewardMilestoneProgress(
+estrellasRequeridas: null == estrellasRequeridas ? _self.estrellasRequeridas : estrellasRequeridas // ignore: cast_nullable_to_non_nullable
+as int,alcanzado: null == alcanzado ? _self.alcanzado : alcanzado // ignore: cast_nullable_to_non_nullable
+as bool,esEspecial: null == esEspecial ? _self.esEspecial : esEspecial // ignore: cast_nullable_to_non_nullable
+as bool,
+  ));
+}
+
+
+}
+
+
+/// @nodoc
 mixin _$RewardProgress {
 
- int get estrellasParaProximoPremio; int get estrellasPorPremio; List<RewardSlot> get premiosDisponibles; RewardPromotion? get promocionActiva;
+ int get estrellasDelMes; List<RewardMilestoneProgress> get hitos; List<RewardSlot> get premiosDisponibles; RewardPromotion? get promocionActiva;
 /// Create a copy of RewardProgress
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -563,16 +835,16 @@ $RewardProgressCopyWith<RewardProgress> get copyWith => _$RewardProgressCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is RewardProgress&&(identical(other.estrellasParaProximoPremio, estrellasParaProximoPremio) || other.estrellasParaProximoPremio == estrellasParaProximoPremio)&&(identical(other.estrellasPorPremio, estrellasPorPremio) || other.estrellasPorPremio == estrellasPorPremio)&&const DeepCollectionEquality().equals(other.premiosDisponibles, premiosDisponibles)&&(identical(other.promocionActiva, promocionActiva) || other.promocionActiva == promocionActiva));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is RewardProgress&&(identical(other.estrellasDelMes, estrellasDelMes) || other.estrellasDelMes == estrellasDelMes)&&const DeepCollectionEquality().equals(other.hitos, hitos)&&const DeepCollectionEquality().equals(other.premiosDisponibles, premiosDisponibles)&&(identical(other.promocionActiva, promocionActiva) || other.promocionActiva == promocionActiva));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,estrellasParaProximoPremio,estrellasPorPremio,const DeepCollectionEquality().hash(premiosDisponibles),promocionActiva);
+int get hashCode => Object.hash(runtimeType,estrellasDelMes,const DeepCollectionEquality().hash(hitos),const DeepCollectionEquality().hash(premiosDisponibles),promocionActiva);
 
 @override
 String toString() {
-  return 'RewardProgress(estrellasParaProximoPremio: $estrellasParaProximoPremio, estrellasPorPremio: $estrellasPorPremio, premiosDisponibles: $premiosDisponibles, promocionActiva: $promocionActiva)';
+  return 'RewardProgress(estrellasDelMes: $estrellasDelMes, hitos: $hitos, premiosDisponibles: $premiosDisponibles, promocionActiva: $promocionActiva)';
 }
 
 
@@ -583,7 +855,7 @@ abstract mixin class $RewardProgressCopyWith<$Res>  {
   factory $RewardProgressCopyWith(RewardProgress value, $Res Function(RewardProgress) _then) = _$RewardProgressCopyWithImpl;
 @useResult
 $Res call({
- int estrellasParaProximoPremio, int estrellasPorPremio, List<RewardSlot> premiosDisponibles, RewardPromotion? promocionActiva
+ int estrellasDelMes, List<RewardMilestoneProgress> hitos, List<RewardSlot> premiosDisponibles, RewardPromotion? promocionActiva
 });
 
 
@@ -600,11 +872,11 @@ class _$RewardProgressCopyWithImpl<$Res>
 
 /// Create a copy of RewardProgress
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? estrellasParaProximoPremio = null,Object? estrellasPorPremio = null,Object? premiosDisponibles = null,Object? promocionActiva = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? estrellasDelMes = null,Object? hitos = null,Object? premiosDisponibles = null,Object? promocionActiva = freezed,}) {
   return _then(_self.copyWith(
-estrellasParaProximoPremio: null == estrellasParaProximoPremio ? _self.estrellasParaProximoPremio : estrellasParaProximoPremio // ignore: cast_nullable_to_non_nullable
-as int,estrellasPorPremio: null == estrellasPorPremio ? _self.estrellasPorPremio : estrellasPorPremio // ignore: cast_nullable_to_non_nullable
-as int,premiosDisponibles: null == premiosDisponibles ? _self.premiosDisponibles : premiosDisponibles // ignore: cast_nullable_to_non_nullable
+estrellasDelMes: null == estrellasDelMes ? _self.estrellasDelMes : estrellasDelMes // ignore: cast_nullable_to_non_nullable
+as int,hitos: null == hitos ? _self.hitos : hitos // ignore: cast_nullable_to_non_nullable
+as List<RewardMilestoneProgress>,premiosDisponibles: null == premiosDisponibles ? _self.premiosDisponibles : premiosDisponibles // ignore: cast_nullable_to_non_nullable
 as List<RewardSlot>,promocionActiva: freezed == promocionActiva ? _self.promocionActiva : promocionActiva // ignore: cast_nullable_to_non_nullable
 as RewardPromotion?,
   ));
@@ -703,10 +975,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int estrellasParaProximoPremio,  int estrellasPorPremio,  List<RewardSlot> premiosDisponibles,  RewardPromotion? promocionActiva)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int estrellasDelMes,  List<RewardMilestoneProgress> hitos,  List<RewardSlot> premiosDisponibles,  RewardPromotion? promocionActiva)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _RewardProgress() when $default != null:
-return $default(_that.estrellasParaProximoPremio,_that.estrellasPorPremio,_that.premiosDisponibles,_that.promocionActiva);case _:
+return $default(_that.estrellasDelMes,_that.hitos,_that.premiosDisponibles,_that.promocionActiva);case _:
   return orElse();
 
 }
@@ -724,10 +996,10 @@ return $default(_that.estrellasParaProximoPremio,_that.estrellasPorPremio,_that.
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int estrellasParaProximoPremio,  int estrellasPorPremio,  List<RewardSlot> premiosDisponibles,  RewardPromotion? promocionActiva)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int estrellasDelMes,  List<RewardMilestoneProgress> hitos,  List<RewardSlot> premiosDisponibles,  RewardPromotion? promocionActiva)  $default,) {final _that = this;
 switch (_that) {
 case _RewardProgress():
-return $default(_that.estrellasParaProximoPremio,_that.estrellasPorPremio,_that.premiosDisponibles,_that.promocionActiva);case _:
+return $default(_that.estrellasDelMes,_that.hitos,_that.premiosDisponibles,_that.promocionActiva);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -744,10 +1016,10 @@ return $default(_that.estrellasParaProximoPremio,_that.estrellasPorPremio,_that.
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int estrellasParaProximoPremio,  int estrellasPorPremio,  List<RewardSlot> premiosDisponibles,  RewardPromotion? promocionActiva)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int estrellasDelMes,  List<RewardMilestoneProgress> hitos,  List<RewardSlot> premiosDisponibles,  RewardPromotion? promocionActiva)?  $default,) {final _that = this;
 switch (_that) {
 case _RewardProgress() when $default != null:
-return $default(_that.estrellasParaProximoPremio,_that.estrellasPorPremio,_that.premiosDisponibles,_that.promocionActiva);case _:
+return $default(_that.estrellasDelMes,_that.hitos,_that.premiosDisponibles,_that.promocionActiva);case _:
   return null;
 
 }
@@ -759,11 +1031,17 @@ return $default(_that.estrellasParaProximoPremio,_that.estrellasPorPremio,_that.
 @JsonSerializable()
 
 class _RewardProgress implements RewardProgress {
-  const _RewardProgress({required this.estrellasParaProximoPremio, required this.estrellasPorPremio, required final  List<RewardSlot> premiosDisponibles, this.promocionActiva}): _premiosDisponibles = premiosDisponibles;
+  const _RewardProgress({required this.estrellasDelMes, required final  List<RewardMilestoneProgress> hitos, required final  List<RewardSlot> premiosDisponibles, this.promocionActiva}): _hitos = hitos,_premiosDisponibles = premiosDisponibles;
   factory _RewardProgress.fromJson(Map<String, dynamic> json) => _$RewardProgressFromJson(json);
 
-@override final  int estrellasParaProximoPremio;
-@override final  int estrellasPorPremio;
+@override final  int estrellasDelMes;
+ final  List<RewardMilestoneProgress> _hitos;
+@override List<RewardMilestoneProgress> get hitos {
+  if (_hitos is EqualUnmodifiableListView) return _hitos;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_hitos);
+}
+
  final  List<RewardSlot> _premiosDisponibles;
 @override List<RewardSlot> get premiosDisponibles {
   if (_premiosDisponibles is EqualUnmodifiableListView) return _premiosDisponibles;
@@ -786,16 +1064,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _RewardProgress&&(identical(other.estrellasParaProximoPremio, estrellasParaProximoPremio) || other.estrellasParaProximoPremio == estrellasParaProximoPremio)&&(identical(other.estrellasPorPremio, estrellasPorPremio) || other.estrellasPorPremio == estrellasPorPremio)&&const DeepCollectionEquality().equals(other._premiosDisponibles, _premiosDisponibles)&&(identical(other.promocionActiva, promocionActiva) || other.promocionActiva == promocionActiva));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _RewardProgress&&(identical(other.estrellasDelMes, estrellasDelMes) || other.estrellasDelMes == estrellasDelMes)&&const DeepCollectionEquality().equals(other._hitos, _hitos)&&const DeepCollectionEquality().equals(other._premiosDisponibles, _premiosDisponibles)&&(identical(other.promocionActiva, promocionActiva) || other.promocionActiva == promocionActiva));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,estrellasParaProximoPremio,estrellasPorPremio,const DeepCollectionEquality().hash(_premiosDisponibles),promocionActiva);
+int get hashCode => Object.hash(runtimeType,estrellasDelMes,const DeepCollectionEquality().hash(_hitos),const DeepCollectionEquality().hash(_premiosDisponibles),promocionActiva);
 
 @override
 String toString() {
-  return 'RewardProgress(estrellasParaProximoPremio: $estrellasParaProximoPremio, estrellasPorPremio: $estrellasPorPremio, premiosDisponibles: $premiosDisponibles, promocionActiva: $promocionActiva)';
+  return 'RewardProgress(estrellasDelMes: $estrellasDelMes, hitos: $hitos, premiosDisponibles: $premiosDisponibles, promocionActiva: $promocionActiva)';
 }
 
 
@@ -806,7 +1084,7 @@ abstract mixin class _$RewardProgressCopyWith<$Res> implements $RewardProgressCo
   factory _$RewardProgressCopyWith(_RewardProgress value, $Res Function(_RewardProgress) _then) = __$RewardProgressCopyWithImpl;
 @override @useResult
 $Res call({
- int estrellasParaProximoPremio, int estrellasPorPremio, List<RewardSlot> premiosDisponibles, RewardPromotion? promocionActiva
+ int estrellasDelMes, List<RewardMilestoneProgress> hitos, List<RewardSlot> premiosDisponibles, RewardPromotion? promocionActiva
 });
 
 
@@ -823,11 +1101,11 @@ class __$RewardProgressCopyWithImpl<$Res>
 
 /// Create a copy of RewardProgress
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? estrellasParaProximoPremio = null,Object? estrellasPorPremio = null,Object? premiosDisponibles = null,Object? promocionActiva = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? estrellasDelMes = null,Object? hitos = null,Object? premiosDisponibles = null,Object? promocionActiva = freezed,}) {
   return _then(_RewardProgress(
-estrellasParaProximoPremio: null == estrellasParaProximoPremio ? _self.estrellasParaProximoPremio : estrellasParaProximoPremio // ignore: cast_nullable_to_non_nullable
-as int,estrellasPorPremio: null == estrellasPorPremio ? _self.estrellasPorPremio : estrellasPorPremio // ignore: cast_nullable_to_non_nullable
-as int,premiosDisponibles: null == premiosDisponibles ? _self._premiosDisponibles : premiosDisponibles // ignore: cast_nullable_to_non_nullable
+estrellasDelMes: null == estrellasDelMes ? _self.estrellasDelMes : estrellasDelMes // ignore: cast_nullable_to_non_nullable
+as int,hitos: null == hitos ? _self._hitos : hitos // ignore: cast_nullable_to_non_nullable
+as List<RewardMilestoneProgress>,premiosDisponibles: null == premiosDisponibles ? _self._premiosDisponibles : premiosDisponibles // ignore: cast_nullable_to_non_nullable
 as List<RewardSlot>,promocionActiva: freezed == promocionActiva ? _self.promocionActiva : promocionActiva // ignore: cast_nullable_to_non_nullable
 as RewardPromotion?,
   ));

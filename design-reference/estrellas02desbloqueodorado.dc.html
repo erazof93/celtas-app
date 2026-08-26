@@ -1,0 +1,89 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;800;900&family=Manrope:wght@400;500;600;700;800&display=swap">
+  <style>
+    :root{
+      --black:#0D0D0D; --orange:#E8590C; --gold:#FFB800; --cream:#F5F1E8;
+      --card:#141110; --surface:#17130F; --surfaceSelected:#1B140D;
+      --border:#2A231C; --borderStrong:#3A342C; --cardBorder:#241F19;
+      --textMuted:#8A8378;
+      --r-input:12px; --r-card:14px; --r-pill:20px;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;background:var(--black);font-family:'Manrope',sans-serif;}
+    a{color:var(--orange);} a:hover{color:#ff7a33;}
+    .phone{width:390px;height:844px;background:radial-gradient(circle at 50% 30%,rgba(255,184,0,.16),rgba(13,13,13,0) 55%),var(--black);
+      color:var(--cream);overflow:hidden;position:relative;display:flex;align-items:flex-end;justify-content:center;}
+    .icon{width:1em;height:1em;display:inline-block;vertical-align:middle;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+    .icon.solid{fill:currentColor;stroke:currentColor;stroke-width:1;stroke-linejoin:round;}
+    .spark{position:absolute;color:var(--gold);}
+  </style>
+</helmet>
+
+<svg style="position:absolute;width:0;height:0" aria-hidden="true">
+  <defs>
+    <path id="star" d="M12 2.4l2.97 6.35 6.98.86-5.13 4.83 1.4 6.94L12 17.9l-6.22 3.38 1.4-6.94-5.13-4.83 6.98-.86L12 2.4z"/>
+    <path id="clock" d="M12 7v5.3l3.6 2M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z" fill="none"/>
+    <path id="spark4" d="M12 2v5M12 17v5M2 12h5M17 12h5" fill="none"/>
+  </defs>
+</svg>
+
+<div class="phone">
+  <!-- destellos sueltos, sugiriendo el confeti dorado del mismo overlay real -->
+  <svg viewBox="0 0 24 24" class="spark" style="top:70px;left:48px;width:22px;height:22px;opacity:.8;"><use href="#spark4"/></svg>
+  <svg viewBox="0 0 24 24" class="spark" style="top:130px;right:56px;width:16px;height:16px;opacity:.6;"><use href="#spark4"/></svg>
+  <svg viewBox="0 0 24 24" class="spark" style="top:220px;left:90px;width:12px;height:12px;opacity:.5;"><use href="#spark4"/></svg>
+  <svg viewBox="0 0 24 24" class="spark solid" style="top:160px;right:110px;width:10px;height:10px;opacity:.7;"><use href="#star"/></svg>
+  <svg viewBox="0 0 24 24" class="spark solid" style="top:90px;right:150px;width:14px;height:14px;opacity:.5;color:var(--orange);"><use href="#star"/></svg>
+
+  <div style="width:100%;padding:20px;padding-bottom:44px;">
+    <div style="position:relative;background:var(--card);border:1.5px solid var(--gold);border-radius:var(--r-card);
+      padding:24px;box-shadow:0 0 0 1px rgba(255,184,0,.18),0 0 46px rgba(255,184,0,.4);text-align:center;">
+
+      <p style="position:absolute;top:-11px;left:50%;transform:translateX(-50%);margin:0;background:var(--gold);color:var(--black);
+        font:800 11px/1 'Manrope',sans-serif;letter-spacing:.5px;padding:5px 12px;border-radius:999px;white-space:nowrap;">
+        ★ PREMIO ESPECIAL
+      </p>
+
+      <div style="width:78px;height:78px;margin:6px auto 0;border-radius:999px;position:relative;
+        display:flex;align-items:center;justify-content:center;">
+        <div style="position:absolute;inset:-14px;border-radius:999px;
+          background:radial-gradient(circle,rgba(255,184,0,.5),rgba(255,184,0,0) 70%);"></div>
+        <div style="width:78px;height:78px;border-radius:999px;background:var(--surfaceSelected);
+          border:1.5px solid var(--gold);display:flex;align-items:center;justify-content:center;position:relative;">
+          <svg viewBox="0 0 24 24" class="icon solid" style="width:40px;height:40px;color:var(--gold);filter:drop-shadow(0 0 10px rgba(255,184,0,.9));"><use href="#star"/></svg>
+        </div>
+      </div>
+
+      <p style="margin:18px 0 0;font:800 24px/1.2 'Cinzel',serif;color:var(--cream);">
+        ¡Lo <span style="color:var(--gold);">lograste</span>!
+      </p>
+      <p style="margin:8px 0 0;font:400 14px/1.4 'Manrope',sans-serif;color:var(--textMuted);">
+        Completaste las 15 estrellas del mes.<br>Ya puedes canjear tu premio especial.
+      </p>
+
+      <div style="display:inline-flex;align-items:center;gap:6px;margin:16px auto 0;background:var(--surface);
+        border:1px solid var(--border);border-radius:var(--r-pill);padding:8px 14px;">
+        <svg viewBox="0 0 24 24" class="icon" style="width:14px;height:14px;color:var(--textMuted);"><use href="#clock"/></svg>
+        <p style="margin:0;font:600 12px/1 'Manrope',sans-serif;color:var(--textMuted);">Tienes 15 días para reclamarla</p>
+      </div>
+
+      <div style="margin-top:20px;height:52px;border-radius:var(--r-input);background:var(--gold);
+        display:flex;align-items:center;justify-content:center;box-shadow:0 0 22px rgba(255,184,0,.5);">
+        <p style="margin:0;font:800 16px/1 'Manrope',sans-serif;color:var(--black);">Ver mis premios</p>
+      </div>
+
+      <p style="margin:12px 0 0;font:400 13px/1 'Manrope',sans-serif;color:var(--textMuted);text-decoration:underline;">Seguir comprando</p>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
