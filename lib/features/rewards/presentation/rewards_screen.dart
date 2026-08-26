@@ -465,8 +465,11 @@ class _ProgressCardState extends State<_ProgressCard>
         children: [
           Column(
             children: [
+              // 4px (no 7px): las celdas de hito ya no cargan tag+tallo
+              // encima del ícono, así que son ~20px más bajas y no
+              // necesitan tanto aire entre filas.
               for (var row = 0; row < rows; row++) ...[
-                if (row > 0) const SizedBox(height: 7),
+                if (row > 0) const SizedBox(height: 4),
                 _MilestoneRow(
                   startStar: row * 5 + 1,
                   endStar: min((row + 1) * 5, totalStars),
@@ -509,7 +512,8 @@ class _ProgressCardState extends State<_ProgressCard>
 
 /// Una fila de hasta 5 estrellas (`startStar`..`endStar` inclusive), todas
 /// alineadas por abajo (mismo efecto que `align-items:flex-end` en el
-/// mockup) porque las celdas de hito son más altas por la etiqueta+tallo.
+/// mockup) porque las celdas de hito son más altas: el ícono se agranda para
+/// darle espacio a la etiqueta superpuesta.
 class _MilestoneRow extends StatelessWidget {
   const _MilestoneRow({
     required this.startStar,
@@ -560,7 +564,11 @@ class _MilestoneRow extends StatelessWidget {
 
 /// Una celda del tablero: estrella normal (42px, sin cambios) si `hito` es
 /// `null`, o una de las 4 combinaciones (alcanzado × especial) si coincide
-/// con un hito.
+/// con un hito. En las 4 combinaciones de hito, la etiqueta (mismo estilo de
+/// `_MilestoneTag`) va CENTRADA ENCIMA de la estrella dentro del mismo
+/// `Stack` que ya usan el glow y el confetti — sin tallo ni columna
+/// separada — así que el ícono se agranda lo necesario para que la etiqueta
+/// no quede recortada.
 class _MilestoneCell extends StatelessWidget {
   const _MilestoneCell({
     required this.starNumber,
@@ -597,109 +605,125 @@ class _MilestoneCell extends StatelessWidget {
     if (hito.alcanzado) {
       final color = hito.esEspecial ? CeltasColors.gold : CeltasColors.orange;
       final label = hito.esEspecial ? '★ Especial' : 'Premio $premioNumber';
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _MilestoneTag(label: label, background: color, glow: true),
-          Container(width: 2, height: 9, color: color),
-          SizedBox(
-            width: 68,
-            height: 68,
-            child: Stack(
-              alignment: Alignment.center,
-              clipBehavior: Clip.none,
-              children: [
-                AnimatedBuilder(
-                  animation: glowOpacity,
-                  builder: (context, child) =>
-                      Opacity(opacity: glowOpacity.value, child: child),
-                  child: Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [
-                          color.withValues(alpha: 0.42),
-                          color.withValues(alpha: 0),
-                        ],
-                      ),
-                    ),
+      return SizedBox(
+        width: 78,
+        height: 78,
+        child: Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            AnimatedBuilder(
+              animation: glowOpacity,
+              builder: (context, child) =>
+                  Opacity(opacity: glowOpacity.value, child: child),
+              child: Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      color.withValues(alpha: 0.42),
+                      color.withValues(alpha: 0),
+                    ],
                   ),
                 ),
-                ..._confettiAccents(color, confetti),
-                AnimatedBuilder(
-                  animation: trophyScale,
-                  builder: (context, child) =>
-                      Transform.scale(scale: trophyScale.value, child: child),
-                  child: Icon(Icons.star_rounded, size: 50, color: color),
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+            ..._confettiAccents(color, confetti),
+            AnimatedBuilder(
+              animation: trophyScale,
+              builder: (context, child) =>
+                  Transform.scale(scale: trophyScale.value, child: child),
+              child: Icon(Icons.star_rounded, size: 54, color: color),
+            ),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: _MilestoneTag(label: label, background: color, glow: true),
+              ),
+            ),
+          ],
+        ),
       );
     }
 
     if (hito.esEspecial) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const _MilestoneTag(
-            label: '★ Especial',
-            background: CeltasColors.gold,
-            glow: true,
-          ),
-          Container(width: 2, height: 9, color: CeltasColors.gold),
-          SizedBox(
-            width: 60,
-            height: 60,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                AnimatedBuilder(
-                  animation: glowOpacity,
-                  builder: (context, child) =>
-                      Opacity(opacity: glowOpacity.value, child: child),
-                  child: Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [
-                          CeltasColors.gold.withValues(alpha: 0.4),
-                          CeltasColors.gold.withValues(alpha: 0),
-                        ],
-                      ),
-                    ),
+      return SizedBox(
+        width: 68,
+        height: 68,
+        child: Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            AnimatedBuilder(
+              animation: glowOpacity,
+              builder: (context, child) =>
+                  Opacity(opacity: glowOpacity.value, child: child),
+              child: Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      CeltasColors.gold.withValues(alpha: 0.4),
+                      CeltasColors.gold.withValues(alpha: 0),
+                    ],
                   ),
                 ),
-                const Icon(
-                  Icons.star_outline_rounded,
-                  size: 46,
-                  color: CeltasColors.gold,
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+            const Icon(
+              Icons.star_outline_rounded,
+              size: 50,
+              color: CeltasColors.gold,
+            ),
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: _MilestoneTag(
+                  label: '★ Especial',
+                  background: CeltasColors.gold,
+                  glow: true,
+                ),
+              ),
+            ),
+          ],
+        ),
       );
     }
 
-    // No alcanzado + normal: mismo tamaño que una celda normal sin relleno,
-    // sin trofeo ni glow — solo la etiqueta en tono apagado.
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _MilestoneTag(
-          label: 'Premio $premioNumber',
-          background: CeltasColors.borderStrong,
-          textColor: CeltasColors.textMuted,
-        ),
-        Container(width: 2, height: 9, color: CeltasColors.borderStrong),
-        const _StarDot(filled: false, pop: false),
-      ],
+    // No alcanzado + normal: la estrella mantiene el mismo tamaño que una
+    // celda normal sin relleno (sin trofeo ni glow) — solo se agranda el
+    // Stack que la envuelve para darle espacio a la etiqueta apagada
+    // superpuesta arriba.
+    return SizedBox(
+      width: 54,
+      height: 54,
+      child: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          const _StarDot(filled: false, pop: false),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: _MilestoneTag(
+                label: 'Premio $premioNumber',
+                background: CeltasColors.borderStrong,
+                textColor: CeltasColors.textMuted,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
