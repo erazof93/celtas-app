@@ -13,6 +13,7 @@ import 'package:celtas_mobile/features/notifications/data/models/notification_hi
 import 'package:celtas_mobile/features/notifications/data/notification_history_repository.dart';
 import 'package:celtas_mobile/features/rewards/application/reward_providers.dart';
 import 'package:celtas_mobile/features/rewards/data/models/reward_progress.dart';
+import 'package:celtas_mobile/features/rewards/data/reward_repository.dart';
 import 'package:celtas_mobile/features/settings/application/settings_providers.dart';
 import 'package:celtas_mobile/features/settings/data/models/business_hours.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_bottom_nav.dart';
@@ -26,6 +27,8 @@ import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class MockAuthRepository extends Mock implements AuthRepository {}
+
+class MockRewardRepository extends Mock implements RewardRepository {}
 
 void main() {
   final tokens = AuthTokens(
@@ -60,10 +63,20 @@ void main() {
 
   /// Overrides comunes: auth fake + Home sin requests reales (banners, menú
   /// y horario de atención — el Home real los carga del backend).
+  ///
+  /// `rewardRepository`: por defecto el tab Estrellas (`RewardsScreen`) se
+  /// mockea overrideando directo `rewardProgressProvider` (más simple). El
+  /// test de refresh al cambiar de tab necesita en cambio contar cuántas
+  /// veces se llama `GET /rewards/progress` — para eso pasa un
+  /// `MockRewardRepository` acá, que se conecta overrideando
+  /// `rewardRepositoryProvider` (del que `rewardProgressProvider` depende sin
+  /// mockear), dejando `verify(() => repo.getProgress()).called(n)`
+  /// disponible en el test.
   List<Override> overrides(
     MockAuthRepository repository, {
     List<PublicMenuCategory> menu = const [],
     List<Banner> banners = const [],
+    RewardRepository? rewardRepository,
   }) => [
     authRepositoryProvider.overrideWithValue(repository),
     activeBannersProvider.overrideWith((ref) async => banners),
@@ -72,16 +85,19 @@ void main() {
       (ref) async =>
           const BusinessHours(open: true, message: null, nextChangeAt: null),
     ),
-    // El tab Estrellas (RewardsScreen) llama a `GET /rewards/progress` al
-    // construirse — sin este override golpearía la red real en el entorno
-    // de test.
-    rewardProgressProvider.overrideWith(
-      (ref) async => const RewardProgress(
-        estrellasParaProximoPremio: 4,
-        estrellasPorPremio: 10,
-        premiosDisponibles: [],
+    if (rewardRepository != null)
+      rewardRepositoryProvider.overrideWithValue(rewardRepository)
+    else
+      // El tab Estrellas (RewardsScreen) llama a `GET /rewards/progress` al
+      // construirse — sin este override golpearía la red real en el entorno
+      // de test.
+      rewardProgressProvider.overrideWith(
+        (ref) async => const RewardProgress(
+          estrellasParaProximoPremio: 4,
+          estrellasPorPremio: 10,
+          premiosDisponibles: [],
+        ),
       ),
-    ),
   ];
 
   /// Login rápido de punta a punta (Splash → Login → sesión activa).
@@ -90,6 +106,7 @@ void main() {
     MockAuthRepository repository, {
     List<PublicMenuCategory> menu = const [],
     List<Banner> banners = const [],
+    RewardRepository? rewardRepository,
   }) async {
     when(() => repository.readRefreshToken()).thenAnswer((_) async => null);
     when(
@@ -104,7 +121,12 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: overrides(repository, menu: menu, banners: banners),
+        overrides: overrides(
+          repository,
+          menu: menu,
+          banners: banners,
+          rewardRepository: rewardRepository,
+        ),
         child: const CeltasApp(),
       ),
     );
@@ -215,6 +237,55 @@ void main() {
     expect(activeTabIndex(tester), 0);
     expect(find.text('Entregar en'), findsOneWidget);
   });
+
+  testWidgets(
+    'volver a la pestaña Estrellas refresca el progreso (regresión: '
+    'RewardsScreen vive en un StatefulShellBranch siempre montado, así que '
+    'sin invalidar rewardProgressProvider al tocar el tab el progreso viejo '
+    'se quedaba pegado hasta un pull-to-refresh manual)',
+    (tester) async {
+      final repository = MockAuthRepository();
+      final rewardRepository = MockRewardRepository();
+      when(() => rewardRepository.getProgress()).thenAnswer(
+        (_) async => const RewardProgress(
+          estrellasParaProximoPremio: 4,
+          estrellasPorPremio: 10,
+          premiosDisponibles: [],
+        ),
+      );
+      await login(tester, repository, rewardRepository: rewardRepository);
+
+      // Inicio → Estrellas (primera entrada: una llamada).
+      await tester.tap(
+        find.descendant(
+          of: find.byType(CeltasBottomNav),
+          matching: find.text('Estrellas'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      verify(() => rewardRepository.getProgress()).called(1);
+
+      // Estrellas → Perfil → Estrellas de nuevo: debe volver a pedirlo, no
+      // quedarse con el progreso ya cacheado del `FutureProvider` (sin
+      // `.autoDispose`) de la primera entrada.
+      await tester.tap(
+        find.descendant(
+          of: find.byType(CeltasBottomNav),
+          matching: find.text('Perfil'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(CeltasBottomNav),
+          matching: find.text('Estrellas'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      verify(() => rewardRepository.getProgress()).called(1);
+    },
+  );
 
   testWidgets('ruta protegida sin sesión → redirige a /login', (tester) async {
     final repository = MockAuthRepository();

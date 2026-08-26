@@ -51,9 +51,9 @@ abstract class RewardPromotion with _$RewardPromotion {
 /// }
 /// ```
 ///
-/// `estrellasParaProximoPremio` es lo que FALTA para el próximo premio
-/// (`estrellasDelMes % estrellasPorPremio` en el backend), no lo ya
-/// acumulado — cuidado con el signo al calcular estrellas rellenas para la
+/// `estrellasParaProximoPremio` es el progreso YA ACUMULADO en el ciclo
+/// actual (`estrellasDelMes % estrellasPorPremio` en el backend), NO lo que
+/// falta — cuidado con el signo al calcular estrellas rellenas para la
 /// grilla (ver `RewardsScreen`). `promocionActiva` es `null` si no hay
 /// ninguna vigente hoy; `premiosDisponibles` puede ser `[]`.
 @freezed

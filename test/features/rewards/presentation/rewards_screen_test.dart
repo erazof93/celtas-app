@@ -106,7 +106,9 @@ void main() {
 
   testWidgets(
     'estrellasParaProximoPremio 0 CON premio disponible (recién se cruzó '
-    'un múltiplo) → grilla llena y mensaje de premio listo',
+    'un múltiplo) → la grilla SIEMPRE representa el progreso hacia el '
+    'PRÓXIMO premio (0 de 10, sin inflarse a llena); el aviso del premio ya '
+    'ganado vive únicamente en la sección "Premios disponibles"',
     (tester) async {
       final repository = MockRewardRepository();
       when(() => repository.getProgress()).thenAnswer(
@@ -137,21 +139,29 @@ void main() {
       await tester.tap(viewRewardsButton);
       await tester.pumpAndSettle();
 
-      expect(find.text('10 de 10 estrellas'), findsOneWidget);
+      expect(find.text('0 de 10 estrellas'), findsOneWidget);
+      expect(
+        find.text('Te faltan 10 estrellas para desbloquear tu próximo premio'),
+        findsOneWidget,
+      );
       expect(
         find.text('¡Ya puedes desbloquear tu próximo premio!'),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         find.text('Empieza a comprar para ganar tu primera estrella'),
         findsNothing,
       );
+      // El aviso del premio ya ganado sigue viviendo en su propia sección.
+      expect(find.text('Premios disponibles'), findsOneWidget);
+      expect(find.byKey(const ValueKey('reward-slot-r-1')), findsOneWidget);
     },
   );
 
   testWidgets(
     'estrellasParaProximoPremio > 0 → grilla parcial y "Te faltan N '
-    'estrellas"',
+    'estrellas" (estrellasParaProximoPremio es lo YA ACUMULADO, no lo que '
+    'falta)',
     (tester) async {
       final repository = MockRewardRepository();
       when(() => repository.getProgress()).thenAnswer(
@@ -164,13 +174,40 @@ void main() {
 
       await pumpScreen(tester, repository: repository);
 
-      expect(find.text('6 de 10 estrellas'), findsOneWidget);
+      expect(find.text('4 de 10 estrellas'), findsOneWidget);
       expect(
-        find.text('Te faltan 4 estrellas para desbloquear tu próximo premio'),
+        find.text('Te faltan 6 estrellas para desbloquear tu próximo premio'),
         findsOneWidget,
       );
-      expect(find.byIcon(Icons.star_rounded), findsNWidgets(6));
-      expect(find.byIcon(Icons.star_outline_rounded), findsNWidgets(4));
+      expect(find.byIcon(Icons.star_rounded), findsNWidgets(4));
+      expect(find.byIcon(Icons.star_outline_rounded), findsNWidgets(6));
+    },
+  );
+
+  testWidgets(
+    'regresión producción: 12 estrellas ganadas este mes con '
+    'estrellasPorPremio=10 (backend devuelve 12 % 10 = 2 ya acumuladas) → '
+    'debe mostrar "2 de 10 estrellas" / "Te faltan 8", NUNCA restar el '
+    'acumulado del total',
+    (tester) async {
+      final repository = MockRewardRepository();
+      when(() => repository.getProgress()).thenAnswer(
+        (_) async => const RewardProgress(
+          estrellasParaProximoPremio: 2,
+          estrellasPorPremio: 10,
+          premiosDisponibles: [],
+        ),
+      );
+
+      await pumpScreen(tester, repository: repository);
+
+      expect(find.text('2 de 10 estrellas'), findsOneWidget);
+      expect(
+        find.text('Te faltan 8 estrellas para desbloquear tu próximo premio'),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.star_rounded), findsNWidgets(2));
+      expect(find.byIcon(Icons.star_outline_rounded), findsNWidgets(8));
     },
   );
 }

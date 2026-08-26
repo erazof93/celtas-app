@@ -14,6 +14,7 @@ import 'package:celtas_mobile/features/notifications/presentation/notifications_
 import 'package:celtas_mobile/features/orders/presentation/order_detail_screen.dart';
 import 'package:celtas_mobile/features/orders/presentation/orders_screen.dart';
 import 'package:celtas_mobile/features/profile/presentation/profile_screen.dart';
+import 'package:celtas_mobile/features/rewards/application/reward_providers.dart';
 import 'package:celtas_mobile/features/rewards/presentation/reward_redeem_screen.dart';
 import 'package:celtas_mobile/features/rewards/presentation/rewards_screen.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_bottom_nav.dart';
@@ -222,16 +223,16 @@ final routerProvider = Provider<GoRouter>((ref) {
 /// Por eso el `PopScope` de doble-atrás solo necesita vivir acá: cuando hay
 /// algo empujado encima, el back del sistema lo pop-ea a eso primero y nunca
 /// llega a este widget; solo llega cuando el shell es la ruta visible.
-class _ShellScaffold extends StatefulWidget {
+class _ShellScaffold extends ConsumerStatefulWidget {
   const _ShellScaffold({required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
 
   @override
-  State<_ShellScaffold> createState() => _ShellScaffoldState();
+  ConsumerState<_ShellScaffold> createState() => _ShellScaffoldState();
 }
 
-class _ShellScaffoldState extends State<_ShellScaffold> {
+class _ShellScaffoldState extends ConsumerState<_ShellScaffold> {
   static const _confirmWindow = Duration(seconds: 2);
 
   DateTime? _lastBackPressAt;
@@ -268,12 +269,25 @@ class _ShellScaffoldState extends State<_ShellScaffold> {
         body: widget.navigationShell,
         bottomNavigationBar: CeltasBottomNav(
           currentIndex: widget.navigationShell.currentIndex,
-          onDestinationSelected: (index) => widget.navigationShell.goBranch(
-            index,
-            // Al tocar el tab ya activo no se re-pushea la rama (evita
-            // duplicar el stack de ese tab).
-            initialLocation: index == widget.navigationShell.currentIndex,
-          ),
+          onDestinationSelected: (index) {
+            // Estrellas vive en un `StatefulShellBranch` (siempre montada
+            // para preservar su estado), así que `rewardProgressProvider`
+            // (sin `.autoDispose`) no se vuelve a pedir solo por cambiar de
+            // tab. Invalidarlo acá fuerza un refresh cada vez que el usuario
+            // entra o vuelve a tocar la pestaña, sin depender solo del
+            // pull-to-refresh — necesario porque el progreso puede cambiar
+            // del lado del backend (pedido entregado) mientras el usuario
+            // estaba en otra pestaña.
+            if (index == CeltasNavItem.rewards.index) {
+              ref.invalidate(rewardProgressProvider);
+            }
+            widget.navigationShell.goBranch(
+              index,
+              // Al tocar el tab ya activo no se re-pushea la rama (evita
+              // duplicar el stack de ese tab).
+              initialLocation: index == widget.navigationShell.currentIndex,
+            );
+          },
         ),
       ),
     );

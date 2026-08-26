@@ -263,15 +263,23 @@ class _PromotionBanner extends StatelessWidget {
   }
 }
 
-/// Grilla de estrellas + texto de apoyo. Filled = `estrellasPorPremio -
-/// estrellasParaProximoPremio`, salvo `estrellasParaProximoPremio == 0`, que
-/// es ambiguo: el backend calcula `estrellasDelMes % estrellasPorPremio`, y
-/// ese resto da `0` tanto si el cliente recién cruzó un múltiplo exacto
-/// (premio nuevo esperando) como si todavía no tiene ninguna estrella este
-/// mes (`estrellasDelMes == 0`, ej. un usuario que nunca hizo un pedido). La
-/// única señal del lado del cliente para distinguirlos es
-/// `premiosDisponibles`: si hay un premio sin usar/sin vencer, es porque
-/// realmente se cruzó un múltiplo hace poco.
+/// Grilla de estrellas + texto de apoyo. `estrellasParaProximoPremio` es el
+/// progreso YA ACUMULADO en el ciclo actual (`estrellasDelMes %
+/// estrellasPorPremio` en el backend) — NO lo que falta. Ej.: 12 estrellas
+/// totales este mes con estrellasPorPremio=10 → backend devuelve 12 % 10 = 2,
+/// que son 2 estrellas YA ganadas hacia el próximo premio. Se usa directo
+/// como `filled`, sin restarlo del total, y SIN excepción para
+/// `premiosDisponibles`: la grilla representa siempre el progreso hacia el
+/// PRÓXIMO premio (el que todavía no existe como `RewardRedemption`), nunca
+/// se "infla" a llena para avisar de un premio ya generado — ese aviso vive
+/// en la sección "Premios disponibles" de abajo, con su propio "Canjear".
+///
+/// `accumulated == 0` es ambiguo en sí mismo (el backend calcula
+/// `estrellasDelMes % estrellasPorPremio`, y ese resto da `0` tanto si el
+/// cliente recién cruzó un múltiplo exacto como si todavía no tiene ninguna
+/// estrella este mes) pero ya no afecta a `filled` — solo decide el texto de
+/// apoyo: `premiosDisponibles` distingue "nunca compró" de "ya tiene premios
+/// ganados, simplemente el contador del mes volvió a 0".
 class _ProgressCard extends StatelessWidget {
   const _ProgressCard({required this.progress});
 
@@ -279,11 +287,11 @@ class _ProgressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final remaining = progress.estrellasParaProximoPremio;
+    final accumulated = progress.estrellasParaProximoPremio;
     final total = progress.estrellasPorPremio;
+    final filled = accumulated; // SIEMPRE — sin excepción para premios pendientes
+    final remaining = total - accumulated;
     final hasUnclaimedReward = progress.premiosDisponibles.isNotEmpty;
-    final justUnlocked = remaining == 0 && hasUnclaimedReward;
-    final filled = justUnlocked ? total : (remaining == 0 ? 0 : total - remaining);
     final textTheme = Theme.of(context).textTheme;
 
     return Container(
@@ -317,10 +325,8 @@ class _ProgressCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            remaining == 0
-                ? (justUnlocked
-                    ? '¡Ya puedes desbloquear tu próximo premio!'
-                    : 'Empieza a comprar para ganar tu primera estrella')
+            accumulated == 0 && !hasUnclaimedReward
+                ? 'Empieza a comprar para ganar tu primera estrella'
                 : 'Te faltan $remaining estrella${remaining == 1 ? '' : 's'} '
                     'para desbloquear tu próximo premio',
             textAlign: TextAlign.center,
