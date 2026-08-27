@@ -78,6 +78,8 @@ void main() {
   setUp(() {
     session = MockSession();
     ApiClient.instance.session = session;
+    // Singleton: limpiar el hook entre tests para no arrastrar callbacks.
+    ApiClient.instance.onSessionRefreshed = null;
     when(() => session.accessToken).thenReturn(null);
     when(() => session.readRefreshToken()).thenAnswer((_) async => 'refresh-old');
     when(() => session.saveRefreshToken(any())).thenAnswer((_) async {});
@@ -357,6 +359,119 @@ void main() {
       final refreshRequests =
           adapter.requests.where((r) => r.path == '/auth/refresh').toList();
       expect(refreshRequests.length, 1);
+    });
+  });
+
+  group('interceptor de error — hook onSessionRefreshed', () {
+    test('se invoca UNA vez tras un refresh exitoso', () async {
+      var calls = 0;
+      ApiClient.instance.onSessionRefreshed = () => calls++;
+
+      var menuCalls = 0;
+      final adapter = StubAdapter((options) async {
+        if (options.path == '/auth/refresh') {
+          return jsonResponse({'success': true, 'data': refreshTokensBody}, 200);
+        }
+        menuCalls++;
+        if (menuCalls == 1) {
+          return jsonResponse(
+            {'success': false, 'message': 'No autorizado', 'statusCode': 401},
+            401,
+          );
+        }
+        return jsonResponse({'success': true, 'data': {'ok': true}}, 200);
+      });
+      ApiClient.instance.dio.httpClientAdapter = adapter;
+
+      final response = await ApiClient.instance.dio.get('/menu');
+
+      expect(response.statusCode, 200);
+      expect(calls, 1);
+    });
+
+    test('NO se invoca si el refresh falla con 401 definitivo', () async {
+      var calls = 0;
+      ApiClient.instance.onSessionRefreshed = () => calls++;
+
+      final adapter = StubAdapter((options) async {
+        if (options.path == '/auth/refresh') {
+          return jsonResponse(
+            {'success': false, 'message': 'Refresh inválido', 'statusCode': 401},
+            401,
+          );
+        }
+        return jsonResponse(
+          {'success': false, 'message': 'No autorizado', 'statusCode': 401},
+          401,
+        );
+      });
+      ApiClient.instance.dio.httpClientAdapter = adapter;
+
+      await expectLater(
+        ApiClient.instance.dio.get('/menu'),
+        throwsA(isA<DioException>()),
+      );
+
+      verify(() => session.clearSession()).called(1);
+      expect(calls, 0);
+    });
+
+    test('NO se invoca si el refresh falla por error transitorio (5xx)',
+        () async {
+      var calls = 0;
+      ApiClient.instance.onSessionRefreshed = () => calls++;
+
+      final adapter = StubAdapter((options) async {
+        if (options.path == '/auth/refresh') {
+          return jsonResponse(
+            {'success': false, 'message': 'Server dormido', 'statusCode': 503},
+            503,
+          );
+        }
+        return jsonResponse(
+          {'success': false, 'message': 'No autorizado', 'statusCode': 401},
+          401,
+        );
+      });
+      ApiClient.instance.dio.httpClientAdapter = adapter;
+
+      await expectLater(
+        ApiClient.instance.dio.get('/menu'),
+        throwsA(isA<DioException>()),
+      );
+
+      expect(calls, 0);
+    });
+
+    test('un callback que lanza no rompe el reintento de la request original',
+        () async {
+      ApiClient.instance.onSessionRefreshed =
+          () => throw StateError('callback roto');
+
+      var menuCalls = 0;
+      final adapter = StubAdapter((options) async {
+        if (options.path == '/auth/refresh') {
+          return jsonResponse({'success': true, 'data': refreshTokensBody}, 200);
+        }
+        menuCalls++;
+        if (menuCalls == 1) {
+          return jsonResponse(
+            {'success': false, 'message': 'No autorizado', 'statusCode': 401},
+            401,
+          );
+        }
+        return jsonResponse({'success': true, 'data': {'ok': true}}, 200);
+      });
+      ApiClient.instance.dio.httpClientAdapter = adapter;
+
+      final response = await ApiClient.instance.dio.get('/menu');
+
+      expect(response.statusCode, 200);
+      expect(response.data, {'ok': true});
+      final menuRequests =
+          adapter.requests.where((r) => r.path == '/menu').toList();
+      expect(menuRequests.length, 2);
+      expect(menuRequests[1].headers['Authorization'], 'Bearer access-new');
     });
   });
 }

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/core/router/app_router.dart';
 import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
 import 'package:celtas_mobile/features/auth/application/auth_state.dart';
@@ -91,6 +92,13 @@ class NotificationService {
       }
     });
 
+    // Tercer disparador: cada refresh silencioso exitoso de la sesión. No se
+    // chequea `authControllerProvider.status` acá (a diferencia del listener
+    // de `onTokenRefresh`) porque este hook SOLO lo llama `ApiClient` cuando
+    // un `POST /auth/refresh` ya devolvió tokens válidos — la sesión está
+    // autenticada por definición en ese instante.
+    ApiClient.instance.onSessionRefreshed = _registerToken;
+
     // Foreground: FCM no muestra la notificación sola, hay que mostrarla a
     // mano. Invalida ya mismo el provider: la pantalla puede estar abierta.
     FirebaseMessaging.onMessage.listen((message) {
@@ -145,6 +153,21 @@ class NotificationService {
         );
   }
 
+  /// Sube el `fcmToken` actual del dispositivo al backend
+  /// (`PATCH /users/me` vía `notificationRepository`). Se dispara desde TRES
+  /// puntos, a propósito:
+  ///   1. Transición HACIA autenticado (login, registro, Google, o bootstrap
+  ///      con sesión previa) — listener de `authControllerProvider`.
+  ///   2. `FirebaseMessaging.onTokenRefresh` — Firebase rotó el token del
+  ///      dispositivo y la sesión está autenticada en ese momento.
+  ///   3. Cada refresh silencioso exitoso de la sesión — hook
+  ///      `ApiClient.onSessionRefreshed`. Cierra la ventana en la que Firebase
+  ///      rota el token mientras la sesión está vencida: el caso (2) se pierde
+  ///      (no re-sincroniza si no está autenticado) y sin este tercer
+  ///      disparador el backend no se enteraría del token nuevo hasta el
+  ///      próximo login explícito del usuario.
+  /// Best-effort en todos los casos: si la subida falla (backend dormido, sin
+  /// red) no bloquea nada; el siguiente disparador lo reintenta.
   Future<void> _registerToken() async {
     final token = await FirebaseMessaging.instance.getToken();
     if (token == null) return;

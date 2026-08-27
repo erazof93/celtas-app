@@ -85,6 +85,17 @@ class ApiClient {
   /// Puente a la sesión de auth, registrado por `AuthController` al arrancar.
   AuthSessionBridge? session;
 
+  /// Hook opcional que se dispara tras CADA refresh silencioso exitoso de la
+  /// sesión (401 → `POST /auth/refresh` OK → tokens rotados), justo después de
+  /// aplicar los tokens nuevos. Lo registra la capa de notificaciones
+  /// (`NotificationService.init`) para re-sincronizar el `fcmToken`: cierra la
+  /// ventana en la que Firebase rota el token del dispositivo mientras la
+  /// sesión está vencida y ese aviso se perdería hasta el próximo login
+  /// explícito. Mismo patrón que `session` — un hook que otra capa registra.
+  /// Best-effort: si el callback lanza, no rompe el reintento de la request
+  /// original.
+  void Function()? onSessionRefreshed;
+
   /// Endpoints de auth que nunca entran al ciclo de refresh (evita loops).
   static const _authEndpoints = {
     '/auth/login',
@@ -189,6 +200,14 @@ class ApiClient {
       // Rotación: el backend emite un refreshToken nuevo en cada refresh.
       await session?.saveRefreshToken(tokens.refreshToken);
       await session?.applyRefreshedTokens(tokens);
+      // Best-effort: un callback registrado que lance no debe abortar el
+      // reintento de la request original que está esperando este bloque.
+      try {
+        onSessionRefreshed?.call();
+      } catch (_) {
+        // Ignorado a propósito: el consumidor (NotificationService) ya hace
+        // su propio trabajo best-effort, pero no se asume.
+      }
       _flushQueue(tokens.accessToken);
       original.headers['Authorization'] = 'Bearer ${tokens.accessToken}';
       final retried = await dio.fetch(original);
