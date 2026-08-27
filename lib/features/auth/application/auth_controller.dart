@@ -5,6 +5,7 @@ import 'package:celtas_mobile/features/auth/application/auth_state.dart';
 import 'package:celtas_mobile/features/auth/data/auth_repository.dart';
 import 'package:celtas_mobile/features/auth/data/models/auth_tokens.dart';
 import 'package:celtas_mobile/features/auth/data/models/user.dart';
+import 'package:celtas_mobile/features/notifications/application/notification_providers.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -134,6 +135,18 @@ class AuthController extends Notifier<AuthState> implements AuthSessionBridge {
   }
 
   Future<void> logout() async {
+    // Best-effort: borra el fcmToken del dispositivo ANTES de limpiar el
+    // estado — necesita el accessToken todavía vigente para autenticar el
+    // DELETE. Evita que, en un celular compartido, la próxima cuenta que
+    // inicie sesión reciba notificaciones de pedidos de esta cuenta. Si
+    // falla (backend dormido, sin red), no bloquea el logout local: el
+    // token queda hasta que el próximo login en este dispositivo lo
+    // sobrescriba (mismo comportamiento que antes de este cambio).
+    try {
+      await ref.read(notificationRepositoryProvider).clearFcmToken();
+    } catch (_) {
+      // Ignorado a propósito.
+    }
     // Cierra la sesión de Google en la SDK (best-effort) para que el próximo
     // login pida elegir cuenta en vez de auto-seleccionar la anterior.
     await _repository.signOutFromGoogle();

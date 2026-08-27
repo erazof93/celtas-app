@@ -95,4 +95,67 @@ void main() {
       );
     });
   });
+
+  group('clearFcmToken', () {
+    test('éxito: DELETE /users/me/fcm-token sin body', () async {
+      when(() => dio.delete<void>('/users/me/fcm-token')).thenAnswer(
+        (_) async => Response<void>(
+          requestOptions: RequestOptions(path: '/users/me/fcm-token'),
+        ),
+      );
+
+      await repository.clearFcmToken();
+
+      verify(() => dio.delete<void>('/users/me/fcm-token')).called(1);
+    });
+
+    test('error del backend → ApiException con el mensaje real', () async {
+      when(() => dio.delete<void>('/users/me/fcm-token')).thenThrow(
+        DioException(
+          requestOptions: RequestOptions(path: '/users/me/fcm-token'),
+          response: Response(
+            requestOptions: RequestOptions(path: '/users/me/fcm-token'),
+            statusCode: 401,
+            data: {
+              'success': false,
+              'message': 'No autorizado',
+              'statusCode': 401,
+            },
+          ),
+          type: DioExceptionType.badResponse,
+        ),
+      );
+
+      await expectLater(
+        repository.clearFcmToken(),
+        throwsA(
+          isA<ApiException>().having(
+            (e) => e.message,
+            'message',
+            'No autorizado',
+          ),
+        ),
+      );
+    });
+
+    test('error de red → ApiException de conexión', () async {
+      when(() => dio.delete<void>('/users/me/fcm-token')).thenThrow(
+        DioException(
+          requestOptions: RequestOptions(path: '/users/me/fcm-token'),
+          type: DioExceptionType.connectionError,
+        ),
+      );
+
+      await expectLater(
+        repository.clearFcmToken(),
+        throwsA(
+          isA<ApiException>().having(
+            (e) => e.message,
+            'message',
+            contains('No se pudo conectar con el servidor'),
+          ),
+        ),
+      );
+    });
+  });
 }

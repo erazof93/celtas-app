@@ -6,6 +6,7 @@ import 'package:celtas_mobile/features/auth/data/auth_repository.dart';
 import 'package:celtas_mobile/features/auth/data/models/user.dart';
 import 'package:celtas_mobile/features/notifications/application/notification_providers.dart';
 import 'package:celtas_mobile/features/notifications/data/notification_permission_repository.dart';
+import 'package:celtas_mobile/features/notifications/data/notification_repository.dart';
 import 'package:celtas_mobile/features/profile/application/profile_providers.dart';
 import 'package:celtas_mobile/features/profile/data/profile_repository.dart';
 import 'package:celtas_mobile/features/profile/presentation/profile_screen.dart';
@@ -24,6 +25,8 @@ class MockAuthRepository extends Mock implements AuthRepository {}
 
 class MockNotificationPermissionRepository extends Mock
     implements NotificationPermissionRepository {}
+
+class MockNotificationRepository extends Mock implements NotificationRepository {}
 
 void main() {
   final user = User(
@@ -88,6 +91,11 @@ void main() {
       ).thenAnswer((_) async => AuthorizationStatus.authorized);
     }
 
+    // `logout()` llama `clearFcmToken()` (DELETE /users/me/fcm-token) — sin
+    // este override golpearía la red real en el test de "Cerrar sesión".
+    final notificationRepo = MockNotificationRepository();
+    when(() => notificationRepo.clearFcmToken()).thenAnswer((_) async {});
+
     final container = ProviderContainer(
       overrides: [
         profileRepositoryProvider.overrideWithValue(profileRepository),
@@ -95,6 +103,7 @@ void main() {
         notificationPermissionRepositoryProvider.overrideWithValue(
           notificationPermissionRepo,
         ),
+        notificationRepositoryProvider.overrideWithValue(notificationRepo),
       ],
     );
     addTearDown(container.dispose);

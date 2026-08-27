@@ -4,6 +4,8 @@ import 'package:celtas_mobile/features/auth/application/auth_state.dart';
 import 'package:celtas_mobile/features/auth/data/auth_repository.dart';
 import 'package:celtas_mobile/features/auth/data/models/auth_tokens.dart';
 import 'package:celtas_mobile/features/auth/data/models/user.dart';
+import 'package:celtas_mobile/features/notifications/application/notification_providers.dart';
+import 'package:celtas_mobile/features/notifications/data/notification_repository.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,8 +14,11 @@ import 'package:mocktail/mocktail.dart';
 
 class MockAuthRepository extends Mock implements AuthRepository {}
 
+class MockNotificationRepository extends Mock implements NotificationRepository {}
+
 void main() {
   late MockAuthRepository repository;
+  late MockNotificationRepository notificationRepo;
   late ProviderContainer container;
 
   final user = User(
@@ -38,9 +43,12 @@ void main() {
 
   setUp(() {
     repository = MockAuthRepository();
+    notificationRepo = MockNotificationRepository();
+    when(() => notificationRepo.clearFcmToken()).thenAnswer((_) async {});
     container = ProviderContainer(
       overrides: [
         authRepositoryProvider.overrideWithValue(repository),
+        notificationRepositoryProvider.overrideWithValue(notificationRepo),
       ],
     );
     addTearDown(container.dispose);
@@ -174,9 +182,28 @@ void main() {
       verify(() => repository.saveRefreshToken('refresh-1')).called(1);
     });
 
-    test('logout → cierra sesión de Google, limpia refreshToken y queda sin '
-        'sesión', () async {
+    test('logout → des-registra el fcmToken, cierra sesión de Google, limpia '
+        'refreshToken y queda sin sesión', () async {
       when(() => repository.readRefreshToken()).thenAnswer((_) async => null);
+      when(() => repository.signOutFromGoogle()).thenAnswer((_) async {});
+      when(() => repository.clearRefreshToken()).thenAnswer((_) async {});
+
+      await container.read(authControllerProvider.notifier).logout();
+
+      expect(
+        container.read(authControllerProvider).status,
+        AuthStatus.unauthenticated,
+      );
+      verify(() => notificationRepo.clearFcmToken()).called(1);
+      verify(() => repository.signOutFromGoogle()).called(1);
+      verify(() => repository.clearRefreshToken()).called(1);
+    });
+
+    test('logout → si clearFcmToken falla (red/backend dormido), el logout '
+        'local igual completa', () async {
+      when(() => repository.readRefreshToken()).thenAnswer((_) async => null);
+      when(() => notificationRepo.clearFcmToken())
+          .thenThrow(const ApiException('No se pudo conectar con el servidor.'));
       when(() => repository.signOutFromGoogle()).thenAnswer((_) async {});
       when(() => repository.clearRefreshToken()).thenAnswer((_) async {});
 

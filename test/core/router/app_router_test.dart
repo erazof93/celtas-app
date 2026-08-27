@@ -9,8 +9,10 @@ import 'package:celtas_mobile/features/home/application/home_providers.dart';
 import 'package:celtas_mobile/features/home/data/models/banner.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_category.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
+import 'package:celtas_mobile/features/notifications/application/notification_providers.dart';
 import 'package:celtas_mobile/features/notifications/data/models/notification_history_item.dart';
 import 'package:celtas_mobile/features/notifications/data/notification_history_repository.dart';
+import 'package:celtas_mobile/features/notifications/data/notification_repository.dart';
 import 'package:celtas_mobile/features/rewards/application/reward_providers.dart';
 import 'package:celtas_mobile/features/rewards/data/models/reward_progress.dart';
 import 'package:celtas_mobile/features/rewards/data/reward_repository.dart';
@@ -29,6 +31,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 class MockAuthRepository extends Mock implements AuthRepository {}
 
 class MockRewardRepository extends Mock implements RewardRepository {}
+
+class MockNotificationRepository extends Mock implements NotificationRepository {}
+
+/// `NotificationRepository` con `clearFcmToken()` stubbeado a no-op — lo único
+/// que `logout()` le pide.
+MockNotificationRepository _stubNotificationRepo() {
+  final repo = MockNotificationRepository();
+  when(() => repo.clearFcmToken()).thenAnswer((_) async {});
+  return repo;
+}
 
 void main() {
   final tokens = AuthTokens(
@@ -79,6 +91,9 @@ void main() {
     RewardRepository? rewardRepository,
   }) => [
     authRepositoryProvider.overrideWithValue(repository),
+    // `logout()` llama `clearFcmToken()` (DELETE /users/me/fcm-token) — sin
+    // este override golpearía la red real y colgaría los tests de logout.
+    notificationRepositoryProvider.overrideWithValue(_stubNotificationRepo()),
     activeBannersProvider.overrideWith((ref) async => banners),
     publicMenuProvider.overrideWith((ref) async => menu),
     businessHoursProvider.overrideWith(
