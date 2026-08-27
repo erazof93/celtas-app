@@ -319,13 +319,15 @@ salida cruda propia): `359: All tests passed!`.
 - [x] Carrito se limpia tras confirmar pedido exitosamente
 - [x] Validación de cupón (`/coupons/validate`) no lo marca como usado antes de confirmar
 
-### Salsas/cremas (selector en el detalle + carrito + payload) — ⚠️ PENDIENTE (parcial)
+### Salsas/cremas (selector en el detalle + carrito + payload) — ✅ COMPLETO
 
 Escrito originalmente en una sesión sin acceso al toolchain de Flutter (ver `ROADMAP.md`, sección
-4, entrada "Mejora nueva (en curso)"). Los primeros 3 ítems y los de fusión/línea de carrito ya se
-confirmaron corriendo el toolchain de verdad (ver auditorías puntuales de esta sección + la de
-tri-state más abajo); los de verificación en dispositivo/emulador real siguen sin correr en esta
-sesión.
+4). Los primeros 3 ítems y los de fusión/línea de carrito se confirmaron corriendo el toolchain de
+verdad (ver auditorías puntuales de esta sección + la de tri-state más abajo). Los 2 ítems que
+faltaban — verificación en dispositivo/emulador real de "agregar → vuelve a Home" y del texto de
+WhatsApp — quedaron cerrados con un test de integración nuevo (`integration_test/sauces_flow_test.dart`)
+corrido en emulador Y en dispositivo físico real; ver "Auditoría puntual: verificación E2E en
+dispositivo real" al final de esta sección.
 
 - [x] `flutter pub get` + `dart run build_runner build --delete-conflicting-outputs` no genera
       diffs distintos a los `*.freezed.dart`/`*.g.dart` ya escritos (`sauce_option.*`,
@@ -349,9 +351,12 @@ sesión.
       funcionando igual (eso sí sigue siendo cierto), pero "se puede agregar sin elegir ninguna" ya
       no es correcto tal como está escrito — corregir la redacción de este ítem si se retoma esta
       sección, o quitarlo a favor del checklist de tri-state de abajo.
-- [ ] "Agregar al carrito" vuelve a Home automáticamente (verificar en dispositivo/emulador real,
-      no solo en el widget test — la transición de `go_router` puede comportarse distinto). Sigue
-      sin verificarse en dispositivo real en esta sesión (sin dispositivo conectado)
+- [x] "Agregar al carrito" vuelve a Home automáticamente (verificado en dispositivo/emulador real,
+      no solo en el widget test — la transición de `go_router` sobre `/product/:id` empujado sí
+      cae en Home). `integration_test/sauces_flow_test.dart`: tras "AGREGAR AL CARRITO" el detalle
+      (`detail-add`) ya no está montado y `home-cart-icon` sí — probado con salsa real y con "Sin
+      salsas" explícito, en emulador (`emulator-5554`, Android 17) y en dispositivo físico
+      (`24117RN76L`, Xiaomi, Android 15). Ver auditoría E2E al final de la sección.
 - [x] Mismo producto con distinta combinación de salsas → filas separadas en el carrito, cada una
       con su propio stepper de cantidad; misma combinación → se fusiona (suma cantidad) —
       confirmado con tests reales de `cart_provider_test.dart`/`product_detail_screen_test.dart`
@@ -367,11 +372,14 @@ sesión.
       producto no ofrece catálogo de salsas o el cliente nunca llegó a elegir; se manda `[]`
       explícito cuando el cliente eligió "Sin salsas" a propósito; se mandan los ids cuando hay
       salsas elegidas. Verificado con test + mutación real (ver abajo).
-- [ ] Mensaje de WhatsApp final incluye las salsas concatenadas, incluido el caso "Sin salsas"
-      literal del tri-state (esto lo arma el backend — ver `OrdersService.buildWhatsappUrl` en
-      `backend-celtas`, ya verificado en su propia sesión; acá solo falta confirmar en
-      dispositivo/emulador real que el texto que abre `url_launcher` las trae, incluida la palabra
-      "Sin salsas" cuando corresponda — no verificado en esta sesión, sin dispositivo conectado)
+- [x] Mensaje de WhatsApp final incluye las salsas concatenadas, incluido el caso "Sin salsas"
+      literal del tri-state (esto lo arma el backend — `OrdersService.buildWhatsappUrl` en
+      `backend-celtas`). Verificado end-to-end en dispositivo físico real (`24117RN76L`, Android 15)
+      con `integration_test/sauces_flow_test.dart`: pedido creado recorriendo el checkout de la app
+      (`cart-continue` → `checkout-confirm`), y el `text` del `whatsappUrl` de ese pedido (el mismo
+      string que `_openWhatsapp` le pasa a `launchUrl` sin mutar) trae
+      `• 1x Celtas Burgues Clasica (Salsas: mayonesa)` y
+      `• 1x Celtas Burgues Clasica (Salsas: Sin salsas)`. Ver auditoría E2E al final de la sección.
 
 #### Auditoría puntual: fix de la carrera SnackBar/`pop()` en `_addToCart()`
 
@@ -853,6 +861,70 @@ el fix) deja el aviso visible sin scroll bajo un viewport realista; (3) no se pi
 fixture de prueba como parte de este encargo. No se marca ningún checkbox nuevo de la sección
 "Salsas/cremas" de arriba por esta auditoría puntual (sigue igual de incompleta, sin relación con
 estos 2 ajustes) — se documentó la entrada correspondiente en `ROADMAP.md`.
+
+#### Auditoría puntual: verificación E2E en dispositivo real (los 2 ítems que faltaban)
+
+Alcance: cerrar los 2 checkboxes `[ ]` que quedaban de la sección "Salsas/cremas" — "agregar al
+carrito vuelve a Home" y "el texto de WhatsApp trae las salsas concatenadas / 'Sin salsas'
+literal" — que sólo podían confirmarse en dispositivo/emulador real y ninguna sesión anterior
+tuvo uno conectado para esto.
+
+Se agregó `integration_test/sauces_flow_test.dart` (espejo del patrón de `cart_flow_test.dart`;
+usa el usuario de prueba persistente `mobile_it@celtas.pe` contra el backend real). Flujo:
+login real → busca en `GET /menu` el primer producto con `sauces` no vacío ("Celtas Burgues
+Clasica", salsa "mayonesa") → abre el detalle, elige la salsa, "AGREGAR AL CARRITO" → assert
+`detail-add` desmontado + `home-cart-icon` presente (volvió a Home) → repite con el chip "Sin
+salsas" → abre el carrito, assert `cremas: mayonesa` y `Sin salsas` → `cart-continue` →
+`checkout-confirm` (+ modal de teléfono si aparece) → espera el pedido en `GET /orders/me` →
+decodifica el `text` del `whatsappUrl` y assert de que contiene
+`Celtas Burgues Clasica (Salsas: mayonesa)` y `Celtas Burgues Clasica (Salsas: Sin salsas)`.
+El test **exige** (`expect(orderPath, 'ui')`) que el pedido se haya creado recorriendo el
+checkout de la app; tiene un `_createOrderDirect` de respaldo que valida el formato del mensaje
+igual, pero si se usa el test falla ruidoso (para que una regresión del checkout no se esconda
+tras un verde) — hallazgo de `@tester` en la auditoría, corregido.
+
+Formato del sufijo de salsas verificado por lectura directa de
+`../backend-celtas/src/modules/orders/orders.service.ts` (`buildWhatsappUrl`, ~líneas 694-698):
+`selectedSauces === null` → sin sufijo; `[]` → ` (Salsas: Sin salsas)`; con nombres →
+` (Salsas: n1, n2)`. Payload de la app en `lib/features/checkout/data/order_repository.dart:95-100`:
+`selectedSauces.isNotEmpty` → `sauceIds: [ids]`; `else if explicitlyNoSauces` → `sauceIds: []`
+explícito; si no, se omite la llave. `_openWhatsapp` (`checkout_screen.dart:270-279`) pasa la URL
+a `launchUrl` sin mutarla, así que el `text` del `whatsappUrl` del pedido es exactamente lo que
+se abre.
+
+Corridas reales (salida cruda propia, reproducidas también por `@tester`):
+- `flutter analyze` → `No issues found!` (con `integration_test/` incluido).
+- `flutter test` (suite unit) → `513: All tests passed!`.
+- `flutter test integration_test/sauces_flow_test.dart -d emulator-5554` (Android 17 / API 37) →
+  verde. La primera corrida cruzó el borde de cierre del local (23:59 hora Lima → 409 "Local
+  cerrado", manejado bien por la app); ya dentro de horario, el pedido se creó por el flujo de UI.
+- `flutter test integration_test/sauces_flow_test.dart -d 24117RN76L` (Xiaomi físico, Android 15 /
+  API 35) → `All tests passed!`, `[camino=ui]`, pedido `bd7fc143-4edf-4d35-93be-42811ae6cd17`
+  creado recorriendo el checkout; `text` del `whatsappUrl` con las 2 líneas
+  `• 1x Celtas Burgues Clasica (Salsas: mayonesa)` y `• 1x ... (Salsas: Sin salsas)`.
+
+Análisis de falso positivo:
+- **"Vuelve a Home"**: si `_addToCart()` no hiciera el `addPostFrameCallback` → `context.pop()`
+  (`product_detail_screen.dart:221-224`), `ProductDetailScreen` seguiría montado y `detail-add`
+  seguiría presente → `findsNothing` falla. La mutación equivalente ya está documentada arriba
+  (sección "fix de la carrera SnackBar/`pop()`": `pop()` inmediato → `Found 1 widget with key
+  [detail-add]`). Sólido en ambos dispositivos, 100% flujo de UI.
+- **Texto de WhatsApp**: si la app omitiera la llave en vez de mandar `sauceIds: []` para la
+  línea "Sin salsas", el backend produciría la línea sin sufijo → falla el `contains('(Salsas:
+  Sin salsas)')`. Si el backend perdiera el sufijo, fallan ambos asserts. En la corrida del
+  dispositivo físico es un check end-to-end real a través de `OrderRepository.createOrder`.
+
+Pedidos de prueba reales creados en producción durante esta verificación + la auditoría de
+`@tester` (cuenta `mobile_it@celtas.pe`, dirección de prueba en San Juan de Miraflores):
+`f39feced`, `00f27c37`, `8dff6420`, `00477980`, `44f4e4cc`, `bd7fc143` — borrables desde el panel
+admin.
+
+Hallazgo no bloqueante (de `@tester`, ya aplicado): el respaldo `_createOrderDirect` podía
+enmascarar un fallo del checkout por UI en el emulador preview Android 17 (`launchUrl` se colgaba
+~66s). Corregido: el test ahora trackea el camino y falla si no fue el de UI.
+
+**Veredicto de `@tester`: LISTO.** Los 2 checkboxes de arriba quedan marcados; el checkbox del
+`ROADMAP.md` ("selección de salsas/cremas en el detalle de producto", Módulo 4) pasa a `[x]`.
 
 ### Refactor: `showCeltasSnackBar` compartido (limpieza de deuda técnica)
 

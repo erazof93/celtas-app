@@ -479,7 +479,7 @@ celtas-mobile/
       tapado por `_CartSummaryBar` cuando el carrito ya tiene ítems. Auditado por `@tester`: sin
       bugs, veredicto LISTO — detalle completo en `docs/testing-checklist.md`, sección
       Notificaciones (auditoría conjunta de esta ronda).
-- [ ] **Mejora nueva (en curso): selección de salsas/cremas en el detalle de producto.**
+- [x] **Selección de salsas/cremas en el detalle de producto.**
       Feature cross-repo pedida por el dueño del negocio (backend y `celtas-admin` ya cerrados y
       verificados en sesiones previas contra Postgres/servidor reales — ver `ROADMAP.md` de esos
       dos repos, sección Menu/Orders). Cambios en este repo, hechos en una sesión **sin acceso al
@@ -589,13 +589,19 @@ celtas-mobile/
         carrito → modo edición con precarga; guardar cambios → vuelve al Carrito (no a Home) con
         la fila actualizada sin duplicar. Auditado por `@tester`: veredicto **LISTO** para estos
         dos hallazgos — detalle en `docs/testing-checklist.md`, sección Salsas/cremas.
-      - **Pendiente antes de poder marcar esto LISTO:** una verificación visual real (emulador o
-        dispositivo) del flujo completo Home → detalle con salsas → Agregar (vuelve a Home) →
-        VER CARRITO → "cremas: ..."/"Sin salsas" visible → Checkout → WhatsApp con las salsas (o
-        "Sin salsas") concatenadas — sin dispositivo conectado en ninguna de las sesiones hasta
-        ahora. `flutter pub get` + `build_runner` sí se corrieron de verdad (ver mejora de
-        tri-state justo abajo, que corrió todo el toolchain real por primera vez sobre este
-        módulo) y no generaron diffs distintos a lo escrito a mano.
+      - **Verificación E2E en dispositivo real (última pieza — cerrada).** Test de integración
+        nuevo `integration_test/sauces_flow_test.dart` (usa el usuario de prueba
+        `mobile_it@celtas.pe` contra el backend real): Home → detalle con salsas → elegir salsa /
+        "Sin salsas" → "AGREGAR AL CARRITO" → confirma que vuelve a Home (detalle desmontado,
+        `home-cart-icon` presente) → carrito muestra "cremas: mayonesa" / "Sin salsas" → Checkout
+        → `checkout-confirm` → el `text` del `whatsappUrl` del pedido creado trae
+        `• 1x Celtas Burgues Clasica (Salsas: mayonesa)` y `• 1x ... (Salsas: Sin salsas)`. El
+        test **exige** que el pedido se cree recorriendo el checkout de la app (`expect(orderPath,
+        'ui')`), no por un POST directo de respaldo. Verde en emulador (`emulator-5554`,
+        Android 17) y en dispositivo físico (`24117RN76L`, Xiaomi, Android 15). `flutter analyze`
+        limpio, `flutter test` 513/513. Auditado por `@tester`: veredicto **LISTO** — detalle en
+        `docs/testing-checklist.md`, sección Salsas/cremas → "Auditoría puntual: verificación E2E
+        en dispositivo real". Los 2 checkboxes que faltaban en ese doc quedaron marcados.
       - **Mejora nueva: tri-state real de salsas (no aplica / "Sin salsas" explícito / con
         salsas), pedida por el dueño del negocio.** Hasta acá, un producto con catálogo de salsas
         donde el cliente no tocaba ningún chip quedaba indistinguible de un producto sin catálogo
