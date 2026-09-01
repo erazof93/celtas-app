@@ -1,7 +1,7 @@
 name: celtas_mobile
 description: Aplicación móvil oficial de Celtas Fast Food para pedidos a domicilio."
 publish_to: 'none'
-version: 1.0.1+8
+version: 1.0.1+11
 
 environment:
   sdk: ^3.12.2

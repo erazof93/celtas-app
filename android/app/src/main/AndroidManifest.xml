@@ -54,6 +54,21 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_stat_celtas" />
+        <!-- ── Google Credential Manager: deshabilitado ──
+             El Credential Manager de Google Play Services tiene un bug conocido
+             en Android 17+ que causa "[16] Account reauth failed" al intentar
+             re-autenticar con una cuenta cacheada. Desactivarlo fuerza el uso
+             del flujo legacy de Google Sign-In que funciona correctamente.
+             Referencia: https://github.com/flutter/flutter/issues/190296 -->
+        <meta-data
+            android:name="com.google.android.gms.credentials.API_ENABLED"
+            android:value="false" />
+        <meta-data
+            android:name="com.google.android.gms.credentials.CredentialPickerConfig"
+            android:value="false" />
+        <meta-data
+            android:name="androidx.credentials.CREDENTIAL_SERVICE_ENABLED"
+            android:value="false" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
