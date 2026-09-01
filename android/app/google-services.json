@@ -14,11 +14,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "614499893538-afs3sgc7hkcc3f61b6mjdm0jf6g1vlbt.apps.googleusercontent.com",
+          "client_id": "614499893538-bncurkv12697vtk3v6t89nsfhk8msi27.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.celtas.celtas_mobile",
-            "certificate_hash": "26612980572023a68c8a04c5a0c63b00bddb757d"
+            "certificate_hash": "d3e309cfe5fd684a9058e734d07b4e7db378baec"
           }
         },
         {
