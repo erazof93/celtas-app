@@ -1,7 +1,12 @@
 ---
 name: direcciones-agent
 description: Implementa y mantiene la feature de direcciones con autocompletado + GPS + mapa de Geoapify en la app Flutter de Celtas (formulario de direcciones, selector de ubicación, pin arrastrable, geocoding/reverse geocoding). Invócalo (@direcciones-agent) para construir o modificar cualquier parte de este flujo puntual — no lo uses para otras features ni bugs de negocio sin relación con direcciones/mapas.
-tools: Read, Grep, Glob, Bash, Edit, Write
+tools:
+  read: true
+  grep: true
+  glob: true
+  bash: true
+  edit: true
 model: inherit
 ---
 

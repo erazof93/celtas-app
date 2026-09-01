@@ -14,6 +14,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "614499893538-3g8gh2p22j5nfonbrfq1q9go8be1l828.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.celtas.celtas_mobile",
+            "certificate_hash": "6ac95d718eb43ea87b782e2653b0f55b09c916ac"
+          }
+        },
+        {
+          "client_id": "614499893538-9ec7msfp4aj1roge33iue261vgs647mf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.celtas.celtas_mobile",
+            "certificate_hash": "b5a218aa1fb1ec6889c58f1fe3734f134dc4f40b"
+          }
+        },
+        {
           "client_id": "614499893538-bncurkv12697vtk3v6t89nsfhk8msi27.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

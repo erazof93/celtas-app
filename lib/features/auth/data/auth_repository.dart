@@ -2,6 +2,7 @@ import 'package:celtas_mobile/core/config/env.dart';
 import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/features/auth/data/models/auth_tokens.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -91,15 +92,62 @@ class AuthRepository {
   ///   - El backend responde 409 (email ya existe como cuenta local) →
   ///     `ApiException` con el mensaje del backend.
   Future<AuthTokens> loginWithGoogle() async {
+    if (kDebugMode) print('--> INICIANDO LOGIN CON GOOGLE');
+
+    // ── Validación defensiva del serverClientId ──
+    // En release, si .env no se cargó correctamente, googleServerClientId
+    // será null y initialize() lanzará un error críptico de la SDK nativa.
+    // Capturamos esto temprano con un mensaje claro.
+    final serverId = AppConfig.googleServerClientId;
+    if (serverId == null || serverId.isEmpty) {
+      throw const ApiException(
+        'Google Sign-In no está configurado. Contacta al soporte.',
+      );
+    }
+
     final signIn = GoogleSignIn.instance;
     try {
       if (!_googleInitialized) {
-        await signIn.initialize(serverClientId: AppConfig.googleServerClientId);
+        if (kDebugMode) {
+          print('--> Inicializando GoogleSignIn...');
+          print('--> serverClientId: ${serverId.substring(0, 30)}...');
+        }
+        await signIn.initialize(serverClientId: serverId);
         _googleInitialized = true;
       }
+      // Limpia sesión cacheada de Google ANTES de abrir el picker.
+      // Evita el error nativo [16] "Account reauth failed" cuando el
+      // token cacheado está obsoleto o la cuenta fue eliminada/revocada.
+      if (kDebugMode) print('--> Limpiando sesión Google cacheada...');
+      try {
+        await signIn.signOut();
+      } catch (_) {
+        // Best-effort: si la SDK no estaba inicializada o falla, no bloquea
+        // el flujo de login.
+      }
+
+      if (kDebugMode) print('--> Abriendo selector de cuentas...');
       final account = await signIn.authenticate();
+      if (kDebugMode) print('--> Cuenta seleccionada: ${account.email}');
 
       final idToken = account.authentication.idToken;
+      // Logging detallado del idToken para debugging en release:
+      // imprime solo los primeros 20 y últimos 10 caracteres para no
+      // exponer el token completo en logcat.
+      if (idToken != null && idToken.isNotEmpty) {
+        if (kDebugMode) {
+          if (idToken.length > 30) {
+            final preview =
+                '${idToken.substring(0, 20)}...${idToken.substring(idToken.length - 10)}';
+            print('--> idToken OK (${idToken.length} chars): $preview');
+          } else {
+            print('--> idToken OK (${idToken.length} chars)');
+          }
+        }
+      } else {
+        if (kDebugMode) print('--> idToken: NULL o vacío');
+      }
+
       if (idToken == null || idToken.isEmpty) {
         throw const ApiException(
           'Google no devolvió un token válido. Inténtalo de nuevo.',
@@ -116,6 +164,9 @@ class AuthRepository {
         throw apiExceptionFromDio(e);
       }
     } on GoogleSignInException catch (e) {
+      if (kDebugMode) {
+        print('--> GoogleSignInException: code=${e.code}, desc=${e.description}, details=${e.details}');
+      }
       // Cerrar el picker o que la UI no esté disponible NO es un error.
       if (e.code == GoogleSignInExceptionCode.canceled ||
           e.code == GoogleSignInExceptionCode.interrupted ||

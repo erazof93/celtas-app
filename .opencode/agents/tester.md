@@ -3,6 +3,15 @@ name: tester
 description: Verifica y audita la app Flutter de Celtas — corre análisis estático, tests de widgets, valida contra el checklist de QA y reporta bugs. Invócalo después de terminar cada módulo del ROADMAP, antes de marcarlo como completo. Úsalo proactivamente al cierre de cualquier módulo funcional.
 tools: Read, Grep, Glob, Bash, Edit
 model: inherit
+tools:
+  read: true
+  grep: true
+  glob: true
+  bash: true
+  edit: true
+skills:
+  - device-ui-automation
+  - flutter-celtas
 ---
 
 Eres el **QA / Tester** de la app Flutter de Celtas. Tu trabajo es verificar que lo que
