@@ -38,12 +38,12 @@ void main() {
     );
   });
 
-  GoRouter router() => GoRouter(
+  GoRouter router({bool openNewForm = false}) => GoRouter(
         initialLocation: '/addresses',
         routes: [
           GoRoute(
             path: '/addresses',
-            builder: (_, _) => const AddressesScreen(),
+            builder: (_, _) => AddressesScreen(openNewForm: openNewForm),
           ),
         ],
       );
@@ -51,6 +51,7 @@ void main() {
   Future<ProviderContainer> pumpScreen(
     WidgetTester tester, {
     required MockAddressRepository repository,
+    bool openNewForm = false,
   }) async {
     final container = ProviderContainer(
       overrides: [addressRepositoryProvider.overrideWithValue(repository)],
@@ -62,7 +63,7 @@ void main() {
         container: container,
         child: MaterialApp.router(
           theme: AppTheme.dark,
-          routerConfig: router(),
+          routerConfig: router(openNewForm: openNewForm),
         ),
       ),
     );
@@ -89,6 +90,31 @@ void main() {
     await pumpScreen(tester, repository: repository);
 
     expect(find.text('Todavía no tienes direcciones guardadas'), findsOneWidget);
+  });
+
+  testWidgets(
+      'openNewForm: true → abre directo en el form de alta (Home sin direcciones)',
+      (tester) async {
+    final repository = MockAddressRepository();
+    when(() => repository.getAddresses()).thenAnswer((_) async => []);
+
+    await pumpScreen(tester, repository: repository, openNewForm: true);
+
+    expect(find.byKey(const ValueKey('addresses-form')), findsOneWidget);
+    expect(find.text('Nueva dirección'), findsOneWidget);
+    // El estado vacío queda oculto porque el form ya está abierto.
+    expect(find.text('Todavía no tienes direcciones guardadas'), findsNothing);
+  });
+
+  testWidgets(
+      'openNewForm: false (default) → NO abre el form solo',
+      (tester) async {
+    final repository = MockAddressRepository();
+    when(() => repository.getAddresses()).thenAnswer((_) async => []);
+
+    await pumpScreen(tester, repository: repository);
+
+    expect(find.byKey(const ValueKey('addresses-form')), findsNothing);
   });
 
   testWidgets('con direcciones → lista con badge PRINCIPAL en la default',

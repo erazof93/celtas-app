@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:celtas_mobile/core/theme/app_theme.dart';
+import 'package:celtas_mobile/features/addresses/application/address_providers.dart';
 import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
 import 'package:celtas_mobile/features/home/application/home_providers.dart';
 import 'package:celtas_mobile/features/home/data/models/banner.dart';
@@ -429,14 +430,7 @@ class _HomeHeader extends ConsumerWidget {
                     color: CeltasColors.textMuted,
                   ),
                 ),
-                Text(
-                  'Casa · Av. Corrientes 1234',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: CeltasColors.cream,
-                  ),
-                ),
+                _buildAddressLabel(context, ref),
               ],
             ),
           ),
@@ -497,6 +491,50 @@ class _HomeHeader extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Dirección principal del usuario en el header ("Entregar en …").
+  ///
+  /// Misma regla que aplica el checkout (`checkout_screen.dart`): la lista de
+  /// `GET /users/me/addresses` viene ordenada `isDefault DESC, createdAt ASC`,
+  /// así que la principal es la marcada `isDefault` o, si ninguna lo está, la
+  /// primera. Sin direcciones (o mientras carga / si falla) se invita a
+  /// ingresar una en vez de mostrar un placeholder falso.
+  Widget _buildAddressLabel(BuildContext context, WidgetRef ref) {
+    final addresses = ref.watch(addressListProvider).valueOrNull ?? const [];
+    final hasAddresses = addresses.isNotEmpty;
+
+    final String addressLabel;
+    if (hasAddresses) {
+      final addr = addresses.firstWhere(
+        (a) => a.isDefault,
+        orElse: () => addresses.first,
+      );
+      addressLabel = '${addr.alias} · ${addr.fullAddress}';
+    } else {
+      // Sin direcciones, mientras carga o si falla: se invita a ingresar una
+      // en vez de mostrar un placeholder falso.
+      addressLabel = 'Ingresa tu dirección';
+    }
+
+    return GestureDetector(
+      key: const ValueKey('home-address-label'),
+      onTap: () {
+        // Con direcciones → lista; sin ninguna → salto directo al form de
+        // alta (`?new=1`, leído en el `GoRoute` de `/addresses`).
+        context.push(hasAddresses ? '/addresses' : '/addresses?new=1');
+      },
+      child: Text(
+        addressLabel,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          color: CeltasColors.cream,
+        ),
       ),
     );
   }

@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:celtas_mobile/core/theme/app_theme.dart';
+import 'package:celtas_mobile/features/addresses/application/address_providers.dart';
+import 'package:celtas_mobile/features/addresses/data/models/address.dart';
 import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
 import 'package:celtas_mobile/features/home/application/home_providers.dart';
 import 'package:celtas_mobile/features/home/data/models/banner.dart';
@@ -89,12 +91,16 @@ void main() {
     List<Banner> banners = const [],
     List<PublicMenuCategory> menu = const [],
     List<NotificationHistoryItem>? notifications,
+    List<Address> addresses = const [],
     Override? businessHoursOverride,
   }) async {
     final container = ProviderContainer(
       overrides: [
         activeBannersProvider.overrideWith((ref) async => banners),
         publicMenuProvider.overrideWith((ref) async => menu),
+        addressListProvider.overrideWith(
+          () => _FakeAddressListNotifier(addresses),
+        ),
         // Default: local abierto, sin `nextChangeAt` — la mayoría de los
         // tests de este archivo no se ocupan del cartel de "local cerrado",
         // así que no debe aparecer sin pedirlo, y no debe hacer una request
@@ -129,8 +135,68 @@ void main() {
     await pumpHome(tester);
 
     expect(find.text('Entregar en'), findsOneWidget);
-    expect(find.text('Casa · Av. Corrientes 1234'), findsOneWidget);
   });
+
+  testWidgets(
+    'header sin dirección guardada → invita a ingresar una',
+    (tester) async {
+      await pumpHome(tester);
+
+      expect(find.text('Ingresa tu dirección'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'header con direcciones → muestra la principal (isDefault)',
+    (tester) async {
+      await pumpHome(
+        tester,
+        addresses: const [
+          Address(
+            id: 'a-1',
+            alias: 'Trabajo',
+            fullAddress: 'Av. Callao 850',
+            district: 'Surco',
+          ),
+          Address(
+            id: 'a-2',
+            alias: 'Casa',
+            fullAddress: 'Av. Los Álamos 123',
+            district: 'San Juan de Miraflores',
+            isDefault: true,
+          ),
+        ],
+      );
+
+      expect(find.text('Casa · Av. Los Álamos 123'), findsOneWidget);
+      expect(find.text('Ingresa tu dirección'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'header con direcciones pero ninguna principal → usa la primera',
+    (tester) async {
+      await pumpHome(
+        tester,
+        addresses: const [
+          Address(
+            id: 'a-1',
+            alias: 'Trabajo',
+            fullAddress: 'Av. Callao 850',
+            district: 'Surco',
+          ),
+          Address(
+            id: 'a-2',
+            alias: 'Casa',
+            fullAddress: 'Av. Los Álamos 123',
+            district: 'San Juan de Miraflores',
+          ),
+        ],
+      );
+
+      expect(find.text('Trabajo · Av. Callao 850'), findsOneWidget);
+    },
+  );
 
   testWidgets('sin banners activos → el carrusel se oculta (no es error)', (
     tester,
@@ -1104,4 +1170,15 @@ class _FakeNotificationHistoryNotifier extends NotificationHistoryNotifier {
 
   @override
   Future<List<NotificationHistoryItem>> build() async => _items;
+}
+
+/// Direcciones fijas para el header del Home, sin tocar la red. Mismo patrón
+/// que `_FakeNotificationHistoryNotifier`: la lista se fija en el `build()`.
+class _FakeAddressListNotifier extends AddressListNotifier {
+  _FakeAddressListNotifier(this._addresses);
+
+  final List<Address> _addresses;
+
+  @override
+  Future<List<Address>> build() async => _addresses;
 }

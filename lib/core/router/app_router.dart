@@ -114,7 +114,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       // mockup 09, sin bottom nav).
       GoRoute(
         path: '/addresses',
-        builder: (context, state) => const AddressesScreen(),
+        builder: (context, state) {
+          // `?new=1` (empujado desde el header del Home cuando el usuario aún
+          // no tiene direcciones) abre la pantalla directo en el form de alta.
+          final openNewForm = state.uri.queryParameters['new'] == '1';
+          return AddressesScreen(openNewForm: openNewForm);
+        },
       ),
       // Historial de notificaciones: empujada desde la campana del Home (sin
       // bottom nav, mismo criterio que carrito/direcciones). Sin mockup

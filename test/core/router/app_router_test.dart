@@ -1,5 +1,7 @@
 import 'package:celtas_mobile/app.dart';
 import 'package:celtas_mobile/core/router/app_router.dart';
+import 'package:celtas_mobile/features/addresses/application/address_providers.dart';
+import 'package:celtas_mobile/features/addresses/data/models/address.dart';
 import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
 import 'package:celtas_mobile/features/auth/data/auth_repository.dart';
 import 'package:celtas_mobile/features/auth/data/models/auth_tokens.dart';
@@ -40,6 +42,17 @@ MockNotificationRepository _stubNotificationRepo() {
   final repo = MockNotificationRepository();
   when(() => repo.clearFcmToken()).thenAnswer((_) async {});
   return repo;
+}
+
+/// Direcciones fijas para el header del Home, sin request real a
+/// `GET /users/me/addresses` (el `_HomeHeader` observa `addressListProvider`).
+class _FakeAddressListNotifier extends AddressListNotifier {
+  _FakeAddressListNotifier(this._addresses);
+
+  final List<Address> _addresses;
+
+  @override
+  Future<List<Address>> build() async => _addresses;
 }
 
 void main() {
@@ -89,8 +102,12 @@ void main() {
     List<PublicMenuCategory> menu = const [],
     List<Banner> banners = const [],
     RewardRepository? rewardRepository,
+    List<Address> addresses = const [],
   }) => [
     authRepositoryProvider.overrideWithValue(repository),
+    // El header del Home observa `addressListProvider` — sin este override
+    // dispararía un `GET /users/me/addresses` real en el entorno de test.
+    addressListProvider.overrideWith(() => _FakeAddressListNotifier(addresses)),
     // `logout()` llama `clearFcmToken()` (DELETE /users/me/fcm-token) — sin
     // este override golpearía la red real y colgaría los tests de logout.
     notificationRepositoryProvider.overrideWithValue(_stubNotificationRepo()),
@@ -122,6 +139,7 @@ void main() {
     List<PublicMenuCategory> menu = const [],
     List<Banner> banners = const [],
     RewardRepository? rewardRepository,
+    List<Address> addresses = const [],
   }) async {
     when(() => repository.readRefreshToken()).thenAnswer((_) async => null);
     when(
@@ -141,6 +159,7 @@ void main() {
           menu: menu,
           banners: banners,
           rewardRepository: rewardRepository,
+          addresses: addresses,
         ),
         child: const CeltasApp(),
       ),
@@ -485,6 +504,51 @@ void main() {
     expect(find.text('Tu carrito'), findsOneWidget);
     expect(find.byType(CeltasBottomNav), findsNothing);
   });
+
+  testWidgets(
+    'header del Home sin direcciones → "Ingresa tu dirección" abre '
+    'AddressesScreen directo en el form de alta (?new=1)',
+    (tester) async {
+      final repository = MockAuthRepository();
+      await login(tester, repository);
+
+      expect(find.text('Ingresa tu dirección'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('home-address-label')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('addresses-form')), findsOneWidget);
+      expect(find.text('Nueva dirección'), findsOneWidget);
+      expect(find.byType(CeltasBottomNav), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'header del Home con dirección → el texto abre AddressesScreen en '
+    'modo lista (sin form)',
+    (tester) async {
+      final repository = MockAuthRepository();
+      await login(
+        tester,
+        repository,
+        addresses: const [
+          Address(
+            id: 'a-1',
+            alias: 'Casa',
+            fullAddress: 'Av. Los Álamos 123',
+            district: 'San Juan de Miraflores',
+            isDefault: true,
+          ),
+        ],
+      );
+
+      expect(find.text('Casa · Av. Los Álamos 123'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('home-address-label')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('addresses-form')), findsNothing);
+      expect(find.byKey(const ValueKey('addresses-add-new')), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'campana del Home → pantalla de notificaciones (historial vacío)',

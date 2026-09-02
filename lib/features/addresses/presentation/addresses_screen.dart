@@ -17,7 +17,12 @@ import 'package:latlong2/latlong.dart';
 /// toggle de "principal"), editar (mismo formulario, precargado, en el lugar
 /// de la tarjeta) y eliminar (con confirmación).
 class AddressesScreen extends ConsumerStatefulWidget {
-  const AddressesScreen({super.key});
+  const AddressesScreen({super.key, this.openNewForm = false});
+
+  /// Abre la pantalla directo en el formulario de alta (empujada así desde el
+  /// header del Home vía `/addresses?new=1` cuando el usuario aún no tiene
+  /// direcciones guardadas).
+  final bool openNewForm;
 
   @override
   ConsumerState<AddressesScreen> createState() => _AddressesScreenState();
@@ -41,6 +46,18 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
   String? _formError;
   String? _actionError;
   String? _deletingId;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.openNewForm) {
+      // `_openNewForm` llama `setState`: diferir al primer post-frame para no
+      // invocarlo durante `initState`.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openNewForm();
+      });
+    }
+  }
 
   @override
   void dispose() {
