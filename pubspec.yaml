@@ -9,6 +9,12 @@ environment:
 dependencies:
   cached_network_image: ^3.4.1
   confetti: ^0.8.0
+  # Embebe el font CupertinoIcons. No lo usa código propio: lo referencia
+  # `go_router` (vía `cupertino_ui`, chevron "back" de estilo iOS). Sin esta
+  # dep, `flutter build` avisa "Expected to find fonts for ...
+  # cupertino_icons/CupertinoIcons, but found (MaterialIcons)". Se tree-shakea
+  # a unos KB si no se renderiza ningún glifo Cupertino.
+  cupertino_icons: ^1.0.9
   dio: ^5.11.0
   firebase_core: ^4.14.0
   firebase_messaging: ^16.6.0
