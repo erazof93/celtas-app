@@ -38,6 +38,14 @@
           }
         },
         {
+          "client_id": "614499893538-sagpn8kshbj5796fk0ceisvcmm00p6p5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.celtas.celtas_mobile",
+            "certificate_hash": "867ec4f598f43de84f441b040c5eefe67bc53800"
+          }
+        },
+        {
           "client_id": "614499893538-sn5adeq44eog889k15c7s3pmqosapen6.apps.googleusercontent.com",
           "client_type": 3
         }

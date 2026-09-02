@@ -54,24 +54,6 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_stat_celtas" />
-        <!-- ── Google Credential Manager: deshabilitado (workaround experimental) ──
-            A partir de google_sign_in 7.x, Android usa el Credential Manager para
-            el flujo de login, que en algunos casos produce "[16] Account reauth
-            failed" incluso con SHA-1/OAuth Client correctamente configurados
-            (confirmado con evidencia propia: 3 huellas —upload key, clave clásica,
-            clave poscuántica— verificadas en Firebase/Google Cloud/Play Console,
-            sin discrepancias). Desactivar estos servicios fuerza el flujo legacy.
-            Es un workaround reportado por la comunidad (no oficial de Google), en
-            prueba en este proyecto desde 2026-09-01. -->
-        <meta-data
-            android:name="com.google.android.gms.credentials.API_ENABLED"
-            android:value="false" />
-        <meta-data
-            android:name="com.google.android.gms.credentials.CredentialPickerConfig"
-            android:value="false" />
-        <meta-data
-            android:name="androidx.credentials.CREDENTIAL_SERVICE_ENABLED"
-            android:value="false" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
