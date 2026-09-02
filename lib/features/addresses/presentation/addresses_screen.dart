@@ -3,6 +3,7 @@ import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/addresses/application/address_providers.dart';
 import 'package:celtas_mobile/features/addresses/data/models/address.dart';
 import 'package:celtas_mobile/features/addresses/presentation/widgets/address_form_card.dart';
+import 'package:celtas_mobile/shared/widgets/celtas_snackbar.dart';
 import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
 import 'package:celtas_mobile/shared/widgets/svg_stroke_icon.dart';
 import 'package:flutter/material.dart';
@@ -46,6 +47,10 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
   String? _formError;
   String? _actionError;
   String? _deletingId;
+
+  /// `id` de la dirección que se está promoviendo a principal (spinner + tap
+  /// deshabilitado en su tarjeta mientras dura el `PATCH`).
+  String? _settingDefaultId;
 
   @override
   void initState() {
@@ -152,6 +157,7 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
           fullAddress: fullAddress,
           reference: reference,
           district: district,
+          isDefault: _formIsDefault,
           latitude: _formLatitude,
           longitude: _formLongitude,
         );
@@ -223,6 +229,40 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
           _deletingId = null;
           _actionError =
               'No se pudo eliminar la dirección. Inténtalo de nuevo.';
+        });
+      }
+    }
+  }
+
+  /// Promueve una dirección a principal sin abrir el formulario: `PATCH
+  /// /users/me/addresses/:id` con `{isDefault: true}` (el backend desmarca la
+  /// anterior). `updateAddress` del notifier refresca la lista completa, así
+  /// que el badge "PRINCIPAL" y el orden se actualizan solos.
+  Future<void> _onSetAsDefault(String addressId) async {
+    setState(() {
+      _settingDefaultId = addressId;
+      _actionError = null;
+    });
+    try {
+      await ref
+          .read(addressListProvider.notifier)
+          .updateAddress(addressId, isDefault: true);
+      if (!mounted) return;
+      setState(() => _settingDefaultId = null);
+      showCeltasSnackBar(context, 'Esta es tu dirección principal');
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() {
+          _settingDefaultId = null;
+          _actionError = e.message;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _settingDefaultId = null;
+          _actionError =
+              'No se pudo cambiar la dirección principal. Inténtalo de nuevo.';
         });
       }
     }
@@ -327,8 +367,10 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
                         _AddressListCard(
                           address: address,
                           deleting: _deletingId == address.id,
+                          settingDefault: _settingDefaultId == address.id,
                           onEdit: () => _openEditForm(address),
                           onDelete: () => _confirmDelete(address),
+                          onSetAsDefault: () => _onSetAsDefault(address.id),
                         ),
                       const SizedBox(height: 12),
                     ],
@@ -406,14 +448,18 @@ class _AddressListCard extends StatelessWidget {
   const _AddressListCard({
     required this.address,
     required this.deleting,
+    required this.settingDefault,
     required this.onEdit,
     required this.onDelete,
+    required this.onSetAsDefault,
   });
 
   final Address address;
   final bool deleting;
+  final bool settingDefault;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback onSetAsDefault;
 
   @override
   Widget build(BuildContext context) {
@@ -515,6 +561,47 @@ class _AddressListCard extends StatelessWidget {
               style: textTheme.bodySmall?.copyWith(
                 fontSize: 12,
                 color: CeltasColors.textSubtle,
+              ),
+            ),
+          ],
+          // Acción inline para promover esta dirección a principal sin abrir el
+          // formulario. Va al pie de la tarjeta (no en la fila de íconos
+          // editar/eliminar) para no competir por el ancho con el alias y el
+          // badge — la fila superior ya llega justa en pantallas angostas.
+          if (!address.isDefault) ...[
+            const SizedBox(height: 12),
+            GestureDetector(
+              key: ValueKey('addresses-set-default-${address.id}'),
+              behavior: HitTestBehavior.opaque,
+              onTap: settingDefault ? null : onSetAsDefault,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (settingDefault)
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: CeltasColors.gold,
+                      ),
+                    )
+                  else
+                    const Icon(
+                      Icons.star_outline,
+                      size: 16,
+                      color: CeltasColors.gold,
+                    ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Hacer principal',
+                    style: textTheme.labelMedium?.copyWith(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: CeltasColors.gold,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

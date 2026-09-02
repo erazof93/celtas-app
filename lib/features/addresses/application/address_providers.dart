@@ -28,19 +28,30 @@ class AddressListNotifier extends AsyncNotifier<List<Address>> {
     required String fullAddress,
     String? reference,
     required String district,
+    bool isDefault = false,
     double? latitude,
     double? longitude,
   }) async {
-    final created = await ref.read(addressRepositoryProvider).createAddress(
-          alias: alias,
-          fullAddress: fullAddress,
-          reference: reference,
-          district: district,
-          latitude: latitude,
-          longitude: longitude,
-        );
-    final current = state.valueOrNull ?? const [];
-    state = AsyncData([...current, created]);
+    final repository = ref.read(addressRepositoryProvider);
+    final created = await repository.createAddress(
+      alias: alias,
+      fullAddress: fullAddress,
+      reference: reference,
+      district: district,
+      isDefault: isDefault,
+      latitude: latitude,
+      longitude: longitude,
+    );
+    if (isDefault) {
+      // El backend desmarca la principal anterior (`unsetDefault` en
+      // `addresses.service.ts`) — el append optimista dejaría dos `isDefault`
+      // en el estado local, así que se refresca la lista completa, mismo
+      // criterio que `updateAddress`.
+      state = AsyncData(await repository.getAddresses());
+    } else {
+      final current = state.valueOrNull ?? const [];
+      state = AsyncData([...current, created]);
+    }
     return created;
   }
 

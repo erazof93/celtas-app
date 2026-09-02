@@ -4,6 +4,7 @@ import 'package:celtas_mobile/features/addresses/application/address_providers.d
 import 'package:celtas_mobile/features/addresses/data/address_repository.dart';
 import 'package:celtas_mobile/features/addresses/data/models/address.dart';
 import 'package:celtas_mobile/features/addresses/presentation/addresses_screen.dart';
+import 'package:celtas_mobile/features/addresses/presentation/widgets/address_form_card.dart';
 import 'package:celtas_mobile/features/addresses/presentation/widgets/address_map_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -373,5 +374,145 @@ void main() {
 
     verifyNever(() => repository.deleteAddress(any()));
     expect(find.text('Casa'), findsOneWidget);
+  });
+
+  testWidgets(
+      'crear dirección con "Marcar como principal" activo → POST con '
+      'isDefault: true', (tester) async {
+    final repository = MockAddressRepository();
+    var created = false;
+    when(() => repository.getAddresses()).thenAnswer((_) async {
+      return created ? [work, home] : [home];
+    });
+    const nueva = Address(
+      id: 'addr-3',
+      alias: 'Depto',
+      fullAddress: 'Jr. Nueva 456',
+      district: 'Surco',
+      isDefault: true,
+      latitude: -12.1633,
+      longitude: -76.9718,
+    );
+    when(() => repository.createAddress(
+          alias: 'Depto',
+          fullAddress: 'Jr. Nueva 456',
+          district: 'Surco',
+          isDefault: true,
+          latitude: -12.1633,
+          longitude: -76.9718,
+        )).thenAnswer((_) async {
+      created = true;
+      return nueva;
+    });
+
+    await pumpScreen(tester, repository: repository);
+
+    await tester.tap(find.byKey(const ValueKey('addresses-add-new')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('addresses-form-alias')),
+      'Depto',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('addresses-form-full')),
+      'Jr. Nueva 456',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('addresses-form-district')),
+      'Surco',
+    );
+    await touchMap(tester);
+    // Marca "principal" invocando el callback del form directamente (mismo
+    // patrón que `touchMap`): el toggle vive bajo el mapa/overlay del picker y
+    // un `tap()` por coordenadas es frágil en el entorno de test.
+    tester
+        .widget<AddressFormCard>(find.byType(AddressFormCard))
+        .onIsDefaultChanged!(true);
+    await tester.pump();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('addresses-form-save')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('addresses-form-save')));
+    await tester.pumpAndSettle();
+
+    verify(() => repository.createAddress(
+          alias: 'Depto',
+          fullAddress: 'Jr. Nueva 456',
+          district: 'Surco',
+          isDefault: true,
+          latitude: -12.1633,
+          longitude: -76.9718,
+        )).called(1);
+  });
+
+  testWidgets(
+      'tap en "Hacer principal" → PATCH {isDefault: true} con el id correcto, '
+      'sin abrir el formulario', (tester) async {
+    final repository = MockAddressRepository();
+    var promoted = false;
+    when(() => repository.getAddresses()).thenAnswer((_) async {
+      if (!promoted) return [home, work];
+      return [
+        work.copyWith(isDefault: true),
+        home.copyWith(isDefault: false),
+      ];
+    });
+    when(() => repository.updateAddress('addr-2', isDefault: true))
+        .thenAnswer((_) async {
+      promoted = true;
+    });
+
+    await pumpScreen(tester, repository: repository);
+
+    await tester.tap(
+      find.byKey(const ValueKey('addresses-set-default-addr-2')),
+    );
+    await tester.pumpAndSettle();
+
+    verify(() => repository.updateAddress('addr-2', isDefault: true))
+        .called(1);
+    // No se abrió el formulario de edición.
+    expect(find.byKey(const ValueKey('addresses-form')), findsNothing);
+    // Confirmación al usuario.
+    expect(find.text('Esta es tu dirección principal'), findsOneWidget);
+  });
+
+  testWidgets(
+      'la dirección principal NO muestra el botón "Hacer principal"',
+      (tester) async {
+    final repository = MockAddressRepository();
+    when(() => repository.getAddresses()).thenAnswer((_) async => [home, work]);
+
+    await pumpScreen(tester, repository: repository);
+
+    // `home` (addr-1) es la principal → sin botón; `work` (addr-2) sí lo tiene.
+    expect(
+      find.byKey(const ValueKey('addresses-set-default-addr-1')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('addresses-set-default-addr-2')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+      'error del backend al hacer principal → mensaje inline, sin cambiar la '
+      'lista', (tester) async {
+    final repository = MockAddressRepository();
+    when(() => repository.getAddresses()).thenAnswer((_) async => [home, work]);
+    when(() => repository.updateAddress('addr-2', isDefault: true))
+        .thenThrow(const ApiException('No se pudo conectar'));
+
+    await pumpScreen(tester, repository: repository);
+
+    await tester.tap(
+      find.byKey(const ValueKey('addresses-set-default-addr-2')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('No se pudo conectar'), findsOneWidget);
   });
 }
