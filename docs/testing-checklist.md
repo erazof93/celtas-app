@@ -319,6 +319,98 @@ salida cruda propia): `359: All tests passed!`.
 - [x] Carrito se limpia tras confirmar pedido exitosamente
 - [x] Validación de cupón (`/coupons/validate`) no lo marca como usado antes de confirmar
 
+### Persistencia del carrito en caché local (`SharedPreferences`) — auditoría @tester
+
+Fix de un defecto reportado: los ítems del carrito se perdían al cerrar y reabrir la app.
+Archivos: `lib/features/cart/data/cart_storage.dart` (NUEVO), `cart_item.dart`
+(`toStorageJson`/`fromStorageJson` manuales), `cart_provider.dart`
+(`CartState.toJsonForStorage` + `_saveCartToStorage()` fire-and-forget en cada mutación +
+rehidratación síncrona en `build()`), `lib/main.dart` (pre-carga `SharedPreferences` + override
+del `cartStorageProvider`).
+
+Checklist específico:
+
+- [ ] `flutter analyze` limpio — **verificado por @tester**: `No issues found! (ran in 4.7s)`
+- [ ] `flutter test test/features/cart/` verde — **verificado**: `95: All tests passed!`
+- [ ] `flutter test` (suite completa) verde — **verificado**: `+521 ~1: All tests passed!`
+      (el `~1` skip es preexistente, no relacionado)
+- [ ] Contrato de API: N/A — el JSON de `cart_v1` es 100% local, nunca se envía al backend
+      (el `POST /orders` sigue mandando solo `menuItemId`+`quantity`+`sauceIds`). No hay
+      contrato externo contra el cual hacer cross-check. `selectedSauces` reusa el
+      `SauceOption.toJson`/`fromJson` ya generado (`{id,name}`), que sí está atado al contrato
+      de `GET /menu` y no cambió.
+- [ ] Fidelidad de diseño: N/A — feature sin UI propia.
+- [ ] `accessToken`/dato sensible NO va acá — **OK**: el carrito no es dato sensible; usa
+      `SharedPreferences`, nunca `flutter_secure_storage` (mismo criterio que
+      `SeenRewardsStorage`/`NotificationHistoryRepository`).
+- [ ] Caché ilegible no rompe el arranque — **OK**: `load()` tiene try/catch total; JSON
+      corrupto / shape inesperado / entrada malformada → `[]`. Cubierto con test (`'JSON
+      corrupto en la caché → carrito vacío, sin crash'`).
+- [ ] Escritura best-effort no propaga errores a la UI — **OK**: `save()`/`clear()` tragan
+      excepciones; el notifier llama `unawaited(...)`.
+- [ ] Modo degradado (sin override en `main.dart`) no crashea — **OK**: default
+      `CartStorage()` sin `prefs` → `load()` devuelve `[]`, `save()` resuelve `getInstance()`
+      perezosamente. Cubierto con test.
+- [ ] Rewards NO se persisten — **OK**: `toJsonForStorage` excluye `rewardRedemptionId != null`.
+      Cubierto con test.
+- [ ] Cupón / `couponRemovedNotice` NO se persisten — **OK**. Cubierto con test.
+- [ ] `clear()` del notifier vacía la caché — **OK** (escribe `{'items': []}`, no `remove`).
+      Cubierto con test.
+
+**Huecos de cobertura encontrados (tests que faltan, no bugs):**
+
+1. Round-trip de `image != null` — todos los tests de persistencia usan ítems sin `image`.
+   El path `if (image != null) 'image': image` + `json['image'] as String?` está sin ejercitar.
+2. Round-trip de `explicitlyNoSauces: true` — se persiste (`if (explicitlyNoSauces)`) y se lee
+   (`as bool? ?? false`), pero ningún test de persistencia lo verifica de punta a punta.
+3. Round-trip de varias salsas a la vez — solo se prueba `[mayo]` (una). No se prueba
+   `[mayo, mostaza]` ni el orden tras rehidratar.
+4. Comentario con emoji / caracteres no-ASCII — `jsonEncode`/`jsonDecode` lo manejan, pero no
+   hay test. Riesgo bajo.
+5. "Última escritura gana" bajo mutaciones rápidas consecutivas — implícitamente cubierto (el
+   test de rehidratación hace 2 `addItem` seguidos y un solo `pumpEventQueue`), pero no hay un
+   test explícito que fuerce el interleaving de dos `save()` `unawaited`.
+
+**Riesgos / hallazgos no bloqueantes:**
+
+- `CartStorage.clear()` es **código muerto**: nadie lo llama. `CartNotifier.clear()` (usado en
+  `cart_screen.dart:76` y `checkout_screen.dart:155`) llama `_saveCartToStorage()`, que escribe
+  `{'items': []}` vía `save()`, no `_storage.clear()` (que haría `remove` de la key). El efecto
+  observable es el mismo, pero el método `clear()` de `CartStorage` nunca se ejecuta en la app
+  real ni en los tests. Candidato a eliminar o a cablear.
+- La rehidratación fire-and-forget + `unawaited` implica que si el SO mata el proceso en el
+  instante entre `addItem` y que `prefs.setString` termine de bajar a disco, ese ítem se pierde.
+  Es inherente al diseño best-effort y aceptado explícitamente en el encargo; el defecto que se
+  arregla (cierre normal → reapertura) sí da tiempo al flush. **Debe cubrirlo la prueba manual
+  en dispositivo** (ver abajo).
+- El cableado real de `main.dart` (`cartStorageProvider.overrideWithValue(CartStorage(prefs))`)
+  no está cubierto por ningún test — `main.dart` no se testea. Solo verificado por lectura.
+  Lo cubre la prueba manual en dispositivo.
+- `storageKey = 'cart_v1'` está versionado (bien). No hay migración activa: un cambio de shape
+  a futuro obliga a `cart_v2` y deja la key `cart_v1` huérfana (fuga menor de storage, nunca se
+  limpia). Dentro de `v1` la compat es razonable: campos que falten → defaults, campos extra →
+  ignorados. Sin acción requerida ahora, solo a tener presente.
+- Una sola entrada malformada dentro de un `items` por lo demás válido descarta **todo** el
+  carrito (el try/catch envuelve la comprensión entera). Es el comportamiento documentado
+  ("forma inesperada → []"), aceptable, pero vale saberlo.
+
+**Prueba manual en dispositivo real — PENDIENTE (no ejecutada por @tester):**
+
+- Agregar ítems → cerrar la app (swipe away) → reabrir → los ítems normales persisten con su
+  cantidad, salsas y comentario.
+- Agregar un reward (canje de estrellas) → cerrar → reabrir → el reward desapareció, los ítems
+  normales siguen.
+- Aplicar un cupón → cerrar → reabrir → el cupón NO vuelve.
+- Confirmar un pedido → reabrir → carrito vacío.
+- (Opcional, borde) matar el proceso inmediatamente tras agregar un ítem → reabrir → verificar
+  si el ítem sobrevivió (best-effort, puede perderse).
+
+**Veredicto @tester: LISTO con salvedades.** Lo crítico pasa: `analyze` limpio, suite verde,
+rewards/cupón excluidos con test, JSON corrupto y modo degradado cubiertos, no hay dato
+sensible en `SharedPreferences`, sin contrato de API ni diseño que validar. Lo pendiente es
+cobertura de tests secundaria (5 huecos listados, ninguno es un bug) + la prueba manual en
+dispositivo, que el encargo asignó explícitamente al usuario. No se marca nada del `ROADMAP.md`.
+
 ### Salsas/cremas (selector en el detalle + carrito + payload) — ✅ COMPLETO
 
 Escrito originalmente en una sesión sin acceso al toolchain de Flutter (ver `ROADMAP.md`, sección

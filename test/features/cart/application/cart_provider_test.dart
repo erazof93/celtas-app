@@ -1,12 +1,16 @@
 import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
+import 'package:celtas_mobile/features/cart/data/cart_storage.dart';
 import 'package:celtas_mobile/features/coupons/data/models/validated_coupon.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
 import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
 import 'package:celtas_mobile/features/rewards/data/models/reward_catalog_item.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   const burger = PublicMenuItem(
     id: 'i-1',
     name: 'Berserker Burger',
@@ -939,6 +943,179 @@ void main() {
       notifier.addRewardItem(rewardItem, rewardRedemptionId: 'r-1');
 
       expect(container.read(cartProvider).subtotal, 7.2);
+    });
+  });
+
+  group('persistencia en caché local (CartStorage)', () {
+    const mayo = SauceOption(id: 's-1', name: 'Mayonesa');
+    const rewardItem = RewardCatalogItem(
+      id: 'i-9',
+      name: 'Berserker Burger',
+      price: 15.5,
+    );
+
+    late CartStorage storage;
+
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      storage = CartStorage(await SharedPreferences.getInstance());
+    });
+
+    /// Contenedor con el `CartStorage` real (respaldado por el mock de
+    /// `SharedPreferences`), para probar el ciclo guardar → reabrir.
+    ProviderContainer persistentContainer() {
+      final container = ProviderContainer(
+        overrides: [cartStorageProvider.overrideWithValue(storage)],
+      );
+      addTearDown(container.dispose);
+      return container;
+    }
+
+    test('un carrito con ítems se rehidrata igual en un contenedor nuevo',
+        () async {
+      final first = persistentContainer();
+      first.read(cartProvider.notifier).addItem(
+            burger,
+            quantity: 2,
+            selectedSauces: const [mayo],
+            comment: 'Sin cebolla',
+          );
+      first.read(cartProvider.notifier).addItem(wings);
+      await pumpEventQueue(); // deja resolver el save fire-and-forget
+
+      // Simula "cerrar y reabrir la app": contenedor nuevo, misma caché.
+      final second = persistentContainer();
+      final state = second.read(cartProvider);
+
+      expect(state.items, hasLength(2));
+      final restored = state.items.firstWhere((i) => i.menuItemId == 'i-1');
+      expect(restored.quantity, 2);
+      expect(restored.unitPrice, 15.5);
+      expect(restored.selectedSauces, [mayo]);
+      expect(restored.comment, 'Sin cebolla');
+      expect(restored.lineKey, 'i-1::s-1::Sin cebolla');
+    });
+
+    test(
+        'round-trip de todos los campos serializables: image, '
+        'explicitlyNoSauces, varias salsas y comentario con emoji', () async {
+      const mostaza = SauceOption(id: 's-2', name: 'Mostaza');
+      const withImage = PublicMenuItem(
+        id: 'i-7',
+        name: 'Valhöll Combo',
+        price: 22.9,
+        image: 'https://cdn.celtas.pe/combo.png',
+      );
+
+      final first = persistentContainer();
+      first.read(cartProvider.notifier).addItem(
+            withImage,
+            quantity: 3,
+            selectedSauces: const [mostaza, mayo],
+            comment: 'sin cebolla 🧅 extra crocante',
+          );
+      first
+          .read(cartProvider.notifier)
+          .addItem(wings, explicitlyNoSauces: true);
+      await pumpEventQueue();
+
+      final second = persistentContainer();
+      final state = second.read(cartProvider);
+      expect(state.items, hasLength(2));
+
+      final combo = state.items.firstWhere((i) => i.menuItemId == 'i-7');
+      expect(combo.image, 'https://cdn.celtas.pe/combo.png');
+      expect(combo.quantity, 3);
+      expect(combo.comment, 'sin cebolla 🧅 extra crocante');
+      // el orden de las salsas no importa para la identidad de la fila
+      expect(combo.selectedSauces.map((s) => s.id).toSet(), {'s-1', 's-2'});
+      expect(
+        combo.selectedSauces.every((s) => s.name.isNotEmpty),
+        isTrue,
+      );
+
+      final restoredWings = state.items.firstWhere((i) => i.menuItemId == 'i-2');
+      expect(restoredWings.explicitlyNoSauces, isTrue);
+      expect(restoredWings.selectedSauces, isEmpty);
+      expect(restoredWings.image, isNull);
+    });
+
+    test('los ítems de premio NO se persisten (se pierden al reabrir)',
+        () async {
+      final first = persistentContainer();
+      first.read(cartProvider.notifier).addItem(burger);
+      first
+          .read(cartProvider.notifier)
+          .addRewardItem(rewardItem, rewardRedemptionId: 'r-1');
+      await pumpEventQueue();
+
+      expect(first.read(cartProvider).items, hasLength(2));
+
+      final second = persistentContainer();
+      final state = second.read(cartProvider);
+      expect(state.items, hasLength(1));
+      expect(state.items.single.menuItemId, 'i-1');
+      expect(state.items.single.rewardRedemptionId, isNull);
+    });
+
+    test('el cupón aplicado NO se persiste', () async {
+      final first = persistentContainer();
+      first.read(cartProvider.notifier).addItem(burger, quantity: 2);
+      first.read(cartProvider.notifier).applyCoupon(percentageCoupon);
+      await pumpEventQueue();
+      expect(first.read(cartProvider).coupon, isNotNull);
+
+      final second = persistentContainer();
+      final state = second.read(cartProvider);
+      expect(state.items, hasLength(1));
+      expect(state.coupon, isNull);
+      expect(state.couponRemovedNotice, isNull);
+    });
+
+    test('clear() vacía también la caché (no revive al reabrir)', () async {
+      final first = persistentContainer();
+      first.read(cartProvider.notifier).addItem(burger);
+      await pumpEventQueue();
+      first.read(cartProvider.notifier).clear();
+      await pumpEventQueue();
+
+      final second = persistentContainer();
+      expect(second.read(cartProvider).items, isEmpty);
+    });
+
+    test('decrementar hasta 0 se refleja en la caché', () async {
+      final first = persistentContainer();
+      first.read(cartProvider.notifier).addItem(burger, quantity: 2);
+      await pumpEventQueue();
+      first.read(cartProvider.notifier).decrement('i-1');
+      first.read(cartProvider.notifier).decrement('i-1'); // 2 → 0, se elimina
+      await pumpEventQueue();
+
+      final second = persistentContainer();
+      expect(second.read(cartProvider).items, isEmpty);
+    });
+
+    test('JSON corrupto en la caché → carrito vacío, sin crash', () async {
+      SharedPreferences.setMockInitialValues({
+        CartStorage.storageKey: '}{ no es json valido',
+      });
+      final corruptStorage = CartStorage(await SharedPreferences.getInstance());
+      final container = ProviderContainer(
+        overrides: [cartStorageProvider.overrideWithValue(corruptStorage)],
+      );
+      addTearDown(container.dispose);
+
+      expect(container.read(cartProvider).items, isEmpty);
+    });
+
+    test('sin SharedPreferences pre-cargado (default del provider) el carrito '
+        'arranca vacío y las mutaciones no crashean', () {
+      final container = ProviderContainer(); // usa el cartStorageProvider real
+      addTearDown(container.dispose);
+
+      expect(container.read(cartProvider).items, isEmpty);
+      container.read(cartProvider.notifier).addItem(burger);
+      expect(container.read(cartProvider).items, hasLength(1));
     });
   });
 }

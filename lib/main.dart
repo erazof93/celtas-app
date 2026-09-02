@@ -1,22 +1,33 @@
 import 'package:celtas_mobile/app.dart';
+import 'package:celtas_mobile/features/cart/data/cart_storage.dart';
 import 'package:celtas_mobile/features/notifications/application/notification_service.dart';
 import 'package:celtas_mobile/firebase_options.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
+  // `SharedPreferences` se pre-carga acá (no tiene API síncrona) para que
+  // `CartNotifier.build()` pueda rehidratar el carrito de la caché local de
+  // forma síncrona, sin un frame con el carrito/badge en cero al abrir.
+  final prefs = await SharedPreferences.getInstance();
+
   // Se crea el `ProviderContainer` a mano (en vez de dejar que `ProviderScope`
   // lo cree internamente) para que `NotificationService` pueda leer/invalidar
   // providers y navegar fuera del árbol de widgets — necesario porque
   // `getInitialMessage()` (notificación que abrió la app desde terminada) se
   // resuelve antes de que exista ningún `BuildContext`.
-  final container = ProviderContainer();
+  final container = ProviderContainer(
+    overrides: [
+      cartStorageProvider.overrideWithValue(CartStorage(prefs)),
+    ],
+  );
   await NotificationService.instance.init(container);
 
   // `CeltasApp` es un `ConsumerWidget` (usa `ref.watch(routerProvider)`):

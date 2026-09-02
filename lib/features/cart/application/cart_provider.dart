@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:celtas_mobile/features/cart/data/cart_storage.dart';
 import 'package:celtas_mobile/features/cart/data/models/cart_item.dart';
 import 'package:celtas_mobile/features/coupons/data/models/validated_coupon.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
@@ -52,6 +55,17 @@ abstract class CartState with _$CartState {
 
   /// Total con descuento aplicado (vista previa para la UI).
   double get total => subtotal - discount;
+
+  /// Snapshot para la caché local (`CartStorage`). Excluye a propósito:
+  /// - los ítems de premio (`rewardRedemptionId != null`),
+  /// - el cupón (`coupon`) y el aviso de cupón (`couponRemovedNotice`).
+  /// Ver la justificación completa en `CartStorage`.
+  Map<String, dynamic> toJsonForStorage() => {
+        'items': [
+          for (final item in items)
+            if (item.rewardRedemptionId == null) item.toStorageJson(),
+        ],
+      };
 }
 
 /// Notifier del carrito local.
@@ -69,8 +83,26 @@ abstract class CartState with _$CartState {
 /// `lineKey == menuItemId`, así que todo lo que ya llamaba a estos métodos
 /// con un `menuItemId` sigue funcionando igual.
 class CartNotifier extends Notifier<CartState> {
+  CartStorage get _storage => ref.read(cartStorageProvider);
+
   @override
-  CartState build() => const CartState();
+  CartState build() => _loadCartFromStorage();
+
+  /// Rehidrata el carrito desde la caché local al abrir la app (síncrono —
+  /// ver `CartStorage`). Sin nada guardado, arranca vacío. Los ítems de
+  /// premio nunca están en la caché, así que el carrito rehidratado nunca
+  /// los trae.
+  CartState _loadCartFromStorage() {
+    final items = _storage.load();
+    return items.isEmpty ? const CartState() : CartState(items: items);
+  }
+
+  /// Persiste el carrito actual tras cada mutación. Fire-and-forget: no
+  /// bloquea la UI ni al método que lo llama, y los errores de escritura se
+  /// tragan dentro de `CartStorage` (best-effort).
+  void _saveCartToStorage() {
+    unawaited(_storage.save(state.toJsonForStorage()));
+  }
 
   /// Agrega `quantity` unidades de un producto del menú, con la selección
   /// de salsas hecha en el detalle (vacía si el producto no ofrece salsas
@@ -116,6 +148,7 @@ class CartNotifier extends Notifier<CartState> {
     } else {
       state = state.copyWith(items: [...items, newLine]);
     }
+    _saveCartToStorage();
   }
 
   /// Reemplaza la fila `oldLineKey` con la cantidad y salsas nuevas —
@@ -171,6 +204,7 @@ class CartNotifier extends Notifier<CartState> {
         ],
       );
     }
+    _saveCartToStorage();
   }
 
   /// Agrega un ítem de premio canjeado con estrellas: precio forzado a 0,
@@ -195,6 +229,9 @@ class CartNotifier extends Notifier<CartState> {
         ),
       ],
     );
+    // El ítem de premio no se persiste (ver `CartStorage`); esto reescribe
+    // el snapshot de los ítems normales, que no cambiaron.
+    _saveCartToStorage();
   }
 
   /// Suma 1 unidad. Si la fila no existe, no hace nada.
@@ -208,6 +245,7 @@ class CartNotifier extends Notifier<CartState> {
             item,
       ],
     );
+    _saveCartToStorage();
   }
 
   /// Resta 1 unidad. Al llegar a 0 la fila se elimina del carrito.
@@ -225,6 +263,7 @@ class CartNotifier extends Notifier<CartState> {
       ].where((item) => item.quantity > 0).toList(),
     );
     _clearCouponIfInvalid();
+    _saveCartToStorage();
   }
 
   /// Elimina la fila del carrito.
@@ -233,10 +272,14 @@ class CartNotifier extends Notifier<CartState> {
       items: state.items.where((item) => item.lineKey != lineKey).toList(),
     );
     _clearCouponIfInvalid();
+    _saveCartToStorage();
   }
 
   /// Vacía el carrito (tras confirmar el pedido en el módulo 5).
-  void clear() => state = const CartState();
+  void clear() {
+    state = const CartState();
+    _saveCartToStorage();
+  }
 
   /// Guarda el cupón ya validado contra el backend (vista previa del
   /// descuento). El canje real ocurre al crear el pedido.
@@ -253,11 +296,17 @@ class CartNotifier extends Notifier<CartState> {
       return false;
     }
     state = state.copyWith(coupon: coupon);
+    // El cupón no se persiste (ver `CartStorage`); el save mantiene el
+    // snapshot de ítems al día por consistencia con el resto de mutaciones.
+    _saveCartToStorage();
     return true;
   }
 
   /// Quita el cupón aplicado (el usuario decide no usarlo).
-  void removeCoupon() => state = state.copyWith(coupon: null);
+  void removeCoupon() {
+    state = state.copyWith(coupon: null);
+    _saveCartToStorage();
+  }
 
   /// Descarta el aviso de "cupón quitado" ya mostrado.
   void dismissCouponNotice() {

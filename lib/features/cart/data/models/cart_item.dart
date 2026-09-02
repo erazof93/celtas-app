@@ -12,9 +12,14 @@ part 'cart_item.freezed.dart';
 /// ya usa el resto del proyecto, ej. `OrderItem.selectedSauces` en el
 /// backend).
 ///
-/// Es estado local: no se serializa a JSON (el backend nunca recibe el
-/// carrito completo, solo `menuItemId` + `quantity` + `sauceIds` al crear
-/// el pedido — ver `order_repository.dart`), por eso no tiene `fromJson`.
+/// El backend nunca recibe el carrito completo (solo `menuItemId` +
+/// `quantity` + `sauceIds` al crear el pedido — ver `order_repository.dart`).
+/// `toStorageJson`/`fromStorageJson` existen SOLO para la caché local del
+/// carrito en `SharedPreferences` (ver `CartStorage`): serialización manual,
+/// sin `.g.dart` propio (nombres deliberadamente distintos de `toJson`/
+/// `fromJson` para no activar la generación de json_serializable de
+/// freezed). Se reusa el `toJson`/`fromJson` que `SauceOption` ya genera
+/// para las salsas anidadas.
 @freezed
 abstract class CartItem with _$CartItem {
   const factory CartItem({
@@ -46,6 +51,43 @@ abstract class CartItem with _$CartItem {
   }) = _CartItem;
 
   const CartItem._();
+
+  /// Reconstruye un ítem desde la caché local (`CartStorage`). Serialización
+  /// manual, tolerante: los campos opcionales que falten caen a su default
+  /// (mismo criterio que el `@Default` del `factory`). Los ítems de premio
+  /// nunca se persisten, pero `rewardRedemptionId` se lee igual por
+  /// simetría con `toStorageJson`.
+  factory CartItem.fromStorageJson(Map<String, dynamic> json) => CartItem(
+        menuItemId: json['menuItemId'] as String,
+        name: json['name'] as String,
+        unitPrice: (json['unitPrice'] as num).toDouble(),
+        quantity: json['quantity'] as int,
+        image: json['image'] as String?,
+        selectedSauces: (json['selectedSauces'] as List<dynamic>? ?? const [])
+            .map((e) => SauceOption.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        explicitlyNoSauces: json['explicitlyNoSauces'] as bool? ?? false,
+        comment: json['comment'] as String?,
+        rewardRedemptionId: json['rewardRedemptionId'] as String?,
+      );
+
+  /// Serializa el ítem para la caché local. Omite los campos en su valor
+  /// por defecto para no engordar el JSON guardado.
+  Map<String, dynamic> toStorageJson() => {
+        'menuItemId': menuItemId,
+        'name': name,
+        'unitPrice': unitPrice,
+        'quantity': quantity,
+        if (image != null) 'image': image,
+        if (selectedSauces.isNotEmpty)
+          'selectedSauces': [
+            for (final sauce in selectedSauces) sauce.toJson(),
+          ],
+        if (explicitlyNoSauces) 'explicitlyNoSauces': true,
+        if (comment != null) 'comment': comment,
+        if (rewardRedemptionId != null)
+          'rewardRedemptionId': rewardRedemptionId,
+      };
 
   /// Subtotal del ítem (precio unitario × cantidad).
   double get lineTotal => unitPrice * quantity;
