@@ -2625,6 +2625,92 @@ flexibilidad.
 
 ---
 
+## Auditoría: pase de mantenimiento 2026-09-02 (release nuevo + fix login Google) — ✅ LISTO con hallazgo menor no bloqueante
+
+HEAD `24c0aaa`, cambios en working tree sin commitear. Fix real del login Google = certificado
+de firma no registrado en Google Cloud/Firebase (no era bug de código); confirmado E2E en
+dispositivo real por el dueño. Esta auditoría cubre el pase de mantenimiento que acompañó al
+release.
+
+Herramientas propias (salida cruda), tras `flutter pub get` (`Got dependencies!`, sin conflictos):
+- `flutter analyze` → `No issues found!`
+- `flutter test` → `+514 ~1: All tests passed!` (514 pasan, 1 `skip` = test de regresión del
+  hallazgo menor, ver abajo).
+
+✅ Pasó:
+- **Revert byte a byte de `auth_repository.dart` y `auth_repository_test.dart` al baseline
+  `4df16d2`**: `git diff 4df16d2 -- <archivo>` vacío en ambos; `git hash-object` del working tree
+  == `git show 4df16d2:<archivo> | git hash-object` (auth repo `3fb05f4a…`, test `0ea96001…`).
+  Idénticos, no "parecidos".
+- **`google_sign_in` en 7.2.0** (pubspec `^7.2.0`, lock `7.2.0`; `_android 7.2.17`, `_ios 6.3.2`,
+  `_web 1.1.3`, `_platform_interface` dev `3.1.0`). `auth_repository.dart` usa el patrón v7
+  documentado en ROADMAP §1: `GoogleSignIn.instance.initialize(serverClientId:)` una sola vez
+  detrás del flag de instancia `_googleInitialized` (queda en `false` si falla → reintenta) +
+  `authenticate()`. Cancelación (`canceled`/`interrupted`/`uiUnavailable`) →
+  `GoogleSignInCanceledException` (la UI la ignora). Nunca envía `password`.
+- **AndroidManifest**: los 3 `<meta-data>` que deshabilitaban Credential Manager fueron
+  removidos; no quedó ninguno. Coherente con el flujo v7 confirmado en dispositivo.
+- **SDK / build**: `compileSdk = 37` (override explícito sobre el default 36 de Flutter),
+  `targetSdk = flutter.targetSdkVersion` y `minSdk = flutter.minSdkVersion` → en Flutter 3.47.0
+  `FlutterExtension.kt` define `targetSdkVersion = 36`, `minSdkVersion = 24` (verificado leyendo
+  el archivo real del tool). AGP `9.0.1` (settings.gradle.kts), Gradle `9.1.0` (wrapper),
+  Kotlin `2.3.20`. Target 36 cumple el mínimo de Google Play (API 36 es el último estable);
+  compile 37 lo supera. Sin cambio de comportamiento en `build.gradle.kts` (solo comentario).
+- **Enum `AuthorizationStatus.deniedPermanently`** (firebase_messaging 16.6.0): los 2 `switch`
+  sobre `AuthorizationStatus` quedan exhaustivos (analyze limpio lo garantiza, ambos sin
+  `default`/`_`) —
+  `notification_permission_action.dart` (`deniedPermanently` agrupado con `denied` →
+  `openSystemSettings`, correcto: doc upstream dice "el usuario debe habilitar desde ajustes del
+  sistema") y `profile_screen.dart` (`deniedPermanently` en el patrón `||` con
+  `denied`/`notDetermined` → "Desactivadas"/`redLight`). Barrido de `lib/` + `test/`: no hay otro
+  `switch`/`switch expression` sobre `AuthorizationStatus` (el de `notification_providers.dart:142`
+  es sobre `NotificationPermissionAction`, no afectado). Nuevo test en
+  `notification_permission_action_test.dart` cubre el caso 1:1.
+- **`go_router 18.0.0`**: tests de `test/core/router/` verdes (22/22). Barrido de la API usada en
+  `lib/` (`GoRouter`, `GoRoute`, `StatefulShellRoute.indexedStack`, `StatefulShellBranch`,
+  `redirect:`, `context.go/push/pop`, `routerConfig`, `state.pathParameters`/`uri.queryParameters`/
+  `extra`) — todo API estable en v18; el "breaking change" del changelog es solo el bump de min
+  SDK (Flutter 3.44/Dart 3.12), satisfecho por 3.47.0/3.13.0. Router sigue creándose una sola vez
+  con `ref.listen` + `router.refresh()` (patrón anti-bug del Splash intacto). Transitivas nuevas
+  `material_ui`/`cupertino_ui` son el split estándar de Flutter 3.44+, no dependencias pesadas.
+- **Limpieza de cruft**: `.gitignore` cubre `playstore-instalado.apk` (regla `*.apk` línea 63) y
+  `android/build/…` / `android/app/build/…` (líneas 55-56) — verificado con `git check-ignore -v`.
+  `google-services.json` conserva la entrada nueva del cert `86:7e…` (parte del fix real).
+
+❌ Falló:
+- Ninguno.
+
+⚠️ Riesgos / hallazgos no bloqueantes:
+- **Perfil muestra datos del usuario anterior tras `logout()` + `login()` de otra cuenta sin
+  reiniciar la app** (hallazgo reportado, reproducido de forma aislada). Causa:
+  `profileProvider` es un `AsyncNotifierProvider` keep-alive (no `autoDispose`) y **nadie lo
+  invalida** en `AuthController.logout()` ni en `login()` — retiene `AsyncData(userA)` hasta que
+  algo más fuerce el re-fetch o se reinicie la app. **No es regresión de esta sesión** (el código
+  de estado auth/perfil no se tocó salvo el enum). Test de regresión `skip`eado en
+  `test/features/profile/application/profile_stale_user_repro_test.dart` (falla con
+  `Expected: 'Bob B' / Actual: 'Alice A'`). Fix pendiente para la sesión principal: decidir dónde
+  va la invalidación — `auth_controller.dart` no debería importar `profile_providers.dart`
+  (capa auth → profile es mala dirección), así que probablemente `ref.listen` del auth state en la
+  capa de profile, o `profileProvider` como `autoDispose` + `ref.watch` del estado de sesión.
+  Quitar el `skip` al corregir.
+- **`denied` vs `deniedPermanently` (semántica upstream 16.6.0)**: la doc nueva de
+  `firebase_messaging` recomienda para `denied` (Android 13+, aún re-preguntable) *preferir*
+  `requestPermission()` antes que mandar a ajustes; el proyecto mapea ambos a
+  `openSystemSettings`. Es una decisión de diseño **preexistente** y documentada extensamente en
+  `notification_permission_action.dart` (no introducida esta sesión). El split del enum ahora
+  permitiría distinguirlos si se quisiera afinar el UX — mejora futura, no bug.
+- `docs/testing-checklist.md` §"Gestión del permiso de notificaciones" línea ~1789 dice "cubre
+  los 4 casos" — quedó en 5 con `deniedPermanently`. Staleness de doc, sin impacto.
+- Sin verificación de build real de release (`bundle`/`assembleRelease`) en esta sesión — el
+  merge del manifiesto y la resolución final de `targetSdk` no se confirmaron contra un APK/AAB
+  armado, solo contra el `FlutterExtension.kt` del tool.
+
+Veredicto: **LISTO con hallazgo menor aceptado como no bloqueante** (Perfil con usuario stale
+tras cambio de cuenta sin restart — preexistente, con test de regresión `skip`eado, fix
+delegado a la sesión principal).
+
+---
+
 ## Reporte de auditoría (formato esperado del @tester)
 
 ```

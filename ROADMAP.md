@@ -1264,7 +1264,127 @@ celtas-mobile/
       producción. 399/399 tests, `flutter analyze` limpio. Regla nueva agregada a
       `.claude/skills/flutter-celtas/SKILL.md` ("Español de Perú, tuteo — NUNCA voseo") para que
       no se repita en texto nuevo.
-- [ ] Definir distribución: Google Play (pago único ~$25) vs. APK directo mientras se valida
+- [x] Definir distribución: **Google Play** (cuenta creada, pago único hecho). La `1.0.1+14` se
+      publicó y llegó a producción (confirmado: se actualizó desde la tienda en el dispositivo del
+      dueño). Play App Signing activado (Google guarda la clave de la app; se sube el AAB firmado
+      con la clave de subida `key.jks`/alias `celtas-key`, y Google re-firma). El APK directo
+      queda solo como canal de pruebas internas.
+- [x] **Episodio: bug de login con Google en la build de Play Store + pase de mantenimiento
+      (2026-09-02).**
+
+      **Síntoma.** En la app instalada desde Play Store (no en las builds locales por USB), el
+      login con Google fallaba siempre con
+      `PlatformException(sign_in_failed, ...ApiException: 10: , null, null)` — `ApiException: 10`
+      = `DEVELOPER_ERROR`. El picker abría y a los ~2-6s tiraba el error.
+
+      **Diagnóstico real (con evidencia cruda, no suposición).** GMS lo decía textual en logcat
+      (`W/Auth ... [GetTokenResponseHandler] Server returned error: This android application is
+      not registered to use OAuth2.0, please confirm the package name and SHA-1 certificate
+      fingerprint match what you registered ... [CONTEXT service_id=343 ]`). Se extrajo el
+      certificado real de la instalación de Play Store: `adb pull` del `base.apk` +
+      `apksigner verify --print-certs -v --min-sdk-version 24 --max-sdk-version 32` →
+      SHA-1 `86:7E:C4:F5:98:F4:3D:E8:4F:44:1B:04:0C:5E:EF:E6:7B:C5:38:00`. Esa huella **no
+      coincidía con ninguna de las 3 "activas"** (clave clásica `B5:A2:18:AA:1F:B1:EC:68:89:C5:8F:
+      1F:E3:73:4F:13:4D:C4:F4:0B`, poscuántica `6A:C9:5D:71:8E:B4:3E:A8:7B:78:2E:26:53:B0:F5:5B:
+      09:C9:16:AC`, clave de subida `D3:E3:09:CF:E5:FD:68:4A:90:58:E7:34:D0:7B:4E:7D:B3:78:BA:EC`
+      = `android/app/key.jks`) — es la que Play Console lista bajo **"Claves de firma de
+      aplicaciones anteriores"**. O sea: tras un *key upgrade* de Play App Signing, a los
+      dispositivos les seguía llegando el APK firmado con la clave **anterior**, y esa
+      combinación (package `com.celtas.celtas_mobile` + SHA-1 `86:7E…`) nunca se había
+      registrado como cliente OAuth Android en el proyecto de Google Cloud dueño del
+      `serverClientId` (`614499893538-…`). **La causa era 100% de configuración de consola, cero
+      código.**
+
+      **Fix.** Se registraron las **4 huellas** (anterior `86:7E…`, clásica `B5:A2:18…`,
+      poscuántica `6A:C9:5D…`, subida `D3:E3:09…`) como clientes OAuth Android, package
+      `com.celtas.celtas_mobile`, en el proyecto `614499893538` de Google Cloud, y las mismas en
+      Firebase. Único artefacto en este repo: la entrada nueva del cert `86:7e…` en
+      `android/app/google-services.json` (regenerado por `flutterfire`/consola).
+
+      **Parches de síntoma revertidos.** Durante el diagnóstico, sesiones previas (commits
+      `777b318`, `d723933`, `24c0aaa`) habían metido cambios que NO atacaban la causa. Con la
+      causa real ya identificada, se revirtieron con criterio explícito:
+      - `lib/features/auth/data/auth_repository.dart` y su test → **restaurados byte a byte** al
+        baseline `4df16d2` (verificado con `git hash-object`: mismo blob SHA). Eso deshace:
+        logging verboso `[AUTH-GOOGLE]` con `print()` sin guardar por `kDebugMode` (filtraba
+        flujo/email/preview de idToken a logcat en release), flag `_hadReauthFailure` +
+        `disconnect()` en reintento, manejo especial de `"[16] Account reauth failed"`, y el
+        **downgrade de `google_sign_in` a la API v6.x** (`GoogleSignIn(...)` + `signIn()`).
+      - `android/app/src/main/AndroidManifest.xml` → se quitaron los 3 `<meta-data>` que
+        deshabilitaban Credential Manager (`com.google.android.gms.credentials.API_ENABLED=false`,
+        `…CredentialPickerConfig=false`, `androidx.credentials.CREDENTIAL_SERVICE_ENABLED=false`).
+        En dispositivo se confirmó que el flujo v7 de Credential Manager
+        (`…auth.api.credentials.assistedsignin.ui.GoogleSignInActivity` +
+        `identitycredentials.ui.CredentialChooserActivity`) funciona bien con el cert ya
+        registrado — el workaround era innecesario.
+      - Quedó vigente el patrón documentado en §"1. Auth": `google_sign_in` 7.x,
+        `GoogleSignIn.instance.initialize(serverClientId:)` una sola vez (flag `_googleInitialized`)
+        + `authenticate()`.
+
+      **Versiones de dependencias tras el pase (Flutter 3.47.0 / Dart 3.13.0, sin tocar el SDK):**
+      | Paquete | Antes | Después | Nota |
+      |---|---|---|---|
+      | `google_sign_in` | `^6.2.0` (6.3.0) | **`^7.2.0`** | + `google_sign_in_platform_interface` (dev) `^2.5.0` → `^3.1.0`; transitivas `_android 7.2.17`, `_ios 6.3.2`, `_web 1.1.3` |
+      | `firebase_core` | `^4.13.0` | `^4.14.0` | minor |
+      | `firebase_messaging` | `^16.5.0` | `^16.6.0` | agregó el enum `AuthorizationStatus.deniedPermanently` → rompía 2 `switch` exhaustivos; corregido en `notification_permission_action.dart` (caso nuevo → `openSystemSettings`, igual que `denied`) y `profile_screen.dart` (→ "Desactivadas"), + test nuevo |
+      | `flutter_map` | `^8.3.1` | `^8.3.2` | patch |
+      | `go_router` | `^17.4.0` (17.5.0) | **`^18.0.0`** | changelog sin breaking de API (solo sube min SDK a Flutter 3.44/Dart 3.12, ya satisfecho); trae `material_ui`/`cupertino_ui` como transitivas (split estándar de Flutter 3.44+). Router se sigue creando 1 sola vez, patrón `ref.listen`+`refresh()` intacto |
+      | `dio` | 5.11.0 | — | ya en la última |
+
+      **Diferidas** (mayores, cada una necesita su propio pase con migración): `flutter_riverpod`
+      3.x, `freezed` 4.x, `cached_network_image` 4.x. `build_runner` 2.16.1 queda bloqueado por
+      `freezed` 3.x (exige `freezed ^4`), se dejó en `^2.15.1`.
+
+      **SDK / build (verificado leyendo los archivos, no asumido):** `compileSdk = 37` (override
+      explícito en `android/app/build.gradle.kts`), `targetSdk = flutter.targetSdkVersion` = **36**
+      (default del tool en Flutter 3.47.0, confirmado en `FlutterExtension.kt`), `minSdk` = 24,
+      AGP `9.0.1`, Gradle `9.1.0`, plugin `google-services` `4.4.4`, Kotlin `2.3.20`. **Cumple el
+      requisito de Google Play (API 36): target 36 = mínimo exigido, compile 37 lo supera.** (Un
+      reporte previo decía "targetSdk 37" — impreciso; es 36.) Único cambio en `build.gradle.kts`:
+      un comentario obsoleto sobre "debug keys".
+
+      **Limpieza de cruft:** `.gitignore` — agregado `/android/build/`, `/android/app/build/`,
+      `*.apk`, `*.aab`. `git rm --cached` + borrado de disco de `playstore-instalado.apk` (3.2 MB
+      binario suelto) y `android/build/reports/problems/problems-report.html` (artefacto de build
+      commiteado por error).
+
+      **Pruebas end-to-end en dispositivo real (2026-09-02, Xiaomi `24117RN76L`, build local de
+      release `1.0.1+15` firmado con la clave de subida `D3:E3:09…`, instalación limpia tras
+      `flutter clean`):**
+      1. **Login con Google** — picker abre (flujo v7 Credential Manager), cuenta elegida,
+         `idToken` generado, backend `POST /auth/google` lo acepta, navega a Home, Perfil muestra
+         el usuario real del backend. **Logcat: cero `ApiException: 10`, cero
+         `not registered to use OAuth`, cero `FATAL EXCEPTION`.** Confirma que el fix no depende
+         de qué clave use Play para el AAB — las 4 huellas están cubiertas.
+      2. **Login tradicional** (`mobile_it@celtas.pe`) + **persistencia de sesión**: navega a
+         Home; tras `force-stop` + relanzar abre directo en Home con el usuario correcto.
+      3. **Push notification** disparada desde **Marketing (panel admin)** — recibida en el
+         dispositivo (foreground y background).
+
+      **Auditoría `@tester`: veredicto LISTO** (con el hallazgo menor de abajo explícitamente
+      aceptado como no bloqueante). Verificó de forma independiente: `flutter analyze` limpio,
+      **514/514 tests** (+1 `skip`, ver hallazgo), revert byte-idéntico por blob SHA,
+      `google_sign_in` 7.2.0 con patrón v7, exhaustividad de los 2 `switch` de `AuthorizationStatus`,
+      `go_router` 18 sin roturas (22/22 tests de router), SDK conforme.
+
+      **Hallazgo menor (no bloqueante, NO es regresión de esta sesión):** tras `logout()` seguido
+      de `login()` de OTRA cuenta **sin reiniciar la app**, `ProfileScreen` muestra unos segundos
+      los datos del usuario anterior. Causa raíz: `profileProvider`
+      (`lib/features/profile/application/profile_providers.dart`) es keep-alive y **nadie lo
+      invalida** en `AuthController.logout()`/`login()`
+      (`lib/features/auth/application/auth_controller.dart:137` y `:85`); retiene el `AsyncData`
+      del user anterior hasta el próximo re-fetch (o restart). `@tester` lo reprodujo aislado y
+      **no lo corrigió a propósito**: el fix "de una línea" (`ref.invalidate(profileProvider)` en
+      `logout()`) obliga a la capa auth a importar la capa profile (dirección de dependencia
+      invertida); el fix limpio es una decisión de diseño (capa profile hace `ref.listen` del
+      auth state, o `profileProvider` pasa a `autoDispose`). Test de regresión dejado **`skip`eado**
+      en `test/features/profile/application/profile_stale_user_repro_test.dart` con comentario
+      "quitar el `skip` al corregir". Detalle en `docs/testing-checklist.md`, sección "Auditoría:
+      pase de mantenimiento 2026-09-02".
+
+      **Build final: `1.0.1+15`** (el mismo usado en la prueba de dispositivo; después de generar
+      ese build solo se agregaron un test `skip`eado y notas de doc, nada de `lib/` — el AAB no
+      cambia). No hubo cambios cross-repo: el fix fue de consola.
 
 ### 11. Programa de Estrellas (fidelización) — ✅ COMPLETO
 - [x] Tab nueva "Estrellas" en el bottom nav (5º tab), `RewardsScreen`: progreso mensual
