@@ -50,5 +50,15 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Gradle build output redirigido a android/build y android/app/build por
+# android/build.gradle.kts — no versionar (reports, intermediates, etc.)
+/android/build/
+/android/app/build/
+
 /android/app/key.jks
 /android/app/key.properties
+
+# APKs/AABs sueltos: nunca se versionan (el AAB de release vive en
+# build/app/outputs/, ya ignorado por /build/)
+*.apk
+*.aab

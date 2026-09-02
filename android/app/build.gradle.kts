@@ -49,8 +49,10 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // Firma de release real (keystore propio, alias `celtas-key`), leída de
+            // android/app/key.properties → key.jks (ambos fuera de git). Es la clave
+            // de SUBIDA de Play App Signing (SHA-1 D3:E3:09:…:BA:EC); Google re-firma
+            // con la clave de la app al publicar.
             signingConfig = signingConfigs.getByName("release")
         }
     }
