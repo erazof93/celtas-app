@@ -22,6 +22,19 @@ void main() {
       },
     );
 
+    test(
+      'deniedPermanently (firebase_messaging 16.6.0+) → openSystemSettings, '
+      'mismo criterio que denied',
+      () {
+        expect(
+          actionForAuthorizationStatus(
+            AuthorizationStatus.deniedPermanently,
+          ),
+          NotificationPermissionAction.openSystemSettings,
+        );
+      },
+    );
+
     test('authorized → none (ya está activado, tocar no hace nada)', () {
       expect(
         actionForAuthorizationStatus(AuthorizationStatus.authorized),

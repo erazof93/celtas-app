@@ -32,6 +32,10 @@ NotificationPermissionAction actionForAuthorizationStatus(
     case AuthorizationStatus.notDetermined:
       return NotificationPermissionAction.requestPermission;
     case AuthorizationStatus.denied:
+    // `deniedPermanently` (firebase_messaging 16.6.0+): Android "no volver a
+    // preguntar" / iOS rechazo firme — mismo criterio que `denied`, el pedido
+    // nativo ya no muestra nada, así que se va a ajustes del sistema.
+    case AuthorizationStatus.deniedPermanently:
       return NotificationPermissionAction.openSystemSettings;
     case AuthorizationStatus.authorized:
     case AuthorizationStatus.provisional:

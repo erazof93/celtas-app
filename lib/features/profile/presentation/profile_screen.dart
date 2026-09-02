@@ -521,6 +521,7 @@ class _NotificationPermissionRow extends ConsumerWidget {
               CeltasColors.textMuted,
             ),
             AuthorizationStatus.denied ||
+            AuthorizationStatus.deniedPermanently ||
             AuthorizationStatus.notDetermined => (
               'Desactivadas',
               CeltasColors.redLight,
