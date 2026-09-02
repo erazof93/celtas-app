@@ -12,69 +12,73 @@ class MockDio extends Mock implements Dio {}
 
 class MockSecureStorage extends Mock implements FlutterSecureStorage {}
 
-/// Fake de la plataforma de Google: reemplaza el canal nativo para que
-/// `GoogleSignIn.instance.initialize()` y `.authenticate()` funcionen en tests
-/// sin dispositivo. Devuelve un `idToken` fijo o lanza la excepción indicada.
+/// Fake de la plataforma de Google (API v2.x — compatible con google_sign_in
+/// 6.x). Reemplaza el canal nativo para que `GoogleSignIn().signIn()` y
+/// `.authentication` funcionen en tests sin dispositivo.
 class FakeGoogleSignInPlatform extends GoogleSignInPlatform {
-  FakeGoogleSignInPlatform({this.idToken = 'google-id-token', this.exception});
+  FakeGoogleSignInPlatform({this.idToken = 'google-id-token', this.error});
 
   final String? idToken;
-  final GoogleSignInException? exception;
-
-  /// Cantidad de veces que se llamó `init` (para verificar que `initialize()`
-  /// se invoca UNA sola vez).
-  int initCalls = 0;
+  final Object? error;
 
   @override
-  Future<void> init(InitParameters params) async {
-    initCalls++;
-  }
+  Future<void> init({
+    List<String> scopes = const <String>[],
+    SignInOption signInOption = SignInOption.standard,
+    String? hostedDomain,
+    String? clientId,
+  }) async {}
 
   @override
-  Future<AuthenticationResults?>? attemptLightweightAuthentication(
-    AttemptLightweightAuthenticationParameters params,
-  ) async =>
-      null;
-
-  @override
-  Future<AuthenticationResults> authenticate(AuthenticateParameters params) {
-    final e = exception;
+  Future<GoogleSignInUserData?> signIn() async {
+    final e = error;
     if (e != null) throw e;
-    return Future.value(
-      AuthenticationResults(
-        user: const GoogleSignInUserData(
-          id: 'google-1',
-          email: 'cliente@gmail.com',
-          displayName: 'Cliente Google',
-        ),
-        authenticationTokens: AuthenticationTokenData(idToken: idToken),
-      ),
+    return GoogleSignInUserData(
+      id: 'google-1',
+      email: 'cliente@gmail.com',
+      displayName: 'Cliente Google',
     );
   }
 
   @override
-  bool supportsAuthenticate() => true;
+  Future<GoogleSignInTokenData> getTokens({
+    required String email,
+    bool? shouldRecoverAuth,
+  }) async {
+    return GoogleSignInTokenData(idToken: idToken, accessToken: 'access-fake');
+  }
 
   @override
-  bool authorizationRequiresUserInteraction() => false;
+  Future<void> signOut() async {}
 
   @override
-  Future<ClientAuthorizationTokenData?> clientAuthorizationTokensForScopes(
-    ClientAuthorizationTokensForScopesParameters params,
-  ) async =>
-      null;
+  Future<void> disconnect() async {}
+}
+
+/// Si el usuario cancela, signIn() retorna null.
+class FakeGoogleSignInCanceledPlatform extends GoogleSignInPlatform {
+  @override
+  Future<void> init({
+    List<String> scopes = const <String>[],
+    SignInOption signInOption = SignInOption.standard,
+    String? hostedDomain,
+    String? clientId,
+  }) async {}
 
   @override
-  Future<ServerAuthorizationTokenData?> serverAuthorizationTokensForScopes(
-    ServerAuthorizationTokensForScopesParameters params,
-  ) async =>
-      null;
+  Future<GoogleSignInUserData?> signIn() async => null;
 
   @override
-  Future<void> signOut(SignOutParams params) async {}
+  Future<GoogleSignInTokenData> getTokens({
+    required String email,
+    bool? shouldRecoverAuth,
+  }) async => GoogleSignInTokenData();
 
   @override
-  Future<void> disconnect(DisconnectParams params) async {}
+  Future<void> signOut() async {}
+
+  @override
+  Future<void> disconnect() async {}
 }
 
 /// Payload de `AuthTokens` tal como lo devuelve el backend dentro de `data`.
@@ -141,11 +145,7 @@ void main() {
     });
 
     test('usuario cierra el picker → GoogleSignInCanceledException', () async {
-      GoogleSignInPlatform.instance = FakeGoogleSignInPlatform(
-        exception: const GoogleSignInException(
-          code: GoogleSignInExceptionCode.canceled,
-        ),
-      );
+      GoogleSignInPlatform.instance = FakeGoogleSignInCanceledPlatform();
 
       await expectLater(
         repository.loginWithGoogle(),
@@ -154,26 +154,10 @@ void main() {
       verifyNever(() => dio.post(any(), data: any(named: 'data')));
     });
 
-    test('interrupted también cuenta como cancelación', () async {
-      GoogleSignInPlatform.instance = FakeGoogleSignInPlatform(
-        exception: const GoogleSignInException(
-          code: GoogleSignInExceptionCode.interrupted,
-        ),
-      );
-
-      await expectLater(
-        repository.loginWithGoogle(),
-        throwsA(isA<GoogleSignInCanceledException>()),
-      );
-    });
-
     test('fallo de plataforma de Google → ApiException con mensaje claro',
         () async {
       GoogleSignInPlatform.instance = FakeGoogleSignInPlatform(
-        exception: const GoogleSignInException(
-          code: GoogleSignInExceptionCode.unknownError,
-          description: 'network error',
-        ),
+        error: Exception('network error'),
       );
 
       await expectLater(
@@ -269,10 +253,8 @@ void main() {
       );
     });
 
-    test('initialize() se llama UNA sola vez aunque haya varios intentos',
-        () async {
-      final platform = FakeGoogleSignInPlatform();
-      GoogleSignInPlatform.instance = platform;
+    test('Cada llamada crea una instancia nueva (sin estado residual)', () async {
+      GoogleSignInPlatform.instance = FakeGoogleSignInPlatform();
       when(
         () => dio.post<Map<String, dynamic>>(
           '/auth/google',
@@ -285,12 +267,11 @@ void main() {
         ),
       );
 
-      await repository.loginWithGoogle();
-      await repository.loginWithGoogle();
+      final t1 = await repository.loginWithGoogle();
+      final t2 = await repository.loginWithGoogle();
 
-      // La SDK documenta "undefined behavior" si initialize() se llama más de
-      // una vez: el flag de instancia debe evitar el segundo init.
-      expect(platform.initCalls, 1);
+      expect(t1.accessToken, 'access-1');
+      expect(t2.accessToken, 'access-1');
     });
   });
 

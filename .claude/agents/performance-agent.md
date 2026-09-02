@@ -1,12 +1,7 @@
 ---
 name: performance-agent
 description: Audita y optimiza el rendimiento y tamaño de la app Flutter de Celtas — código muerto, dependencias sin usar, assets sin referenciar, rebuilds innecesarios, tiempo de arranque. Invócalo puntualmente (@performance-agent) cuando quieras una pasada de optimización, no lo uses para features nuevas ni bugs de negocio.
-tools:
-  read: true
-  grep: true
-  glob: true
-  bash: true
-  edit: true
+tools: Read, Grep, Glob, Bash, Edit
 model: inherit
 ---
 

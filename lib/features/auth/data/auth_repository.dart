@@ -2,11 +2,10 @@ import 'package:celtas_mobile/core/config/env.dart';
 import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/features/auth/data/models/auth_tokens.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
-/// El usuario cerró el picker de Google sin completar el login.
+/// El usuario cerró el selector de Google sin completar el login.
 ///
 /// No es un error: la UI lo captura y no muestra ningún mensaje.
 class GoogleSignInCanceledException implements Exception {
@@ -24,6 +23,14 @@ class GoogleSignInCanceledException implements Exception {
 ///
 /// El `accessToken` NUNCA se persiste acá: vive solo en memoria (estado de
 /// Riverpod). El `refreshToken` sí, en `flutter_secure_storage`.
+///
+/// ## Google Sign-In (API 6.x — legacy)
+///
+/// Usamos `google_sign_in` 6.x en vez de 7.x porque la versión 7.x usa
+/// Credential Manager de Android (`androidx.credentials`), que tiene bugs
+/// conocidos en ciertos dispositivos (error `[16] Account reauth failed`
+/// incluso con cuentas nuevas y SHA-1 correctos). La API 6.x usa el
+/// `GoogleSignInClient` legacy que funciona de forma confiable.
 class AuthRepository {
   AuthRepository(this._dio, this._secureStorage);
 
@@ -31,18 +38,6 @@ class AuthRepository {
   final FlutterSecureStorage _secureStorage;
 
   static const _refreshTokenKey = 'celtas_refresh_token';
-
-  /// La SDK de Google exige `initialize()` UNA sola vez por proceso (llamarlo
-  /// más de una vez es "undefined behavior" según su documentación). La app
-  /// tiene un único `AuthRepository` (provider singleton), así que un flag de
-  /// instancia alcanza; si `initialize()` falla, el flag queda en false y el
-  /// próximo intento reintenta.
-  bool _googleInitialized = false;
-
-  /// Flag que indica si hubo un error "reauth failed" en un intento previo.
-  /// Cuando ocurre, el próximo intento llama a disconnect() antes de
-  /// authenticate() para limpiar el estado corrupto de la SDK de Google.
-  bool _hadReauthFailure = false;
 
   /// Login tradicional (email + password).
   Future<AuthTokens> login({
@@ -86,9 +81,9 @@ class AuthRepository {
   /// Login/registro con Google: obtiene el `idToken` real de la SDK de Google
   /// y lo envía al backend. NUNCA envía `password` en este flujo.
   ///
-  /// Patrón de `google_sign_in` 7.x: `initialize()` (UNA sola vez, con el
-  /// Client ID "Web application" del backend) + `authenticate()` (picker
-  /// interactivo).
+  /// Patrón de `google_sign_in` 6.x (legacy): se crea una instancia con el
+  /// `serverClientId` (Web application client del backend) y se llama
+  /// `signIn()` que abre el selector de cuentas nativo de Google.
   ///
   /// Errores:
   ///   - El usuario cierra el picker → `GoogleSignInCanceledException` (la UI
@@ -117,41 +112,32 @@ class AuthRepository {
     log('PASO 1b: serverClientId OK (${serverId.length} chars): '
         '${serverId.substring(0, 30)}...');
 
-    final signIn = GoogleSignIn.instance;
+    // ── Crear instancia de GoogleSignIn (API 6.x) ──
+    // Se crea cada vez para evitar estados residuales entre intentos.
+    final signIn = GoogleSignIn(
+      scopes: ['email', 'profile', 'openid'],
+      serverClientId: serverId,
+    );
+
     try {
-      // ── initialize() solo la primera vez ──
-      if (!_googleInitialized) {
-        log('PASO 2: Llamando signIn.initialize(serverClientId)...');
-        await signIn.initialize(serverClientId: serverId);
-        _googleInitialized = true;
-        log('PASO 2b: initialize() completado OK');
-      } else {
-        log('PASO 2: initialize() ya ejecutado (skip)');
-      }
-
-      // ── Pre-cleanup solo si hubo error previo ──
-      if (_hadReauthFailure) {
-        log('PASO 3: Llamando disconnect() (post-reauth previo)...');
-        try {
-          await signIn.disconnect();
-          log('PASO 3b: disconnect() completado OK');
-        } catch (e) {
-          log('PASO 3b: disconnect() falló: $e');
-        }
-      } else {
-        log('PASO 3: Sin error previo — skip disconnect()');
-      }
-
       // ── Abrir selector de cuentas ──
-      log('PASO 4: Llamando signIn.authenticate() — abriendo picker...');
-      final account = await signIn.authenticate();
-      log('PASO 4b: authenticate() completado — email: ${account.email}');
+      log('PASO 2: Llamando signIn.signIn() — abriendo picker...');
+      final account = await signIn.signIn();
+      log('PASO 2b: signIn() completado');
+
+      // ── Verificar que el usuario no canceló ──
+      if (account == null) {
+        log('PASO 2c: account es null — usuario canceló');
+        throw const GoogleSignInCanceledException();
+      }
+      log('PASO 2d: email: ${account.email}');
 
       // ── Extraer idToken ──
-      log('PASO 5: Extrayendo idToken de account.authentication...');
-      final idToken = account.authentication.idToken;
+      log('PASO 3: Extrayendo authentication de account...');
+      final authentication = await account.authentication;
+      final idToken = authentication.idToken;
       if (idToken == null || idToken.isEmpty) {
-        log('PASO 5b: FATAL — idToken es NULL o vacío');
+        log('PASO 3b: FATAL — idToken es NULL o vacío');
         throw const ApiException(
           'Google no devolvió un token válido. Inténtalo de nuevo.',
         );
@@ -159,53 +145,33 @@ class AuthRepository {
       final preview = idToken.length > 30
           ? '${idToken.substring(0, 20)}...${idToken.substring(idToken.length - 10)}'
           : '(muy corto)';
-      log('PASO 5b: idToken OK (${idToken.length} chars): $preview');
+      log('PASO 3b: idToken OK (${idToken.length} chars): $preview');
 
       // ── Enviar al backend ──
-      log('PASO 6: Enviando POST /auth/google...');
+      log('PASO 4: Enviando POST /auth/google...');
       try {
         final response = await _dio.post<Map<String, dynamic>>(
           '/auth/google',
           data: {'idToken': idToken},
         );
-        log('PASO 6b: Backend respondió OK — parseando AuthTokens');
+        log('PASO 4b: Backend respondió OK — parseando AuthTokens');
         final tokens = AuthTokens.fromJson(response.data!);
-        log('PASO 7: Login exitoso — usuario: ${tokens.user.email}');
+        log('PASO 5: Login exitoso — usuario: ${tokens.user.email}');
         return tokens;
       } on DioException catch (e) {
-        log('PASO 6b: ERROR backend — status: ${e.response?.statusCode}, '
+        log('PASO 4b: ERROR backend — status: ${e.response?.statusCode}, '
             'message: ${e.message}, type: ${e.type}');
         throw apiExceptionFromDio(e);
       }
-    } on GoogleSignInException catch (e) {
-      log('EXCEPCIÓN GoogleSignInException: '
-          'code=${e.code}, desc=${e.description}, details=${e.details}');
-
-      if (e.code == GoogleSignInExceptionCode.canceled ||
-          e.code == GoogleSignInExceptionCode.interrupted ||
-          e.code == GoogleSignInExceptionCode.uiUnavailable) {
-        final desc = e.description ?? '';
-        if (desc.contains('reauth failed') || desc.contains('[16]')) {
-          log('→ Detectado reauth failed — flag _hadReauthFailure = true');
-          _hadReauthFailure = true;
-          throw const ApiException(
-            'La sesión de Google expiró. Ve a Ajustes del dispositivo > '
-            'Cuentas > Google y verifica que la cuenta esté activa, '
-            'luego intenta de nuevo.',
-          );
-        }
-        throw const GoogleSignInCanceledException();
-      }
-      throw const ApiException(
-        'No se pudo conectar con Google. Revisa tu conexión e inténtalo de nuevo.',
-      );
+    } on GoogleSignInCanceledException {
+      rethrow;
     } on ApiException {
       rethrow;
     } catch (e, stack) {
       log('EXCEPCIÓN inesperada: ${e.runtimeType}: $e');
       log('Stack: $stack');
       throw const ApiException(
-        'Error inesperado al conectar con Google.',
+        'No se pudo conectar con Google. Revisa tu conexión e inténtalo de nuevo.',
       );
     }
   }
@@ -214,7 +180,8 @@ class AuthRepository {
   /// login auto-seleccione la cuenta anterior en dispositivos compartidos.
   Future<void> signOutFromGoogle() async {
     try {
-      await GoogleSignIn.instance.signOut();
+      // Se crea una instancia fresca para cerrar sesión.
+      await GoogleSignIn().signOut();
     } catch (_) {
       // Best-effort: si la SDK no está inicializada o falla, no bloquea el
       // logout de la app.

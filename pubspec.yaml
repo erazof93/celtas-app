@@ -1,7 +1,7 @@
 name: celtas_mobile
 description: Aplicación móvil oficial de Celtas Fast Food para pedidos a domicilio."
 publish_to: 'none'
-version: 1.0.1+11
+version: 1.0.1+13
 
 environment:
   sdk: ^3.12.2
@@ -24,7 +24,7 @@ dependencies:
   geolocator: ^14.0.3
   go_router: ^17.4.0
   google_fonts: ^8.2.1
-  google_sign_in: ^7.2.0
+  google_sign_in: ^6.2.0
   json_annotation: ^4.12.0
   latlong2: ^0.10.1
   permission_handler: ^13.0.1
@@ -39,7 +39,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   freezed: ^3.2.4
-  google_sign_in_platform_interface: ^3.1.0
+  google_sign_in_platform_interface: ^2.5.0
   integration_test:
     sdk: flutter
   json_serializable: ^6.14.1
