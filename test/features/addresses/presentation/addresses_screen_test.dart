@@ -84,6 +84,12 @@ void main() {
     await tester.pump();
   }
 
+  /// Abre el menú de acciones de una tarjeta (tap en cualquier parte de ella).
+  Future<void> openOptions(WidgetTester tester, String addressId) async {
+    await tester.tap(find.byKey(ValueKey('addresses-card-$addressId')));
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('sin direcciones → estado vacío', (tester) async {
     final repository = MockAddressRepository();
     when(() => repository.getAddresses()).thenAnswer((_) async => []);
@@ -266,6 +272,7 @@ void main() {
 
     await pumpScreen(tester, repository: repository);
 
+    await openOptions(tester, 'addr-1');
     await tester.tap(find.byKey(const ValueKey('addresses-edit-addr-1')));
     await tester.pumpAndSettle();
 
@@ -333,6 +340,7 @@ void main() {
 
     await pumpScreen(tester, repository: repository);
 
+    await openOptions(tester, 'addr-1');
     await tester.tap(find.byKey(const ValueKey('addresses-delete-addr-1')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('ELIMINAR'));
@@ -352,6 +360,7 @@ void main() {
 
     await pumpScreen(tester, repository: repository);
 
+    await openOptions(tester, 'addr-2');
     await tester.tap(find.byKey(const ValueKey('addresses-delete-addr-2')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('ELIMINAR'));
@@ -367,6 +376,7 @@ void main() {
 
     await pumpScreen(tester, repository: repository);
 
+    await openOptions(tester, 'addr-1');
     await tester.tap(find.byKey(const ValueKey('addresses-delete-addr-1')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('CANCELAR'));
@@ -466,6 +476,7 @@ void main() {
 
     await pumpScreen(tester, repository: repository);
 
+    await openOptions(tester, 'addr-2');
     await tester.tap(
       find.byKey(const ValueKey('addresses-set-default-addr-2')),
     );
@@ -480,22 +491,35 @@ void main() {
   });
 
   testWidgets(
-      'la dirección principal NO muestra el botón "Hacer principal"',
-      (tester) async {
+      'tap en la tarjeta → menú de acciones (Hacer principal / Editar / '
+      'Eliminar)', (tester) async {
     final repository = MockAddressRepository();
     when(() => repository.getAddresses()).thenAnswer((_) async => [home, work]);
 
     await pumpScreen(tester, repository: repository);
 
-    // `home` (addr-1) es la principal → sin botón; `work` (addr-2) sí lo tiene.
-    expect(
-      find.byKey(const ValueKey('addresses-set-default-addr-1')),
-      findsNothing,
-    );
+    // `work` (addr-2, no principal) → las 3 acciones.
+    await openOptions(tester, 'addr-2');
     expect(
       find.byKey(const ValueKey('addresses-set-default-addr-2')),
       findsOneWidget,
     );
+    expect(find.text('Hacer principal'), findsOneWidget);
+    expect(find.text('Editar'), findsOneWidget);
+    expect(find.text('Eliminar'), findsOneWidget);
+
+    // Cierra el sheet (tap fuera) y abre el de `home` (addr-1, principal) →
+    // sin "Hacer principal".
+    await tester.tapAt(const Offset(20, 20));
+    await tester.pumpAndSettle();
+    await openOptions(tester, 'addr-1');
+    expect(
+      find.byKey(const ValueKey('addresses-set-default-addr-1')),
+      findsNothing,
+    );
+    expect(find.text('Hacer principal'), findsNothing);
+    expect(find.text('Editar'), findsOneWidget);
+    expect(find.text('Eliminar'), findsOneWidget);
   });
 
   testWidgets(
@@ -508,6 +532,7 @@ void main() {
 
     await pumpScreen(tester, repository: repository);
 
+    await openOptions(tester, 'addr-2');
     await tester.tap(
       find.byKey(const ValueKey('addresses-set-default-addr-2')),
     );

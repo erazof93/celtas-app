@@ -3,6 +3,7 @@ import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/addresses/application/address_providers.dart';
 import 'package:celtas_mobile/features/addresses/data/models/address.dart';
 import 'package:celtas_mobile/features/addresses/presentation/widgets/address_form_card.dart';
+import 'package:celtas_mobile/features/addresses/presentation/widgets/principal_badge.dart';
 import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
 import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
 import 'package:celtas_mobile/features/checkout/application/checkout_providers.dart';
@@ -629,14 +630,22 @@ class _AddressCard extends StatelessWidget {
                         color: CeltasColors.orange,
                       ),
                       const SizedBox(width: 6),
-                      Text(
-                        address.alias,
-                        style: textTheme.bodyLarge?.copyWith(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: CeltasColors.cream,
+                      Flexible(
+                        child: Text(
+                          address.alias,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.bodyLarge?.copyWith(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: CeltasColors.cream,
+                          ),
                         ),
                       ),
+                      if (address.isDefault) ...[
+                        const SizedBox(width: 8),
+                        const PrincipalBadge(),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 2),

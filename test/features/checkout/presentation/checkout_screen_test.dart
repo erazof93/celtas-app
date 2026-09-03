@@ -4,6 +4,7 @@ import 'package:celtas_mobile/features/addresses/application/address_providers.d
 import 'package:celtas_mobile/features/addresses/data/address_repository.dart';
 import 'package:celtas_mobile/features/addresses/data/models/address.dart';
 import 'package:celtas_mobile/features/addresses/presentation/widgets/address_map_picker.dart';
+import 'package:celtas_mobile/features/addresses/presentation/widgets/principal_badge.dart';
 import 'package:celtas_mobile/features/auth/application/auth_controller.dart';
 import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
 import 'package:celtas_mobile/features/auth/application/auth_state.dart';
@@ -269,6 +270,55 @@ void main() {
       expect(find.text('Trabajo'), findsOneWidget);
       expect(find.text('+ Agregar nueva dirección'), findsOneWidget);
       expect(find.text('Nueva dirección'), findsNothing);
+    });
+
+    testWidgets(
+        'selector de direcciones → badge PRINCIPAL solo en la dirección '
+        'isDefault', (tester) async {
+      final addressRepo = MockAddressRepository();
+      when(() => addressRepo.getAddresses())
+          .thenAnswer((_) async => [home, work]); // solo `home` es isDefault
+
+      await pumpCheckout(
+        tester,
+        addressRepository: addressRepo,
+        orderRepository: MockOrderRepository(),
+        items: [burger],
+      );
+
+      // Un único badge, dentro de la tarjeta de "Casa" (la principal).
+      expect(find.text('PRINCIPAL'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('checkout-address-addr-1')),
+          matching: find.byType(PrincipalBadge),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('checkout-address-addr-2')),
+          matching: find.text('PRINCIPAL'),
+        ),
+        findsNothing,
+      );
+    });
+
+    testWidgets(
+        'selector de direcciones → sin ninguna isDefault, ningún badge',
+        (tester) async {
+      final addressRepo = MockAddressRepository();
+      when(() => addressRepo.getAddresses()).thenAnswer((_) async => [work]);
+
+      await pumpCheckout(
+        tester,
+        addressRepository: addressRepo,
+        orderRepository: MockOrderRepository(),
+        items: [burger],
+      );
+
+      expect(find.text('Trabajo'), findsOneWidget);
+      expect(find.text('PRINCIPAL'), findsNothing);
     });
 
     testWidgets('agregar nueva dirección → POST y queda seleccionada',
