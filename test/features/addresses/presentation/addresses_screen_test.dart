@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/addresses/application/address_providers.dart';
@@ -39,9 +41,18 @@ void main() {
     );
   });
 
+  // `/addresses` se empuja sobre `/home` para que el `context.pop()` del tap
+  // en el cuerpo de una tarjeta ("hacer principal + volver al Home") tenga a
+  // dónde volver, igual que en la app real (siempre se llega con `push`).
   GoRouter router({bool openNewForm = false}) => GoRouter(
-        initialLocation: '/addresses',
+        initialLocation: '/home',
         routes: [
+          GoRoute(
+            path: '/home',
+            builder: (_, _) => const Scaffold(
+              body: Center(child: Text('HOME_MARKER')),
+            ),
+          ),
           GoRoute(
             path: '/addresses',
             builder: (_, _) => AddressesScreen(openNewForm: openNewForm),
@@ -59,15 +70,18 @@ void main() {
     );
     addTearDown(container.dispose);
 
+    final goRouter = router(openNewForm: openNewForm);
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
         child: MaterialApp.router(
           theme: AppTheme.dark,
-          routerConfig: router(openNewForm: openNewForm),
+          routerConfig: goRouter,
         ),
       ),
     );
+    await tester.pumpAndSettle();
+    unawaited(goRouter.push('/addresses'));
     await tester.pumpAndSettle();
     return container;
   }
@@ -82,12 +96,6 @@ void main() {
         tester.widget<AddressMapPicker>(find.byType(AddressMapPicker));
     mapPicker.onCenterChanged(point ?? const LatLng(-12.1633, -76.9718));
     await tester.pump();
-  }
-
-  /// Abre el menú de acciones de una tarjeta (tap en cualquier parte de ella).
-  Future<void> openOptions(WidgetTester tester, String addressId) async {
-    await tester.tap(find.byKey(ValueKey('addresses-card-$addressId')));
-    await tester.pumpAndSettle();
   }
 
   testWidgets('sin direcciones → estado vacío', (tester) async {
@@ -272,7 +280,6 @@ void main() {
 
     await pumpScreen(tester, repository: repository);
 
-    await openOptions(tester, 'addr-1');
     await tester.tap(find.byKey(const ValueKey('addresses-edit-addr-1')));
     await tester.pumpAndSettle();
 
@@ -340,7 +347,6 @@ void main() {
 
     await pumpScreen(tester, repository: repository);
 
-    await openOptions(tester, 'addr-1');
     await tester.tap(find.byKey(const ValueKey('addresses-delete-addr-1')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('ELIMINAR'));
@@ -360,7 +366,6 @@ void main() {
 
     await pumpScreen(tester, repository: repository);
 
-    await openOptions(tester, 'addr-2');
     await tester.tap(find.byKey(const ValueKey('addresses-delete-addr-2')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('ELIMINAR'));
@@ -376,7 +381,6 @@ void main() {
 
     await pumpScreen(tester, repository: repository);
 
-    await openOptions(tester, 'addr-1');
     await tester.tap(find.byKey(const ValueKey('addresses-delete-addr-1')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('CANCELAR'));
@@ -458,8 +462,8 @@ void main() {
   });
 
   testWidgets(
-      'tap en "Hacer principal" → PATCH {isDefault: true} con el id correcto, '
-      'sin abrir el formulario', (tester) async {
+      'tap en el cuerpo de la tarjeta → PATCH {isDefault: true} y vuelve al '
+      'Home', (tester) async {
     final repository = MockAddressRepository();
     var promoted = false;
     when(() => repository.getAddresses()).thenAnswer((_) async {
@@ -476,7 +480,32 @@ void main() {
 
     await pumpScreen(tester, repository: repository);
 
-    await openOptions(tester, 'addr-2');
+    await tester.tap(find.byKey(const ValueKey('addresses-card-addr-2')));
+    await tester.pumpAndSettle();
+
+    verify(() => repository.updateAddress('addr-2', isDefault: true))
+        .called(1);
+    // Volvió al Home; no abrió el formulario.
+    expect(find.text('HOME_MARKER'), findsOneWidget);
+    expect(find.byKey(const ValueKey('addresses-form')), findsNothing);
+  });
+
+  testWidgets(
+      'tap en el botón "Hacer principal" → PATCH + SnackBar, SIN volver al '
+      'Home', (tester) async {
+    final repository = MockAddressRepository();
+    var promoted = false;
+    when(() => repository.getAddresses()).thenAnswer((_) async {
+      if (!promoted) return [home, work];
+      return [work.copyWith(isDefault: true), home.copyWith(isDefault: false)];
+    });
+    when(() => repository.updateAddress('addr-2', isDefault: true))
+        .thenAnswer((_) async {
+      promoted = true;
+    });
+
+    await pumpScreen(tester, repository: repository);
+
     await tester.tap(
       find.byKey(const ValueKey('addresses-set-default-addr-2')),
     );
@@ -484,47 +513,45 @@ void main() {
 
     verify(() => repository.updateAddress('addr-2', isDefault: true))
         .called(1);
-    // No se abrió el formulario de edición.
-    expect(find.byKey(const ValueKey('addresses-form')), findsNothing);
-    // Confirmación al usuario.
     expect(find.text('Esta es tu dirección principal'), findsOneWidget);
+    // Se queda en la lista, no vuelve al Home.
+    expect(find.text('HOME_MARKER'), findsNothing);
   });
 
   testWidgets(
-      'tap en la tarjeta → menú de acciones (Hacer principal / Editar / '
-      'Eliminar)', (tester) async {
+      'tap en el lápiz → abre el form, sin hacer principal ni volver al Home',
+      (tester) async {
     final repository = MockAddressRepository();
     when(() => repository.getAddresses()).thenAnswer((_) async => [home, work]);
 
     await pumpScreen(tester, repository: repository);
 
-    // `work` (addr-2, no principal) → las 3 acciones.
-    await openOptions(tester, 'addr-2');
-    expect(
-      find.byKey(const ValueKey('addresses-set-default-addr-2')),
-      findsOneWidget,
-    );
-    expect(find.text('Hacer principal'), findsOneWidget);
-    expect(find.text('Editar'), findsOneWidget);
-    expect(find.text('Eliminar'), findsOneWidget);
-
-    // Cierra el sheet (tap fuera) y abre el de `home` (addr-1, principal) →
-    // sin "Hacer principal".
-    await tester.tapAt(const Offset(20, 20));
+    await tester.tap(find.byKey(const ValueKey('addresses-edit-addr-2')));
     await tester.pumpAndSettle();
-    await openOptions(tester, 'addr-1');
-    expect(
-      find.byKey(const ValueKey('addresses-set-default-addr-1')),
-      findsNothing,
-    );
-    expect(find.text('Hacer principal'), findsNothing);
-    expect(find.text('Editar'), findsOneWidget);
-    expect(find.text('Eliminar'), findsOneWidget);
+
+    expect(find.byKey(const ValueKey('addresses-form')), findsOneWidget);
+    expect(find.text('HOME_MARKER'), findsNothing);
+    verifyNever(() => repository.updateAddress(any(), isDefault: true));
   });
 
   testWidgets(
-      'error del backend al hacer principal → mensaje inline, sin cambiar la '
-      'lista', (tester) async {
+      'tap en la basura → diálogo de confirmación, sin volver al Home',
+      (tester) async {
+    final repository = MockAddressRepository();
+    when(() => repository.getAddresses()).thenAnswer((_) async => [home, work]);
+
+    await pumpScreen(tester, repository: repository);
+
+    await tester.tap(find.byKey(const ValueKey('addresses-delete-addr-2')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('¿Eliminar dirección?'), findsOneWidget);
+    expect(find.text('HOME_MARKER'), findsNothing);
+  });
+
+  testWidgets(
+      'error del backend al hacer principal → mensaje inline, sin volver al '
+      'Home', (tester) async {
     final repository = MockAddressRepository();
     when(() => repository.getAddresses()).thenAnswer((_) async => [home, work]);
     when(() => repository.updateAddress('addr-2', isDefault: true))
@@ -532,12 +559,11 @@ void main() {
 
     await pumpScreen(tester, repository: repository);
 
-    await openOptions(tester, 'addr-2');
-    await tester.tap(
-      find.byKey(const ValueKey('addresses-set-default-addr-2')),
-    );
+    await tester.tap(find.byKey(const ValueKey('addresses-card-addr-2')));
     await tester.pumpAndSettle();
 
     expect(find.text('No se pudo conectar'), findsOneWidget);
+    // El error corta el pop: seguimos en la lista.
+    expect(find.text('HOME_MARKER'), findsNothing);
   });
 }

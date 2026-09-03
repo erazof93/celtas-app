@@ -238,8 +238,9 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
   /// Promueve una dirección a principal sin abrir el formulario: `PATCH
   /// /users/me/addresses/:id` con `{isDefault: true}` (el backend desmarca la
   /// anterior). `updateAddress` del notifier refresca la lista completa, así
-  /// que el badge "PRINCIPAL" y el orden se actualizan solos.
-  Future<void> _onSetAsDefault(String addressId) async {
+  /// que el badge "PRINCIPAL" y el orden se actualizan solos. Devuelve `true`
+  /// si el cambio se aplicó (para que el caller decida si volver al Home).
+  Future<bool> _onSetAsDefault(String addressId) async {
     setState(() {
       _settingDefaultId = addressId;
       _actionError = null;
@@ -248,9 +249,10 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
       await ref
           .read(addressListProvider.notifier)
           .updateAddress(addressId, isDefault: true);
-      if (!mounted) return;
+      if (!mounted) return true;
       setState(() => _settingDefaultId = null);
       showCeltasSnackBar(context, 'Esta es tu dirección principal');
+      return true;
     } on ApiException catch (e) {
       if (mounted) {
         setState(() {
@@ -258,6 +260,7 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
           _actionError = e.message;
         });
       }
+      return false;
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -266,83 +269,17 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
               'No se pudo cambiar la dirección principal. Inténtalo de nuevo.';
         });
       }
+      return false;
     }
   }
 
-  /// Menú de acciones de una dirección (tap en cualquier parte de su tarjeta).
-  /// Agrupa "Hacer principal", "Editar" y "Eliminar" en un solo lugar en vez
-  /// de repartir íconos por la tarjeta — mismo contenedor que
-  /// `RewardTermsSheet`/`CouponPickerSheet` (`CeltasColors.card` + radio
-  /// arriba + drag-handle).
-  Future<void> _showAddressOptions(Address address) {
-    return showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: CeltasColors.card,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(CeltasRadii.card),
-        ),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.only(top: 12, bottom: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: CeltasColors.border,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 12),
-              if (!address.isDefault)
-                ListTile(
-                  key: ValueKey('addresses-set-default-${address.id}'),
-                  leading: const Icon(
-                    Icons.star_outline,
-                    color: CeltasColors.gold,
-                  ),
-                  title: const Text('Hacer principal'),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    _onSetAsDefault(address.id);
-                  },
-                ),
-              ListTile(
-                key: ValueKey('addresses-edit-${address.id}'),
-                leading: const Icon(
-                  Icons.edit_outlined,
-                  color: CeltasColors.cream,
-                ),
-                title: const Text('Editar'),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  _openEditForm(address);
-                },
-              ),
-              ListTile(
-                key: ValueKey('addresses-delete-${address.id}'),
-                leading: const Icon(
-                  Icons.delete_outline,
-                  color: CeltasColors.redLight,
-                ),
-                title: const Text(
-                  'Eliminar',
-                  style: TextStyle(color: CeltasColors.redLight),
-                ),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  _confirmDelete(address);
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  /// Tap en el cuerpo de una tarjeta (no en los íconos): la hace principal y,
+  /// si salió bien, vuelve al Home — que ya observa `addressListProvider` y
+  /// mostrará la dirección recién elegida en el header.
+  Future<void> _onAddressTapped(String addressId) async {
+    if (_settingDefaultId == addressId) return; // ya hay un PATCH en vuelo
+    final ok = await _onSetAsDefault(addressId);
+    if (ok && mounted && context.canPop()) context.pop();
   }
 
   @override
@@ -443,9 +380,12 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
                       else
                         _AddressListCard(
                           address: address,
-                          busy: _deletingId == address.id ||
-                              _settingDefaultId == address.id,
-                          onTap: () => _showAddressOptions(address),
+                          deleting: _deletingId == address.id,
+                          settingDefault: _settingDefaultId == address.id,
+                          onBodyTap: () => _onAddressTapped(address.id),
+                          onEdit: () => _openEditForm(address),
+                          onDelete: () => _confirmDelete(address),
+                          onSetAsDefault: () => _onSetAsDefault(address.id),
                         ),
                       const SizedBox(height: 12),
                     ],
@@ -522,104 +462,177 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
 class _AddressListCard extends StatelessWidget {
   const _AddressListCard({
     required this.address,
-    required this.busy,
-    required this.onTap,
+    required this.deleting,
+    required this.settingDefault,
+    required this.onBodyTap,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onSetAsDefault,
   });
 
   final Address address;
+  final bool deleting;
+  final bool settingDefault;
 
-  /// Hay un `PATCH` en vuelo para esta dirección (borrado o "hacer principal"):
-  /// se muestra un spinner en lugar del ícono de "más opciones" y el tap de la
-  /// tarjeta queda deshabilitado.
-  final bool busy;
+  /// Tap en el cuerpo de la tarjeta (alias + dirección, NO los íconos): hace
+  /// principal esta dirección y vuelve al Home.
+  final VoidCallback onBodyTap;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
-  /// Tap en cualquier parte de la tarjeta → menú de acciones
-  /// (`_showAddressOptions`). Editar/eliminar/hacer-principal viven todos ahí,
-  /// no como íconos sueltos en la tarjeta.
-  final VoidCallback onTap;
+  /// Botón inline "Hacer principal" (solo si no es la principal). Mismo efecto
+  /// que el tap del cuerpo pero SIN volver al Home — se queda en la lista.
+  final VoidCallback onSetAsDefault;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    return GestureDetector(
-      key: ValueKey('addresses-card-${address.id}'),
-      behavior: HitTestBehavior.opaque,
-      onTap: busy ? null : onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: CeltasColors.card,
-          border: Border.all(color: CeltasColors.border),
-          borderRadius: BorderRadius.circular(CeltasRadii.card),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const SvgStrokeIcon(
-                  path:
-                      'M3 10l9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z',
-                  size: 16,
-                  color: CeltasColors.orange,
-                  strokeWidth: 2.2,
-                ),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    address.alias,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: textTheme.bodyLarge?.copyWith(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: CeltasColors.cream,
-                    ),
+    final busy = deleting || settingDefault;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: CeltasColors.card,
+        border: Border.all(color: CeltasColors.border),
+        borderRadius: BorderRadius.circular(CeltasRadii.card),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  key: ValueKey('addresses-card-${address.id}'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: busy ? null : onBodyTap,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const SvgStrokeIcon(
+                            path:
+                                'M3 10l9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z',
+                            size: 16,
+                            color: CeltasColors.orange,
+                            strokeWidth: 2.2,
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              address.alias,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: textTheme.bodyLarge?.copyWith(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: CeltasColors.cream,
+                              ),
+                            ),
+                          ),
+                          if (address.isDefault) ...[
+                            const SizedBox(width: 8),
+                            const PrincipalBadge(),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        [address.fullAddress, address.district].join(', '),
+                        style: textTheme.bodySmall?.copyWith(
+                          fontSize: 13.5,
+                          color: CeltasColors.textMuted,
+                        ),
+                      ),
+                      if (address.reference != null &&
+                          address.reference!.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          address.reference!,
+                          style: textTheme.bodySmall?.copyWith(
+                            fontSize: 12,
+                            color: CeltasColors.textSubtle,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-                if (address.isDefault) ...[
-                  const SizedBox(width: 8),
-                  const PrincipalBadge(),
-                ],
-                const Spacer(),
-                if (busy)
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: CeltasColors.textMuted,
-                    ),
-                  )
-                else
-                  const Icon(
-                    Icons.more_horiz,
-                    size: 20,
+              ),
+              const SizedBox(width: 12),
+              // Íconos de acción — fuera del `GestureDetector` del cuerpo, cada
+              // uno con su propia acción y sin volver al Home.
+              if (deleting)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
                     color: CeltasColors.textMuted,
                   ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              [address.fullAddress, address.district].join(', '),
-              style: textTheme.bodySmall?.copyWith(
-                fontSize: 13.5,
-                color: CeltasColors.textMuted,
-              ),
-            ),
-            if (address.reference != null &&
-                address.reference!.isNotEmpty) ...[
-              const SizedBox(height: 2),
-              Text(
-                address.reference!,
-                style: textTheme.bodySmall?.copyWith(
-                  fontSize: 12,
-                  color: CeltasColors.textSubtle,
+                )
+              else ...[
+                GestureDetector(
+                  key: ValueKey('addresses-edit-${address.id}'),
+                  onTap: onEdit,
+                  child: const SvgStrokeIcon(
+                    path: 'M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z'
+                        'M12 20h9',
+                    size: 16,
+                  ),
                 ),
-              ),
+                const SizedBox(width: 14),
+                GestureDetector(
+                  key: ValueKey('addresses-delete-${address.id}'),
+                  onTap: onDelete,
+                  child: const Icon(
+                    Icons.delete_outline,
+                    size: 18,
+                    color: CeltasColors.redLight,
+                  ),
+                ),
+              ],
             ],
+          ),
+          if (!address.isDefault) ...[
+            const SizedBox(height: 12),
+            GestureDetector(
+              key: ValueKey('addresses-set-default-${address.id}'),
+              behavior: HitTestBehavior.opaque,
+              onTap: settingDefault ? null : onSetAsDefault,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (settingDefault)
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: CeltasColors.gold,
+                      ),
+                    )
+                  else
+                    const Icon(
+                      Icons.star_outline,
+                      size: 16,
+                      color: CeltasColors.gold,
+                    ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Hacer principal',
+                    style: textTheme.labelMedium?.copyWith(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: CeltasColors.gold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
