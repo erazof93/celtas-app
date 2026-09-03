@@ -1,5 +1,6 @@
 import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/core/network/auth_session_bridge.dart';
+import 'package:celtas_mobile/features/addresses/data/address_selection_storage.dart';
 import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
 import 'package:celtas_mobile/features/auth/application/auth_state.dart';
 import 'package:celtas_mobile/features/auth/data/auth_repository.dart';
@@ -151,6 +152,11 @@ class AuthController extends Notifier<AuthState> implements AuthSessionBridge {
     // login pida elegir cuenta en vez de auto-seleccionar la anterior.
     await _repository.signOutFromGoogle();
     await _repository.clearRefreshToken();
+    // La "dirección seleccionada" es un UUID de una dirección de ESTA cuenta —
+    // no debe arrastrarse a la siguiente en un celular compartido. (El
+    // `resolveActiveAddress` igual se auto-cura si el id no está en la lista,
+    // esto es solo prolijidad.)
+    await ref.read(addressSelectionStorageProvider).clear();
     state = const AuthState.unauthenticated();
   }
 }

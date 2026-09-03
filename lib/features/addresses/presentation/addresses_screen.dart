@@ -1,6 +1,7 @@
 import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/addresses/application/address_providers.dart';
+import 'package:celtas_mobile/features/addresses/application/address_selection_provider.dart';
 import 'package:celtas_mobile/features/addresses/data/models/address.dart';
 import 'package:celtas_mobile/features/addresses/presentation/widgets/address_form_card.dart';
 import 'package:celtas_mobile/features/addresses/presentation/widgets/principal_badge.dart';
@@ -273,13 +274,12 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
     }
   }
 
-  /// Tap en el cuerpo de una tarjeta (no en los íconos): la hace principal y,
-  /// si salió bien, vuelve al Home — que ya observa `addressListProvider` y
-  /// mostrará la dirección recién elegida en el header.
-  Future<void> _onAddressTapped(String addressId) async {
-    if (_settingDefaultId == addressId) return; // ya hay un PATCH en vuelo
-    final ok = await _onSetAsDefault(addressId);
-    if (ok && mounted && context.canPop()) context.pop();
+  /// Tap en el cuerpo de una tarjeta (no en los íconos): la marca como
+  /// dirección seleccionada actual (la que muestra el Home / pre-selecciona el
+  /// checkout) y vuelve. NO toca `isDefault` — eso es el botón ⭐.
+  void _onAddressSelected(String addressId) {
+    ref.read(selectedAddressIdProvider.notifier).select(addressId);
+    if (mounted && context.canPop()) context.pop();
   }
 
   @override
@@ -382,7 +382,7 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
                           address: address,
                           deleting: _deletingId == address.id,
                           settingDefault: _settingDefaultId == address.id,
-                          onBodyTap: () => _onAddressTapped(address.id),
+                          onBodyTap: () => _onAddressSelected(address.id),
                           onEdit: () => _openEditForm(address),
                           onDelete: () => _confirmDelete(address),
                           onSetAsDefault: () => _onSetAsDefault(address.id),

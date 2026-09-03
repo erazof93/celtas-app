@@ -1,4 +1,5 @@
 import 'package:celtas_mobile/core/network/api_client.dart';
+import 'package:celtas_mobile/features/addresses/data/address_selection_storage.dart';
 import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
 import 'package:celtas_mobile/features/auth/application/auth_state.dart';
 import 'package:celtas_mobile/features/auth/data/auth_repository.dart';
@@ -16,9 +17,27 @@ class MockAuthRepository extends Mock implements AuthRepository {}
 
 class MockNotificationRepository extends Mock implements NotificationRepository {}
 
+/// Espía de `AddressSelectionStorage`: cuenta cuántas veces `logout()` la
+/// limpia, sin tocar `SharedPreferences`.
+class _SpyAddressSelectionStorage extends AddressSelectionStorage {
+  int clearCalls = 0;
+
+  @override
+  String? load() => null;
+
+  @override
+  Future<void> save(String id) async {}
+
+  @override
+  Future<void> clear() async {
+    clearCalls++;
+  }
+}
+
 void main() {
   late MockAuthRepository repository;
   late MockNotificationRepository notificationRepo;
+  late _SpyAddressSelectionStorage addressSelectionStorage;
   late ProviderContainer container;
 
   final user = User(
@@ -44,11 +63,14 @@ void main() {
   setUp(() {
     repository = MockAuthRepository();
     notificationRepo = MockNotificationRepository();
+    addressSelectionStorage = _SpyAddressSelectionStorage();
     when(() => notificationRepo.clearFcmToken()).thenAnswer((_) async {});
     container = ProviderContainer(
       overrides: [
         authRepositoryProvider.overrideWithValue(repository),
         notificationRepositoryProvider.overrideWithValue(notificationRepo),
+        addressSelectionStorageProvider
+            .overrideWithValue(addressSelectionStorage),
       ],
     );
     addTearDown(container.dispose);
@@ -197,6 +219,8 @@ void main() {
       verify(() => notificationRepo.clearFcmToken()).called(1);
       verify(() => repository.signOutFromGoogle()).called(1);
       verify(() => repository.clearRefreshToken()).called(1);
+      // La dirección seleccionada de esta cuenta no se arrastra a la próxima.
+      expect(addressSelectionStorage.clearCalls, 1);
     });
 
     test('logout → si clearFcmToken falla (red/backend dormido), el logout '

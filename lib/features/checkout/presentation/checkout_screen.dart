@@ -1,6 +1,7 @@
 import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/addresses/application/address_providers.dart';
+import 'package:celtas_mobile/features/addresses/application/address_selection_provider.dart';
 import 'package:celtas_mobile/features/addresses/data/models/address.dart';
 import 'package:celtas_mobile/features/addresses/presentation/widgets/address_form_card.dart';
 import 'package:celtas_mobile/features/addresses/presentation/widgets/principal_badge.dart';
@@ -292,7 +293,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       if (addresses.isEmpty) {
         _showAddForm = true;
       } else {
-        _selectedAddressId = addresses.first.id;
+        // Arranca en la dirección activa (la elegida en el Home / AddressesScreen
+        // si sigue existiendo, si no la principal), no ciegamente en la primera.
+        final selectedId = ref.read(selectedAddressIdProvider);
+        _selectedAddressId =
+            resolveActiveAddress(addresses, selectedId)?.id ?? addresses.first.id;
       }
     });
 

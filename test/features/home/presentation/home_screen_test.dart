@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/addresses/application/address_providers.dart';
+import 'package:celtas_mobile/features/addresses/data/address_selection_storage.dart';
 import 'package:celtas_mobile/features/addresses/data/models/address.dart';
 import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
 import 'package:celtas_mobile/features/home/application/home_providers.dart';
@@ -92,6 +93,7 @@ void main() {
     List<PublicMenuCategory> menu = const [],
     List<NotificationHistoryItem>? notifications,
     List<Address> addresses = const [],
+    String? selectedAddressId,
     Override? businessHoursOverride,
   }) async {
     final container = ProviderContainer(
@@ -100,6 +102,9 @@ void main() {
         publicMenuProvider.overrideWith((ref) async => menu),
         addressListProvider.overrideWith(
           () => _FakeAddressListNotifier(addresses),
+        ),
+        addressSelectionStorageProvider.overrideWithValue(
+          _FakeAddressSelectionStorage(selectedAddressId),
         ),
         // Default: local abierto, sin `nextChangeAt` — la mayoría de los
         // tests de este archivo no se ocupan del cartel de "local cerrado",
@@ -195,6 +200,61 @@ void main() {
       );
 
       expect(find.text('Trabajo · Av. Callao 850'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'header con dirección seleccionada → muestra esa, no la principal',
+    (tester) async {
+      await pumpHome(
+        tester,
+        selectedAddressId: 'a-1',
+        addresses: const [
+          Address(
+            id: 'a-1',
+            alias: 'Trabajo',
+            fullAddress: 'Av. Callao 850',
+            district: 'Surco',
+          ),
+          Address(
+            id: 'a-2',
+            alias: 'Casa',
+            fullAddress: 'Av. Los Álamos 123',
+            district: 'San Juan de Miraflores',
+            isDefault: true,
+          ),
+        ],
+      );
+
+      expect(find.text('Trabajo · Av. Callao 850'), findsOneWidget);
+      expect(find.text('Casa · Av. Los Álamos 123'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'header con selección que ya no existe → cae a la principal',
+    (tester) async {
+      await pumpHome(
+        tester,
+        selectedAddressId: 'borrada',
+        addresses: const [
+          Address(
+            id: 'a-1',
+            alias: 'Trabajo',
+            fullAddress: 'Av. Callao 850',
+            district: 'Surco',
+          ),
+          Address(
+            id: 'a-2',
+            alias: 'Casa',
+            fullAddress: 'Av. Los Álamos 123',
+            district: 'San Juan de Miraflores',
+            isDefault: true,
+          ),
+        ],
+      );
+
+      expect(find.text('Casa · Av. Los Álamos 123'), findsOneWidget);
     },
   );
 
@@ -1181,4 +1241,20 @@ class _FakeAddressListNotifier extends AddressListNotifier {
 
   @override
   Future<List<Address>> build() async => _addresses;
+}
+
+/// `AddressSelectionStorage` fija, sin tocar `SharedPreferences`.
+class _FakeAddressSelectionStorage extends AddressSelectionStorage {
+  _FakeAddressSelectionStorage(this._id);
+
+  final String? _id;
+
+  @override
+  String? load() => _id;
+
+  @override
+  Future<void> save(String id) async {}
+
+  @override
+  Future<void> clear() async {}
 }

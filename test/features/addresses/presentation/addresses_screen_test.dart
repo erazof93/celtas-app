@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/addresses/application/address_providers.dart';
+import 'package:celtas_mobile/features/addresses/application/address_selection_provider.dart';
 import 'package:celtas_mobile/features/addresses/data/address_repository.dart';
 import 'package:celtas_mobile/features/addresses/data/models/address.dart';
 import 'package:celtas_mobile/features/addresses/presentation/addresses_screen.dart';
@@ -16,6 +17,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MockAddressRepository extends Mock implements AddressRepository {}
 
@@ -39,6 +41,13 @@ void main() {
     dotenv.loadFromString(
       envString: 'API_BASE_URL=https://backend-celtas.onrender.com',
     );
+  });
+
+  setUp(() {
+    // `SelectedAddressNotifier`/`AddressSelectionStorage` tocan
+    // `SharedPreferences` — sin esto el canal de plataforma no responde en
+    // test (los errores se tragan igual, pero mejor no ruido).
+    SharedPreferences.setMockInitialValues({});
   });
 
   // `/addresses` se empuja sobre `/home` para que el `context.pop()` del tap
@@ -462,29 +471,19 @@ void main() {
   });
 
   testWidgets(
-      'tap en el cuerpo de la tarjeta → PATCH {isDefault: true} y vuelve al '
-      'Home', (tester) async {
+      'tap en el cuerpo de la tarjeta → la selecciona (sin tocar isDefault) '
+      'y vuelve al Home', (tester) async {
     final repository = MockAddressRepository();
-    var promoted = false;
-    when(() => repository.getAddresses()).thenAnswer((_) async {
-      if (!promoted) return [home, work];
-      return [
-        work.copyWith(isDefault: true),
-        home.copyWith(isDefault: false),
-      ];
-    });
-    when(() => repository.updateAddress('addr-2', isDefault: true))
-        .thenAnswer((_) async {
-      promoted = true;
-    });
+    when(() => repository.getAddresses()).thenAnswer((_) async => [home, work]);
 
-    await pumpScreen(tester, repository: repository);
+    final container = await pumpScreen(tester, repository: repository);
 
     await tester.tap(find.byKey(const ValueKey('addresses-card-addr-2')));
     await tester.pumpAndSettle();
 
-    verify(() => repository.updateAddress('addr-2', isDefault: true))
-        .called(1);
+    // Quedó como dirección seleccionada, SIN un PATCH de isDefault.
+    expect(container.read(selectedAddressIdProvider), 'addr-2');
+    verifyNever(() => repository.updateAddress(any(), isDefault: true));
     // Volvió al Home; no abrió el formulario.
     expect(find.text('HOME_MARKER'), findsOneWidget);
     expect(find.byKey(const ValueKey('addresses-form')), findsNothing);
@@ -550,8 +549,8 @@ void main() {
   });
 
   testWidgets(
-      'error del backend al hacer principal → mensaje inline, sin volver al '
-      'Home', (tester) async {
+      'error del backend en el botón ⭐ "Hacer principal" → mensaje inline, '
+      'sin volver al Home', (tester) async {
     final repository = MockAddressRepository();
     when(() => repository.getAddresses()).thenAnswer((_) async => [home, work]);
     when(() => repository.updateAddress('addr-2', isDefault: true))
@@ -559,11 +558,12 @@ void main() {
 
     await pumpScreen(tester, repository: repository);
 
-    await tester.tap(find.byKey(const ValueKey('addresses-card-addr-2')));
+    await tester.tap(
+      find.byKey(const ValueKey('addresses-set-default-addr-2')),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('No se pudo conectar'), findsOneWidget);
-    // El error corta el pop: seguimos en la lista.
     expect(find.text('HOME_MARKER'), findsNothing);
   });
 }

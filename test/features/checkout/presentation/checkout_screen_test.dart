@@ -2,6 +2,7 @@ import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/addresses/application/address_providers.dart';
 import 'package:celtas_mobile/features/addresses/data/address_repository.dart';
+import 'package:celtas_mobile/features/addresses/data/address_selection_storage.dart';
 import 'package:celtas_mobile/features/addresses/data/models/address.dart';
 import 'package:celtas_mobile/features/addresses/presentation/widgets/address_map_picker.dart';
 import 'package:celtas_mobile/features/addresses/presentation/widgets/principal_badge.dart';
@@ -47,6 +48,22 @@ class MockOrderHistoryRepository extends Mock
 class MockSettingsRepository extends Mock implements SettingsRepository {}
 
 class MockProfileRepository extends Mock implements ProfileRepository {}
+
+/// `AddressSelectionStorage` fija, sin tocar `SharedPreferences`.
+class _FakeAddressSelectionStorage extends AddressSelectionStorage {
+  _FakeAddressSelectionStorage(this._id);
+
+  final String? _id;
+
+  @override
+  String? load() => _id;
+
+  @override
+  Future<void> save(String id) async {}
+
+  @override
+  Future<void> clear() async {}
+}
 
 /// Controller de auth "de mentira" para tests: se salta por completo el
 /// `build()` real (que se registra como `ApiClient.instance.session` y
@@ -159,6 +176,7 @@ void main() {
     // que sí ejercitan el gate.
     String? userPhone = '987654321',
     UserProvider userProvider = UserProvider.local,
+    String? selectedAddressId,
   }) async {
     final historyRepo = orderHistoryRepository ?? MockOrderHistoryRepository();
     if (orderHistoryRepository == null) {
@@ -189,6 +207,9 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         addressRepositoryProvider.overrideWithValue(addressRepository),
+        addressSelectionStorageProvider.overrideWithValue(
+          _FakeAddressSelectionStorage(selectedAddressId),
+        ),
         orderRepositoryProvider.overrideWithValue(orderRepository),
         orderHistoryRepositoryProvider.overrideWithValue(historyRepo),
         settingsRepositoryProvider.overrideWithValue(settingsRepo),
@@ -270,6 +291,53 @@ void main() {
       expect(find.text('Trabajo'), findsOneWidget);
       expect(find.text('+ Agregar nueva dirección'), findsOneWidget);
       expect(find.text('Nueva dirección'), findsNothing);
+    });
+
+    testWidgets(
+        'con una dirección seleccionada guardada → arranca en ESA, no en la '
+        'principal', (tester) async {
+      final addressRepo = MockAddressRepository();
+      when(() => addressRepo.getAddresses())
+          .thenAnswer((_) async => [home, work]); // home (addr-1) es isDefault
+
+      final orderRepo = MockOrderRepository();
+      when(() => orderRepo.estimateDeliveryFee(any()))
+          .thenAnswer((_) async => 5.0);
+
+      await pumpCheckout(
+        tester,
+        addressRepository: addressRepo,
+        orderRepository: orderRepo,
+        items: [burger],
+        selectedAddressId: 'addr-2', // Trabajo
+      );
+
+      // El estimate se pide para la seleccionada (addr-2), no para la
+      // principal (addr-1).
+      verify(() => orderRepo.estimateDeliveryFee('addr-2')).called(1);
+      verifyNever(() => orderRepo.estimateDeliveryFee('addr-1'));
+    });
+
+    testWidgets(
+        'selección guardada que ya no existe → cae a la principal',
+        (tester) async {
+      final addressRepo = MockAddressRepository();
+      when(() => addressRepo.getAddresses())
+          .thenAnswer((_) async => [home, work]);
+
+      final orderRepo = MockOrderRepository();
+      when(() => orderRepo.estimateDeliveryFee(any()))
+          .thenAnswer((_) async => 5.0);
+
+      await pumpCheckout(
+        tester,
+        addressRepository: addressRepo,
+        orderRepository: orderRepo,
+        items: [burger],
+        selectedAddressId: 'ya-no-existe',
+      );
+
+      verify(() => orderRepo.estimateDeliveryFee('addr-1')).called(1);
     });
 
     testWidgets(

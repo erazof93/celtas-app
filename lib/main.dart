@@ -1,4 +1,5 @@
 import 'package:celtas_mobile/app.dart';
+import 'package:celtas_mobile/features/addresses/data/address_selection_storage.dart';
 import 'package:celtas_mobile/features/cart/data/cart_storage.dart';
 import 'package:celtas_mobile/features/notifications/application/notification_service.dart';
 import 'package:celtas_mobile/firebase_options.dart';
@@ -26,6 +27,9 @@ Future<void> main() async {
   final container = ProviderContainer(
     overrides: [
       cartStorageProvider.overrideWithValue(CartStorage(prefs)),
+      addressSelectionStorageProvider.overrideWithValue(
+        AddressSelectionStorage(prefs),
+      ),
     ],
   );
   await NotificationService.instance.init(container);
