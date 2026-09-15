@@ -1382,9 +1382,80 @@ celtas-mobile/
       "quitar el `skip` al corregir". Detalle en `docs/testing-checklist.md`, sección "Auditoría:
       pase de mantenimiento 2026-09-02".
 
+      **Corregido (sesión posterior, a raíz de un reporte de "el logout no mata la sesión"):** se
+      investigó primero la hipótesis original del reporte (el `redirect` de `routerProvider` usa
+      `ref.read()` y nunca se re-ejecutaría al cambiar el auth) — **falsa**: `routerProvider`
+      (`lib/core/router/app_router.dart:214`) ya tiene `ref.listen(authControllerProvider, (_, _)
+      => router.refresh())`, y el test `logout → vuelve al Login (onboarding)`
+      (`test/core/router/app_router_test.dart`) ya lo confirma en verde. La causa real de la
+      sensación de "sesión no muerta" era este mismo bug de clase, más extendido de lo documentado
+      en 2026-09-02: un barrido (`grep -rn "^final.*Provider(" lib/features` filtrando
+      `autoDispose`) encontró el mismo patrón sin corregir en otros 3 providers keep-alive de datos
+      por-usuario: `orderListProvider`, `userCouponListProvider`, `rewardProgressProvider` — ninguno
+      se invalidaba en logout/login de otra cuenta, igual que `profileProvider`. Se aplicó el "fix
+      limpio" que esta misma entrada ya había dejado planteado (capa de cada feature hace
+      `ref.listen` del auth state, sin invertir la dependencia hacia `auth`): los 4 providers ahora
+      registran `ref.listen(authControllerProvider.select((s) => s.user?.id), (_, _) =>
+      ref.invalidateSelf())` dentro de su propio `build()` — se invalidan solos ante cualquier
+      cambio de `id` de usuario (logout → `null`, o login de otra cuenta), sin que `auth_controller.dart`
+      importe ninguna capa de feature. Test `skip`eado reactivado
+      (`profile_stale_user_repro_test.dart`, ajustado para esperar el re-fetch vía `.future` en vez
+      de un peek síncrono inmediato, ya que la invalidación es lazy) + 3 tests nuevos análogos
+      (`order_list_provider_stale_user_test.dart`, `user_coupon_list_provider_stale_user_test.dart`,
+      `reward_progress_provider_stale_user_test.dart`), los 4 verdes. `flutter analyze` limpio.
+      `flutter test`: **581/581**, sin `skip` (antes 577 + 1 `skip`) — sin regresión en el resto de
+      la app.
+
       **Build final: `1.0.1+15`** (el mismo usado en la prueba de dispositivo; después de generar
       ese build solo se agregaron un test `skip`eado y notas de doc, nada de `lib/` — el AAB no
       cambia). No hubo cambios cross-repo: el fix fue de consola.
+
+- [x] **App version check / gate de actualización forzada.** Backend (`../backend-celtas/src/
+      modules/settings/settings.service.ts`) expone `min_app_version` (`X.Y.Z+BB`) en la whitelist
+      pública de `GET /settings/public`, sembrado con `seedIfMissing`. Mobile: `evaluateAppVersion`
+      (`lib/features/settings/application/app_version_check.dart`, función pura) compara el
+      **build number** contra el instalado (`package_info_plus`, vía `currentAppVersionProvider`),
+      nunca el semver — fail-open (`AppVersionCheck.noBlock`) si `minVersion` es null/vacío/mal
+      formado o si `getPublicSettings()` falla (`appVersionCheckProvider`, `on ApiException`).
+      `ForceUpdateDialog` (`lib/features/settings/presentation/widgets/force_update_dialog.dart`)
+      es no descartable por diseño: `PopScope(canPop: false)` + `showDialog(barrierDismissible:
+      false)`, único botón "Abrir Play Store" (`url_launcher`).
+
+      Auditado por `@tester`: primer veredicto **NO LISTO** — bug bloqueante confirmado con
+      reproducción real (no lectura de código): `_AppVersionGateState` (`lib/app.dart`) llamaba
+      `showDialog(context: context, ...)` con el `context` del propio gate, que es **ancestro**
+      del `Navigator` de `go_router` (montado como `widget.child`, descendiente), no al revés —
+      revienta con `FlutterError: Navigator operation requested with a context that does not
+      include a Navigator` en el momento exacto de bloquear al usuario. Efecto real: el gate nunca
+      llegaba a mostrarse, lo opuesto a su propósito. Corregido en la sesión principal: se agregó
+      `rootNavigatorKey` (`GlobalKey<NavigatorState>`, `lib/core/router/app_router.dart`), pasado
+      como `navigatorKey:` al `GoRouter` real; `_AppVersionGate` ahora llama `showDialog` con
+      `rootNavigatorKey.currentContext` en vez de su propio `context`. Verificado con un test de
+      integración real (no descartado): `test/features/settings/presentation/
+      app_version_gate_test.dart` (`isUpdateRequired: true`, router de prueba con el MISMO
+      `navigatorKey: rootNavigatorKey` que usa el router real — un router de prueba sin esa key no
+      habría ejercitado el fix) confirma que `ForceUpdateDialog` se monta, sobrevive a
+      `tester.binding.handlePopRoute()` (botón atrás real) y a un tap en la barrera, sin
+      excepciones. `flutter analyze`: `No issues found!`. `flutter test`: `577/577` (antes `566`;
+      `@tester` agregó 10, la sesión principal reescribió 1 que estaba descartado — sin
+      regresión). Mutation testing manual sobre `evaluateAppVersion` y el fail-open del provider
+      (no hay tooling de mutation testing automatizado en el proyecto): mutantes `<` → `<=` y
+      "quitar el `try/on ApiException`" quedaron **muertos** por los tests existentes; mutante
+      "quitar el chequeo `.isEmpty`" **sobrevivió** (comportamiento sigue correcto por una red de
+      seguridad redundante en `_buildNumberOf`, pero ningún test lo mata específicamente —
+      severidad baja, no bloqueante). Veredicto final de `@tester` tras el fix: **LISTO**. Detalle
+      completo (evidencia cruda, stack trace del bug original, análisis de riesgos) en
+      `docs/testing-checklist.md`, sección "Auditoría: App Version Check (gate de actualización
+      forzada)".
+
+      **Riesgos no bloqueantes, sin resolver (fuera del alcance de este fix puntual):**
+      `appVersionCheckProvider` corre una sola vez por sesión de app, sin re-chequeo en
+      `AppLifecycleState.resumed` (a diferencia del patrón ya usado para `businessHoursProvider`
+      en el Home) — un usuario con la app ya abierta antes de que se suba un `min_app_version`
+      nuevo no verá el gate hasta reiniciar el proceso. El backend de producción real
+      (`https://backend-celtas.onrender.com/settings/public`, verificado con `curl` durante la
+      auditoría) **todavía no expone `min_app_version`** en su respuesta — la feature está lista
+      en mobile pero inerte en producción hasta que se despliegue el backend con ese cambio.
 
 ### 11. Programa de Estrellas (fidelización) — ✅ COMPLETO
 - [x] Tab nueva "Estrellas" en el bottom nav (5º tab), `RewardsScreen`: progreso mensual

@@ -184,4 +184,62 @@ void main() {
       );
     });
   });
+
+  /// `GET /settings/public` (contrato verificado contra
+  /// `celtas-backend/src/modules/settings/settings.service.ts`,
+  /// `findPublic()`): mapa `key -> value` plano, solo con las keys de la
+  /// whitelist del backend. Usado por `appVersionCheckProvider` para leer
+  /// `min_app_version`.
+  group('getPublicSettings', () {
+    test('devuelve el mapa key-value tal como lo manda el backend', () async {
+      when(() => dio.get<Map<String, dynamic>>('/settings/public'))
+          .thenAnswer(
+        (_) async => Response<Map<String, dynamic>>(
+          requestOptions: RequestOptions(path: '/settings/public'),
+          data: const {
+            'whatsapp_business_number': '51999999999',
+            'min_app_version': '1.0.1+16',
+          },
+        ),
+      );
+
+      final result = await repository.getPublicSettings();
+
+      expect(result['whatsapp_business_number'], '51999999999');
+      expect(result['min_app_version'], '1.0.1+16');
+    });
+
+    test('respuesta sin body → mapa vacío, no lanza', () async {
+      when(() => dio.get<Map<String, dynamic>>('/settings/public'))
+          .thenAnswer(
+        (_) async => Response<Map<String, dynamic>>(
+          requestOptions: RequestOptions(path: '/settings/public'),
+        ),
+      );
+
+      final result = await repository.getPublicSettings();
+
+      expect(result, isEmpty);
+    });
+
+    test('timeout → ApiException de timeout', () async {
+      when(() => dio.get<Map<String, dynamic>>('/settings/public')).thenThrow(
+        DioException(
+          requestOptions: RequestOptions(path: '/settings/public'),
+          type: DioExceptionType.receiveTimeout,
+        ),
+      );
+
+      await expectLater(
+        repository.getPublicSettings(),
+        throwsA(
+          isA<ApiException>().having(
+            (e) => e.message,
+            'message',
+            contains('El servidor tardó demasiado en responder'),
+          ),
+        ),
+      );
+    });
+  });
 }

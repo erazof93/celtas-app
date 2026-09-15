@@ -1,4 +1,5 @@
 import 'package:celtas_mobile/core/network/api_client.dart';
+import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
 import 'package:celtas_mobile/features/rewards/data/models/reward_catalog_item.dart';
 import 'package:celtas_mobile/features/rewards/data/models/reward_progress.dart';
 import 'package:celtas_mobile/features/rewards/data/reward_repository.dart';
@@ -10,10 +11,17 @@ final rewardRepositoryProvider = Provider<RewardRepository>(
 );
 
 /// Progreso del programa de Estrellas (`GET /rewards/progress`). Sin
-/// `.autoDispose`, mismo criterio que `coupon_providers.dart`.
-final rewardProgressProvider = FutureProvider<RewardProgress>(
-  (ref) => ref.read(rewardRepositoryProvider).getProgress(),
-);
+/// `.autoDispose`, mismo criterio que `coupon_providers.dart` — y, por el
+/// mismo motivo, se invalida solo cuando cambia el `id` del user autenticado
+/// (logout o login de otra cuenta en el mismo dispositivo), sin invertir la
+/// dependencia auth→rewards desde `AuthController.logout()` (ver doc de
+/// `profileProvider`).
+final rewardProgressProvider = FutureProvider<RewardProgress>((ref) {
+  ref.listen(authControllerProvider.select((s) => s.user?.id), (_, _) {
+    ref.invalidateSelf();
+  });
+  return ref.read(rewardRepositoryProvider).getProgress();
+});
 
 /// Catálogo de productos canjeables (`GET /rewards/catalog`). `.family` por
 /// `especial`: `false` pide el catálogo normal, `true` el del premio

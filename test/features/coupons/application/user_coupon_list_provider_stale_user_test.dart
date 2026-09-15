@@ -2,24 +2,28 @@ import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
 import 'package:celtas_mobile/features/auth/data/auth_repository.dart';
 import 'package:celtas_mobile/features/auth/data/models/auth_tokens.dart';
 import 'package:celtas_mobile/features/auth/data/models/user.dart';
+import 'package:celtas_mobile/features/coupons/application/coupon_providers.dart';
+import 'package:celtas_mobile/features/coupons/data/coupon_repository.dart';
+import 'package:celtas_mobile/features/coupons/data/models/coupon_status.dart';
+import 'package:celtas_mobile/features/coupons/data/models/user_coupon.dart';
+import 'package:celtas_mobile/features/coupons/data/models/validated_coupon.dart'
+    show CouponDiscountType;
 import 'package:celtas_mobile/features/notifications/application/notification_providers.dart';
 import 'package:celtas_mobile/features/notifications/data/notification_repository.dart';
-import 'package:celtas_mobile/features/profile/application/profile_providers.dart';
-import 'package:celtas_mobile/features/profile/data/profile_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
-class MockProfileRepository extends Mock implements ProfileRepository {}
+class MockCouponRepository extends Mock implements CouponRepository {}
 
 class MockAuthRepository extends Mock implements AuthRepository {}
 
 class MockNotificationRepository extends Mock implements NotificationRepository {}
 
-User _mk(String id, String name) => User(
+User _mk(String id) => User(
       id: id,
       email: '$id@email.com',
-      fullName: name,
+      fullName: id,
       provider: UserProvider.local,
       phone: '+51 1',
       totalSpent: 0,
@@ -28,26 +32,33 @@ User _mk(String id, String name) => User(
       updatedAt: DateTime.utc(2026),
     );
 
-// CORREGIDO (sesion de mantenimiento posterior a 2026-09-02): `profileProvider`
-// es un `AsyncNotifierProvider` keep-alive (no autoDispose); ahora se invalida
-// solo (`ref.listen(authControllerProvider.select((s) => s.user?.id), ...)`
-// dentro de su propio `build()`, ver doc en `profile_providers.dart`) cada vez
-// que cambia el `id` del user autenticado — cubre tanto logout como login de
-// otra cuenta sin reiniciar la app. Se eligio esta capa (no
-// `AuthController.logout()`) para no invertir la dependencia auth->profile.
+UserCoupon _coupon(String id, String code) => UserCoupon(
+      id: id,
+      code: code,
+      discountType: CouponDiscountType.percentage,
+      discountValue: 10,
+      status: CouponStatus.active,
+      expiresAt: DateTime(2026, 12, 31),
+    );
+
+/// Mismo bug de clase que `profileProvider` (ver
+/// `profile_stale_user_repro_test.dart`): `userCouponListProvider` es
+/// keep-alive y nadie lo invalidaba en logout/login de otra cuenta.
+/// Corregido con el mismo patrón (`ref.listen` del `id` del user autenticado
+/// dentro del propio provider, ver doc en `coupon_providers.dart`).
 void main() {
   test(
-    'profileProvider ya NO queda con el user anterior tras logout + login de '
-    'otra cuenta',
+    'userCouponListProvider ya NO queda con los cupones del user anterior '
+    'tras logout + login de otra cuenta',
     () async {
-      final userA = _mk('user-a', 'Alice A');
-      final userB = _mk('user-b', 'Bob B');
+      final couponsA = [_coupon('c-a1', 'VIKINGOA')];
+      final couponsB = [_coupon('c-b1', 'VIKINGOB')];
 
-      final profileRepo = MockProfileRepository();
+      final couponRepo = MockCouponRepository();
       final calls = <int>[];
-      when(() => profileRepo.getProfile()).thenAnswer((_) async {
+      when(() => couponRepo.getMyCoupons()).thenAnswer((_) async {
         calls.add(calls.length);
-        return calls.length == 1 ? userA : userB;
+        return calls.length == 1 ? couponsA : couponsB;
       });
 
       final authRepo = MockAuthRepository();
@@ -64,7 +75,7 @@ void main() {
         (_) async => AuthTokens(
           accessToken: 'at-b',
           refreshToken: 'rt-b',
-          user: userB,
+          user: _mk('user-b'),
         ),
       );
 
@@ -73,7 +84,7 @@ void main() {
 
       final container = ProviderContainer(
         overrides: [
-          profileRepositoryProvider.overrideWithValue(profileRepo),
+          couponRepositoryProvider.overrideWithValue(couponRepo),
           authRepositoryProvider.overrideWithValue(authRepo),
           notificationRepositoryProvider.overrideWithValue(notifRepo),
         ],
@@ -81,27 +92,23 @@ void main() {
       addTearDown(container.dispose);
 
       container.read(authControllerProvider.notifier);
-      final first = await container.read(profileProvider.future);
-      expect(first.fullName, 'Alice A');
+      final first = await container.read(userCouponListProvider.future);
+      expect(first.single.code, 'VIKINGOA');
 
       await container.read(authControllerProvider.notifier).logout();
       await container
           .read(authControllerProvider.notifier)
           .login(email: 'bob@email.com', password: 'x');
 
-      // La invalidación (`ref.invalidateSelf()`) es lazy: recién dispara el
-      // re-fetch cuando algo vuelve a leer el provider — igual que una
-      // pantalla real que espera el nuevo valor vía `ref.watch`/`.future`,
-      // no un peek síncrono inmediatamente después del login.
-      final second = await container.read(profileProvider.future);
+      final second = await container.read(userCouponListProvider.future);
       expect(
-        second.fullName,
-        'Bob B',
+        second.single.code,
+        'VIKINGOB',
         reason:
-            'profileProvider sigue cacheando al user A; nadie lo invalida en '
-            'logout/login',
+            'userCouponListProvider sigue cacheando los cupones del user A; '
+            'nadie lo invalida en logout/login',
       );
-      expect(calls.length, 2, reason: 'getProfile() debe re-consultarse tras el login de otra cuenta');
+      expect(calls.length, 2);
     },
   );
 }

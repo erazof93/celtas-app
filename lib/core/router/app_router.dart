@@ -44,6 +44,14 @@ const _protectedPaths = [
 bool _isProtectedPath(String location) =>
     _protectedPaths.any((p) => location == p || location.startsWith('$p/'));
 
+/// Key del `Navigator` raíz de `go_router`, expuesta para código fuera del
+/// árbol de rutas (`_AppVersionGate` en `app.dart`) que necesita un
+/// `BuildContext` con `Navigator` ancestro para llamar `showDialog` — el
+/// `context` del `builder` de `MaterialApp.router` NO sirve para esto: ese
+/// `builder` envuelve a `child` (que contiene el `Navigator`), por lo que el
+/// `Navigator` es descendiente de ese `context`, no ancestro.
+final rootNavigatorKey = GlobalKey<NavigatorState>();
+
 /// Router de la app.
 ///
 /// Módulo 2: shell route con bottom nav persistente (Inicio, Pedidos, Cupones,
@@ -63,6 +71,7 @@ bool _isProtectedPath(String location) =>
 /// estado nuevo sin perder la ubicación actual.
 final routerProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/',
     redirect: (context, state) {
       final status = ref.read(authControllerProvider).status;

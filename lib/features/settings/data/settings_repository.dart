@@ -24,4 +24,22 @@ class SettingsRepository {
       throw apiExceptionFromDio(e);
     }
   }
+
+  /// `GET /settings/public` (público, sin auth): whitelist explícita de
+  /// keys del lado del backend (`SettingsService.findPublic`), como un
+  /// mapa `key -> value` plano de strings. No se modela con un tipo
+  /// dedicado porque la whitelist puede crecer del lado del backend sin
+  /// que este repositorio necesite cambiar — cada consumidor lee solo la
+  /// key que le importa (ver `appVersionCheckProvider`, que lee
+  /// `min_app_version`).
+  Future<Map<String, dynamic>> getPublicSettings() async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/settings/public',
+      );
+      return response.data ?? const {};
+    } on DioException catch (e) {
+      throw apiExceptionFromDio(e);
+    }
+  }
 }

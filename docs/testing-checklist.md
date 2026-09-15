@@ -2801,6 +2801,231 @@ Veredicto: **LISTO con hallazgo menor aceptado como no bloqueante** (Perfil con 
 tras cambio de cuenta sin restart — preexistente, con test de regresión `skip`eado, fix
 delegado a la sesión principal).
 
+**Actualización posterior (corrección, a raíz de un reporte de "el logout no mata la sesión"):**
+la hipótesis inicial del reporte (que `routerProvider` nunca re-ejecuta su `redirect` al cambiar
+el auth) resultó falsa — ya tenía `ref.listen(authControllerProvider, (_, _) => router.refresh())`
+desde antes, y `test/core/router/app_router_test.dart` ya cubre `logout → vuelve al Login` en
+verde. La causa real era ESTE hallazgo, y un barrido del mismo patrón (`FutureProvider`/
+`AsyncNotifierProvider` keep-alive con datos por-usuario, sin invalidar en logout) encontró 3
+casos más sin documentar: `orderListProvider`, `userCouponListProvider`, `rewardProgressProvider`.
+Fix aplicado en los 4: cada provider ahora hace `ref.listen(authControllerProvider.select((s) =>
+s.user?.id), (_, _) => ref.invalidateSelf())` dentro de su propio `build()` — se invalida solo
+ante cualquier cambio de `id` de usuario, sin que `auth_controller.dart` importe ninguna capa de
+feature (la opción de diseño que esta misma entrada ya había dejado planteada). Test `skip`eado
+reactivado + 3 tests nuevos análogos para orders/coupons/rewards, los 4 en verde. `flutter
+analyze` limpio. `flutter test`: `581/581`, sin `skip` (antes `577 ~1`).
+
+---
+
+## Auditoría: App Version Check (gate de actualización forzada) — ✅ LISTO (corregido tras hallazgo bloqueante de @tester, ver "Actualización posterior" al final)
+
+Feature sin entrada propia en `ROADMAP.md` — trabajo nuevo, sin commitear (working tree), no
+implementado en la sesión de auditoría. Archivos: `lib/features/settings/application/
+app_version_check.dart` (función pura `evaluateAppVersion`), `lib/features/settings/application/
+settings_providers.dart` (`currentAppVersionProvider`, `appVersionCheckProvider`), `lib/features/
+settings/data/settings_repository.dart` (`getPublicSettings()`), `lib/features/settings/
+presentation/widgets/force_update_dialog.dart` (`ForceUpdateDialog`), `lib/app.dart`
+(`_AppVersionGate`). Backend: `min_app_version` en `backend-celtas/src/modules/settings/
+settings.service.ts`, whitelist pública, `seedIfMissing`.
+
+`flutter analyze` (suite completa, salida cruda propia): `No issues found! (ran in 5.6s)`.
+`flutter test` (suite completa, salida cruda propia): `+576 ~1: All tests passed!` (`~1` skip
+preexistente, no relacionado — iba en `566` antes de esta auditoría, sube a `576` por los 10 tests
+nuevos agregados acá; sin regresión en el resto de la app, incluida `lib/app.dart`/
+`MaterialApp.router.builder`, zona compartida por toda la navegación).
+
+Tests nuevos agregados por `@tester` (lógica crítica sin cobertura de widget previa — solo existían
+`app_version_check_test.dart` para la función pura y `app_version_check_provider_test.dart` para el
+provider con mocktail, ninguno ejercitaba el diálogo ni el cableado real en `app.dart`):
+- `test/features/settings/presentation/widgets/force_update_dialog_test.dart` (8 tests): título/
+  mensaje, `minVersion` muestra solo `X.Y.Z` (nunca el build), `minVersion: null` no muestra la
+  línea, `launchUrl` éxito/`false`/`PlatformException` (mensaje de error real, sin crash),
+  `PopScope.canPop == false` **y** simulación real del botón atrás del sistema
+  (`tester.binding.handlePopRoute()`) confirmando que el diálogo sigue montado, tap fuera de la
+  barrera (`barrierDismissible: false`) tampoco lo cierra.
+- `test/features/settings/presentation/app_version_gate_test.dart` (2 tests): `isUpdateRequired:
+  false` → nunca se muestra el diálogo; `appVersionCheckProvider` en `AsyncError` (red
+  desconectada) → fail-open real de punta a punta vía `CeltasApp` completo (no solo el provider
+  aislado), sin excepción no manejada.
+
+✅ Pasó:
+- `evaluateAppVersion` compara el **build number** (parte después de `+`), no el semver — 8 tests
+  existentes, incluida la mutación manual documentada por la sesión principal
+  (`currentBuild < minBuild` → `<=`: MUERTO por el test "build igual").
+- Fail-open correcto y verificado en 3 capas independientes: función pura (`minVersion` null/
+  vacío/mal formado), provider (`ApiException` del repositorio → `noBlock`), y ahora también
+  end-to-end a través de `CeltasApp` completo (test nuevo de red desconectada arriba).
+- Contrato de backend confirmado contra el código fuente real (no asumido):
+  `MIN_APP_VERSION_KEY = 'min_app_version'` sí está en `PUBLIC_KEYS_WHITELIST` de
+  `backend-celtas/src/modules/settings/settings.service.ts`, sembrado por `seedIfMissing` con
+  baseline `'1.0.1+16'` — consistente con `pubspec.yaml` (`version: 1.0.1+17`, no se autobloquea).
+  `getPublicSettings()` recibe el mapa plano ya desenvuelto por el interceptor de respuesta de
+  `ApiClient` (`{ success, data } → data`, confirmado leyendo `api_client.dart:125-133`); el envío
+  crudo real de `GET /settings/public` en producción SÍ trae el envelope
+  `{"success":true,"data":{...}}` (confirmado con `curl` directo a
+  `https://backend-celtas.onrender.com/settings/public`), así que el desenvolvimiento es
+  necesario y funciona.
+- `PopScope(canPop: false)` + `barrierDismissible: false` (doble protección) confirmados con
+  comportamiento real, no solo por lectura: el botón atrás del sistema
+  (`tester.binding.handlePopRoute()`) y un tap fuera de la barrera no cierran el diálogo (tests
+  nuevos arriba). No hay ningún `Navigator.pop` alcanzable desde `ForceUpdateDialog` — el único
+  botón (`Abrir Play Store`) solo llama `launchUrl`.
+- `package_info_plus` promovido de dependencia transitiva a `direct main` en `pubspec.lock`, misma
+  versión, sin conflictos de resolución (`git diff pubspec.lock`).
+- Colores: sin `Color(0xFF...)` sueltos en `force_update_dialog.dart` (solo `CeltasColors.redLight`/
+  `CeltasColors.black`); tipografía vía `Theme.of(context).textTheme` (`headlineSmall`/
+  `bodyMedium`/`bodySmall`), mismo patrón que el `AlertDialog` de confirmación de logout en
+  `profile_screen.dart` — no hay mockup propio en `design-reference/` para este diálogo (no es una
+  de las 12 pantallas originales), así que el criterio de fidelidad aplicable es consistencia con
+  los diálogos ya existentes de la app, que sí se cumple. Texto de UI en español en su totalidad.
+- Decisión de fail-open evaluada como razonable dado el modelo de negocio: no hay pago dentro de
+  la app, el riesgo de una versión vieja es de UX/compatibilidad, no de integridad de datos o
+  dinero — bloquear agresivamente por un chequeo de versión caído sería peor que dejar pasar a un
+  cliente con una versión ligeramente vieja.
+
+❌ Falló — **bug bloqueante, confirmado con reproducción real, no solo lectura de código**:
+- `lib/app.dart:26` (`builder: (context, child) => _AppVersionGate(child: child)`) +
+  `lib/app.dart:60` (`showDialog(context: context, ...)` dentro de
+  `_AppVersionGateState.build`): el comentario del propio archivo (`lib/app.dart:22-25`) afirma
+  "el `Navigator` de `go_router` ya existe acá" — **es falso**. `MaterialApp.router(builder: ...)`
+  monta el `Navigator` de `go_router` como **descendiente** del `Widget` que retorna `builder`
+  (`widget.child`, dentro de `_AppVersionGate`), no como ancestro de él. Un `BuildContext` solo
+  puede resolver ancestros hacia arriba del árbol — el `context` de
+  `_AppVersionGateState.build()` está posicionado ARRIBA de ese `Navigator`, nunca por debajo.
+  Resultado real, reproducido con un widget test armado para el sondeo (mismo criterio ya usado en
+  este archivo para el bug de overlap del banner del Home: se corrió, reprodujo el fallo de forma
+  consistente, y se descartó sin dejarlo en el suite committeado — ver el comentario extenso en
+  `test/features/settings/presentation/app_version_gate_test.dart` con la evidencia completa):
+  montar `CeltasApp` con `appVersionCheckProvider` resolviendo `isUpdateRequired: true` dispara,
+  en el momento exacto en que `showDialog` intenta correr,
+
+  ```
+  FlutterError:<Navigator operation requested with a context that does not include a
+  Navigator.
+          The context used to push or pop routes from the Navigator must be that of a widget that is
+  a descendant of a Navigator widget.>
+  ```
+
+  con el stack trace real:
+  ```
+  #0      Navigator.of.<anonymous closure> (package:flutter/src/widgets/navigator.dart:2959:9)
+  #1      Navigator.of (package:flutter/src/widgets/navigator.dart:2966:6)
+  #2      showDialog (package:flutter/src/material/dialog.dart:1642:19)
+  #3      _AppVersionGateState.build.<anonymous closure>.<anonymous closure> (package:celtas_mobile/app.dart:60:9)
+  #4      SchedulerBinding._invokeFrameCallback (package:flutter/src/scheduler/binding.dart:1430:15)
+  ```
+
+  **Efecto real en producción**: el gate de actualización forzada — el único propósito de esta
+  feature — NUNCA llega a mostrarse. Cuando el backend reporta `isUpdateRequired: true`, la app no
+  bloquea nada; el usuario sigue usando la versión vieja sin ningún aviso, y el error queda como una
+  excepción no manejada durante un frame callback (visible en logs/Crashlytics si está conectado,
+  pero invisible para el usuario y sin ningún efecto de bloqueo). Esto es lo opuesto al objetivo de
+  la feature. No se corrige acá (regla del rol: reportar, no arreglar código de producción) — para
+  la sesión principal: la corrección típica es resolver el `Navigator`/mostrar el diálogo desde un
+  `context` que sí sea descendiente del `Navigator` de `go_router` (ej. envolver `child` en un
+  `Builder` propio dentro de `_AppVersionGate.build()` y usar ESE `context` interno para
+  `showDialog`, o usar el `navigatorKey` que exponga `routerProvider`/`GoRouter` en vez de
+  `context`).
+
+⚠️ Riesgos / casos borde no cubiertos, no bloqueantes (algunos quedan parcialmente sin poder
+verificarse hasta que se corrija el bug de arriba, porque el diálogo no llega a montarse hoy):
+- **El chequeo de versión corre UNA sola vez por sesión de app, nunca se reintenta** —
+  `appVersionCheckProvider` es un `FutureProvider` sin `.autoDispose` y nada lo invalida nunca
+  (confirmado con `grep -rn "appVersionCheckProvider" lib/`: solo aparece definido y consumido en
+  `_AppVersionGate`, sin ningún `ref.invalidate`/`ref.refresh` en ningún otro lugar). A diferencia
+  del patrón *event-driven* ya usado en el Home para `businessHoursProvider`
+  (`AppLifecycleState.resumed` reconsulta al volver de background), acá no hay ningún
+  `WidgetsBindingObserver`. Efecto: un usuario que ya tenía la app abierta ANTES de que el admin
+  suba el `min_app_version` no verá el gate hasta que mate el proceso y reabra la app —
+  potencialmente nunca, si deja la app en background indefinidamente. Esto responde de forma más
+  precisa la pregunta original ("¿qué pasa si pasa de `true` a `false` en un rebuild posterior?"):
+  en el código actual esa transición **no puede ocurrir en absoluto** durante una sesión (el
+  provider nunca se re-evalúa), así que `_dialogShown` sin resetear no es un bug activable hoy —
+  pero es una trampa real para quien agregue a futuro un `ref.invalidate` (ej. al volver de
+  background, seguiendo el patrón de `businessHoursProvider`): en ese momento sí haría falta
+  decidir qué hacer si `isUpdateRequired` vuelve a `false` (¿cerrar el diálogo ya abierto
+  automáticamente? hoy no hay ningún código que lo haga).
+- **Colisión con otros diálogos/bottom sheets**: revisado con `grep -rn "showDialog|
+  showModalBottomSheet" lib/` — los 6 usos existentes fuera de esta feature
+  (`addresses_screen.dart`, `checkout_screen.dart`, `profile_screen.dart`,
+  `reward_terms_sheet.dart`, `cart_screen.dart`, `coupon_picker_sheet.dart`) son todos disparados
+  por una acción explícita del usuario, ninguno se auto-abre al arrancar la app — no hay una
+  carrera realista contra el gate en el arranque. Si el usuario ya tiene un diálogo/bottom sheet
+  propio abierto cuando el chequeo de versión resuelve más tarde (ej. tras el cold-start de
+  30-50s de Render, con el usuario ya navegando), `showDialog(useRootNavigator: true)` (default)
+  apilaría el overlay del gate por ENCIMA de cualquier otro — comportamiento correcto para un gate
+  que debe ganar siempre, pero no verificable hoy en la práctica porque el diálogo no llega a
+  montarse (bug de arriba).
+- **Deep links**: no verificado si un deep link que dispare `GoRouter.go()` podría, tras la
+  corrección del bug de `Navigator`, desmontar el diálogo abierto (`showDialog` con
+  `useRootNavigator: true` empuja sobre el `Navigator` raíz de `go_router`, que en este proyecto es
+  único — sin `ShellRoute`s con `parentNavigatorKey` separado —, así que en teoría sobrevive a un
+  `go()` porque ese método opera sobre las rutas declarativas del propio `GoRouter`, no sobre rutas
+  imperativas apiladas encima; pero esto es análisis, no evidencia empírica, porque no se puede
+  probar de forma realista hasta que el diálogo llegue a mostrarse de verdad).
+- El backend real de producción, al momento de esta auditoría (`curl
+  https://backend-celtas.onrender.com/settings/public`), **no incluye todavía la key
+  `min_app_version`** en su respuesta (solo `business_manual_closed`, `whatsapp_business_number`,
+  `business_manual_closed_reason`, `business_hours_schedule`) — el código del backend que la
+  siembra existe en el repo fuente (`backend-celtas/src/modules/settings/settings.service.ts`),
+  pero el despliegue de Render corriendo ahora mismo aparenta no tenerlo todavía. Con el fail-open
+  ya confirmado, esto no bloquea nada (mismo comportamiento que "key ausente"), pero significa que
+  hoy en producción esta feature está inerte de cualquier forma, incluso si se corrigiera el bug
+  de `Navigator` — hace falta desplegar el backend antes de poder verificarla end-to-end contra
+  producción real.
+
+Veredicto original: **NO LISTO.** Bug bloqueante confirmado con reproducción real (no hipotética): el
+overlay de actualización forzada nunca llega a mostrarse en el flujo real de la app
+(`_AppVersionGate`/`lib/app.dart`), por lo que la feature no cumple su único propósito. La lógica
+de decisión (`evaluateAppVersion`, `appVersionCheckProvider`) y el widget del diálogo en aislamiento
+(`ForceUpdateDialog`) están sólidos y bien cubiertos — el defecto está específicamente en el punto
+de integración de `lib/app.dart`. No se marca nada en `ROADMAP.md`. Pendiente antes de poder
+reabrir esta auditoría: corregir el `Navigator`/`context` en `_AppVersionGate`, confirmar con un
+test de integración real que `isUpdateRequired: true` sí muestra `ForceUpdateDialog` sin excepción
+(el test se descartó a propósito en esta auditoría, ver nota en
+`app_version_gate_test.dart`, pero el caso ya está armado y lista para reactivarse apenas se
+corrija), y desplegar el backend con `min_app_version` para poder verificar contra producción real.
+
+**Actualización posterior (corrección del bug bloqueante, misma sesión principal, no @tester):**
+Fix real: `app_router.dart` ahora expone `final rootNavigatorKey = GlobalKey<NavigatorState>();`,
+pasado como `navigatorKey: rootNavigatorKey` al `GoRouter` real de la app. `_AppVersionGateState`
+(`app.dart`) ya no usa su propio `context` (ancestro del `Navigator`, el bug original) para
+`showDialog` — usa `rootNavigatorKey.currentContext` (el `Navigator` real montado por `child`),
+con un guard `if (navigatorContext == null) return;` en vez de asumir que siempre está listo.
+
+El caso `isUpdateRequired: true` que `@tester` armó, reprodujo y descartó a propósito
+(`app_version_gate_test.dart`) se reactivó y se **reescribió** (no se reactivó tal cual: el
+`fakeRouter()` original no tenía `navigatorKey`, así que no habría ejercitado el fix — un
+`GoRouter` sin `navigatorKey` propio crea su propia key interna, distinta de `rootNavigatorKey`,
+y el gate simplemente no habría hecho nada, dando una falsa sensación de éxito). La versión
+corregida pasa `fakeRouter(navigatorKey: rootNavigatorKey)`, el mismo `navigatorKey` que usa el
+router real, y verifica:
+- `ForceUpdateDialog` se monta (`findsOneWidget`), sin `tester.takeException()`.
+- Simulación real del botón atrás (`tester.binding.handlePopRoute()`): el diálogo sigue montado.
+- Tap en la barrera (`Offset(5, 5)`, fuera del diálogo): el diálogo sigue montado.
+
+Evidencia cruda de esta sesión, después del fix (`flutter analyze` y `flutter test`, salida real,
+no resumida):
+```
+Analyzing celtas-app...
+No issues found! (ran in 6.1s)
+```
+```
+00:38 +577 ~1: All tests passed!
+```
+(`577` = los `576` que dejó `@tester` + el caso `isUpdateRequired: true` reescrito arriba, que
+antes no contaba porque estaba descartado del suite; `~1` es el mismo skip preexistente y no
+relacionado que ya traía la auditoría original.)
+
+Los tres riesgos no bloqueantes que `@tester` dejó documentados arriba (chequeo sin re-ejecución en
+`resumed`, backend de producción todavía sin `min_app_version` en su respuesta real, análisis de
+deep links no verificable) **siguen sin resolverse** — no estaban en el alcance de este fix
+puntual (corregir el bug bloqueante de `Navigator`) y no bloquean el veredicto LISTO, pero quedan
+como trabajo futuro si se decide abordarlos.
+
+Veredicto final: **LISTO.** El bug bloqueante está corregido y verificado con un test de
+integración real (no descartado esta vez) contra el mecanismo exacto que falló originalmente.
+
 ---
 
 ## Reporte de auditoría (formato esperado del @tester)

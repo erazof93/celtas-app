@@ -20,6 +20,17 @@ final profileRepositoryProvider = Provider<ProfileRepository>(
 class ProfileNotifier extends AsyncNotifier<User> {
   @override
   Future<User> build() {
+    // Keep-alive (sin autoDispose): sin esto, tras logout + login de OTRA
+    // cuenta en el mismo dispositivo, `profileProvider` sigue devolviendo el
+    // user anterior hasta que algo más fuerce un re-fetch — bug latente
+    // documentado en `test/features/profile/application/
+    // profile_stale_user_repro_test.dart`. Se invalida solo (no desde
+    // `AuthController.logout()`, que invertiría la dependencia auth→profile)
+    // cada vez que cambia el `id` del user autenticado, cubriendo tanto
+    // logout (→ null) como login de una cuenta distinta.
+    ref.listen(authControllerProvider.select((s) => s.user?.id), (_, _) {
+      ref.invalidateSelf();
+    });
     return ref.read(profileRepositoryProvider).getProfile();
   }
 
