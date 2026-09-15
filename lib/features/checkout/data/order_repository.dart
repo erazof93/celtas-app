@@ -35,20 +35,27 @@ class AddressSnapshotInput {
 ///
 /// `POST /orders` (contrato verificado contra `celtas-backend/src/modules/
 /// orders/dto/create-order.dto.ts` + `orders.service.ts`):
-///   - `items`: `[{ menuItemId, quantity, sauceIds?, comment? }]`,
-///     obligatorio, al menos 1. `sauceIds` es tri-state real
-///     (`resolveSelectedSauces` en el backend distingue los tres casos, no
-///     colapsa `undefined` y `[]`): la llave se OMITE por completo si el
-///     ítem no tiene catálogo de salsas o el cliente nunca eligió
-///     (`CartItem.selectedSauces` vacío y `explicitlyNoSauces == false`) →
-///     el backend guarda `selectedSauces: null` ("no aplica"); se manda
-///     `sauceIds: []` EXPLÍCITO si el cliente tocó "Sin salsas" a propósito
-///     (`explicitlyNoSauces == true`) → el backend guarda
+///   - `items`: `[{ menuItemId, quantity, sauceIds?, beverageIds?,
+///     extraPortionIds?, comment? }]`, obligatorio, al menos 1. `sauceIds` es
+///     tri-state real (`resolveSelectedSauces` en el backend distingue los
+///     tres casos, no colapsa `undefined` y `[]`): la llave se OMITE por
+///     completo si el ítem no tiene catálogo de salsas o el cliente nunca
+///     eligió (`CartItem.selectedSauces` vacío y `explicitlyNoSauces ==
+///     false`) → el backend guarda `selectedSauces: null` ("no aplica"); se
+///     manda `sauceIds: []` EXPLÍCITO si el cliente tocó "Sin salsas" a
+///     propósito (`explicitlyNoSauces == true`) → el backend guarda
 ///     `selectedSauces: []` y esto se muestra literal como "Sin salsas" en
 ///     WhatsApp/admin; con salsas elegidas, se mandan sus ids. El backend
 ///     valida cada id contra las salsas que ese producto realmente ofrece y
 ///     guarda los NOMBRES como snapshot en `OrderItem.selectedSauces` — el
 ///     pedido no se ve afectado si la salsa se borra del catálogo después.
+///     `beverageIds`/`extraPortionIds` son el MISMO tri-state que `sauceIds`
+///     (`resolveSelectedPriced` en el backend), a partir de
+///     `CartItem.selectedBeverages`/`explicitlyNoBeverages` y
+///     `selectedExtraPortions`/`explicitlyNoExtraPortions` — a diferencia de
+///     las salsas, el backend valida además `beverageGroupRequired`/`Max` y
+///     `extraPortionsGroupRequired`/`Max` (`OrdersService.
+///     validateGroupSelection`) y SÍ suman precio al `subtotal` del ítem.
 ///     `comment` (texto libre, opcional, `MaxLength(140)` en el backend) se
 ///     manda SOLO si queda contenido real después de `trim()` — mismo
 ///     criterio que `sauceIds`/`addressSnapshot`/`couponCode`: nunca se
@@ -98,6 +105,20 @@ class OrderRepository {
                   ]
                 else if (item.explicitlyNoSauces)
                   'sauceIds': const <String>[],
+                if (item.selectedBeverages.isNotEmpty)
+                  'beverageIds': [
+                    for (final beverage in item.selectedBeverages)
+                      beverage.id,
+                  ]
+                else if (item.explicitlyNoBeverages)
+                  'beverageIds': const <String>[],
+                if (item.selectedExtraPortions.isNotEmpty)
+                  'extraPortionIds': [
+                    for (final extraPortion in item.selectedExtraPortions)
+                      extraPortion.id,
+                  ]
+                else if (item.explicitlyNoExtraPortions)
+                  'extraPortionIds': const <String>[],
                 if (item.comment != null && item.comment!.trim().isNotEmpty)
                   'comment': item.comment!.trim(),
                 if (item.rewardRedemptionId != null)

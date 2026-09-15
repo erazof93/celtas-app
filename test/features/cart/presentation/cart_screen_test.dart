@@ -11,6 +11,8 @@ import 'package:celtas_mobile/features/coupons/data/models/coupon_status.dart';
 import 'package:celtas_mobile/features/coupons/data/models/user_coupon.dart';
 import 'package:celtas_mobile/features/coupons/data/models/validated_coupon.dart';
 import 'package:celtas_mobile/features/home/application/home_providers.dart';
+import 'package:celtas_mobile/features/home/data/models/beverage_option.dart';
+import 'package:celtas_mobile/features/home/data/models/extra_portion_option.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_category.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
 import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
@@ -988,4 +990,165 @@ void main() {
       },
     );
   });
+
+  group(
+    'editar bebidas/porciones extras desde el carrito (ícono de lápiz) — '
+    'mismo bug de clase ya corregido una vez para salsas, extendido acá',
+    () {
+      const withBeverageMenu = [
+        PublicMenuCategory(
+          id: 'c-1',
+          name: 'Combos',
+          items: [
+            PublicMenuItem(
+              id: 'i-1',
+              name: 'Berserker Burger',
+              price: 15.5,
+              beverages: [
+                BeverageOption(id: 'b-1', name: 'Coca-Cola 500ml', price: 3),
+              ],
+              beverageGroupMaxSelectable: 1,
+            ),
+          ],
+        ),
+      ];
+
+      testWidgets(
+        'producto SIN bebidas/extras seleccionados pero que el menú público '
+        'SÍ ofrece → muestra el ícono de editar (antes solo miraba salsas)',
+        (tester) async {
+          await pumpCart(
+            tester,
+            couponRepository: MockCouponRepository(),
+            items: [burger],
+            menu: withBeverageMenu,
+          );
+
+          expect(find.byKey(const ValueKey('cart-edit-i-1')), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        'ítem con una bebida ya seleccionada → muestra el ícono aunque el '
+        'menú público no esté cargado (no depende de una segunda consulta)',
+        (tester) async {
+          final container = ProviderContainer(
+            overrides: [
+              couponRepositoryProvider.overrideWithValue(
+                MockCouponRepository(),
+              ),
+            ],
+          );
+          addTearDown(container.dispose);
+          container.read(cartProvider.notifier).addItem(
+            burger,
+            selectedBeverages: const [
+              BeverageOption(id: 'b-1', name: 'Coca-Cola 500ml', price: 3),
+            ],
+          );
+
+          await tester.pumpWidget(
+            UncontrolledProviderScope(
+              container: container,
+              child: MaterialApp.router(
+                theme: AppTheme.dark,
+                routerConfig: router(),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          // lineKey con bebidas incluye el sufijo de la combinación elegida.
+          expect(
+            find.byKey(const ValueKey('cart-edit-i-1::b-1')),
+            findsOneWidget,
+          );
+        },
+      );
+
+      testWidgets(
+        'ítem con una porción extra ya seleccionada → muestra el ícono de '
+        'editar',
+        (tester) async {
+          final container = ProviderContainer(
+            overrides: [
+              couponRepositoryProvider.overrideWithValue(
+                MockCouponRepository(),
+              ),
+            ],
+          );
+          addTearDown(container.dispose);
+          container.read(cartProvider.notifier).addItem(
+            burger,
+            selectedExtraPortions: const [
+              ExtraPortionOption(id: 'e-1', name: 'Papas extra', price: 5),
+            ],
+          );
+
+          await tester.pumpWidget(
+            UncontrolledProviderScope(
+              container: container,
+              child: MaterialApp.router(
+                theme: AppTheme.dark,
+                routerConfig: router(),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          expect(
+            find.byKey(const ValueKey('cart-edit-i-1::e-1')),
+            findsOneWidget,
+          );
+        },
+      );
+
+      testWidgets(
+        'subtotal por ítem y total del carrito incluyen el precio de las '
+        'bebidas/porciones extras seleccionadas (mismo cálculo que '
+        'CartItem.lineTotal/el backend, no solo el precio base del '
+        'producto) — hueco de cobertura señalado en la auditoría de '
+        '@tester, cerrado acá',
+        (tester) async {
+          final container = ProviderContainer(
+            overrides: [
+              couponRepositoryProvider.overrideWithValue(
+                MockCouponRepository(),
+              ),
+            ],
+          );
+          addTearDown(container.dispose);
+          // 15.5 (burger) + 3 (Coca-Cola) + 5 (Papas extra) = 23.5 por
+          // unidad × 2 = 47.00.
+          container.read(cartProvider.notifier).addItem(
+            burger,
+            quantity: 2,
+            selectedBeverages: const [
+              BeverageOption(id: 'b-1', name: 'Coca-Cola 500ml', price: 3),
+            ],
+            selectedExtraPortions: const [
+              ExtraPortionOption(id: 'e-1', name: 'Papas extra', price: 5),
+            ],
+          );
+
+          await tester.pumpWidget(
+            UncontrolledProviderScope(
+              container: container,
+              child: MaterialApp.router(
+                theme: AppTheme.dark,
+                routerConfig: router(),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          // Único ítem en el carrito: el subtotal de la fila, el subtotal
+          // general y el total general coinciden — 3 widgets con el mismo
+          // texto (mismo criterio ya documentado en el test del stepper de
+          // cantidad más arriba, "1 ítem × 1 → ... 3 widgets").
+          expect(find.text('S/ 47.00'), findsNWidgets(3));
+        },
+      );
+    },
+  );
 }

@@ -4,7 +4,6 @@ import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
 import 'package:celtas_mobile/features/cart/data/models/cart_item.dart';
 import 'package:celtas_mobile/features/home/application/home_providers.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
-import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_snackbar.dart';
 import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
@@ -31,13 +30,35 @@ import 'package:go_router/go_router.dart';
 ///     un producto con salsas en un celular de ~6.1", y sigue siendo un
 ///     hero grande y reconocible.
 ///   - Nombre en Cinzel 24px, descripción 14px muted, precio dorado 22px.
-///   - Selector de salsas/cremas (solo si `item.sauces` no está vacío —
-///     ej. arroz chaufa no lo muestra): sección nueva, no viene del mockup
-///     original (12 pantallas, sin esta funcionalidad todavía) — se sigue el
-///     mismo lenguaje visual del resto de la pantalla (chips con borde
-///     dorado cuando están seleccionados, mismo criterio que "VER MIS
-///     CUPONES" del carrito y el círculo de selección de `_AddressCard` del
-///     checkout).
+///   - Selector de salsas/bebidas/porciones extras (cada uno solo si
+///     `item.sauces`/`item.beverages`/`item.extraPortions` no está vacío —
+///     ej. arroz chaufa no muestra ninguno): sección nueva, no viene del
+///     mockup original (12 pantallas, sin esta funcionalidad todavía). Cada
+///     categoría es un `_OptionGroupDropdown`: un campo tipo "dropdown"
+///     (mismo lenguaje visual de input que el resto de la pantalla — borde,
+///     `CeltasColors.surface`, `CeltasRadii.input`) que muestra un resumen
+///     de la selección actual y, al tocarlo, abre un diálogo con checkboxes
+///     (multi-selección real, más un checkbox "Sin X" mutuamente excluyente
+///     con las opciones reales). Reemplazó un selector de chips horizontales
+///     usado en una iteración anterior — chips no escalan bien cuando el
+///     catálogo de opciones crece (ej. muchas bebidas), y el diálogo permite
+///     ver todas las opciones sin que la pantalla crezca con el catálogo.
+///     Bebidas/porciones extras tienen dos diferencias reales de negocio
+///     frente a salsas, no solo de estilo — (1) cada opción elegida SÍ suma
+///     precio al total (el ítem del diálogo muestra el precio, ej.
+///     "Coca-Cola 500ml — S/3.00") y (2) el grupo puede ser obligatorio
+///     (`beverageGroupRequired`/`extraPortionsGroupRequired`) y/o tener un
+///     máximo de opciones (`beverageGroupMaxSelectable`/
+///     `extraPortionsGroupMaxSelectable`) — configurado por el admin,
+///     contrato verificado contra `OrdersService.validateGroupSelection` en
+///     el backend. El checkbox "Sin X" ni se muestra cuando el grupo es
+///     obligatorio (elegir "ninguna" no es una opción válida ahí). La
+///     validación se espeja acá SOLO para UX inmediata (aviso
+///     "Obligatorio"/"Máximo X" antes de tocar "Agregar") — el backend
+///     vuelve a validar lo mismo al crear el pedido y es la única fuente de
+///     verdad real, mismo principio que el resto del proyecto ("el total y
+///     los subtotales se calculan SIEMPRE en el backend, nunca se confía en
+///     el frontend").
 ///   - Selector de cantidad (stepper `#17130F` borde `#2A231C` radio 12).
 ///   - Barra inferior fija con botón angled "AGREGAR AL CARRITO · S/ X.XX"
 ///     donde el precio ya viene multiplicado por la cantidad seleccionada.
@@ -106,15 +127,20 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
   late int _quantity;
   late final Set<String> _selectedSauceIds;
   late bool _explicitlyNoSauces;
+  late final Set<String> _selectedBeverageIds;
+  late bool _explicitlyNoBeverages;
+  late final Set<String> _selectedExtraPortionIds;
+  late bool _explicitlyNoExtraPortions;
   late final TextEditingController _commentController;
 
   @override
   void initState() {
     super.initState();
-    // Modo edición: precarga cantidad, salsas y comentario de la fila que se
-    // está editando en vez de arrancar en 1/vacío — ver doc de `editingItem`
-    // en `ProductDetailScreen`. Si la fila editada tenía "Sin salsas" marcado
-    // explícitamente, precarga ese chip en vez de dejar todo vacío.
+    // Modo edición: precarga cantidad, salsas, bebidas, extras y comentario
+    // de la fila que se está editando en vez de arrancar en 1/vacío — ver
+    // doc de `editingItem` en `ProductDetailScreen`. Si la fila editada
+    // tenía "Sin X" marcado explícitamente en cualquiera de las tres
+    // categorías, precarga ese chip en vez de dejar todo vacío.
     final editingItem = widget.editingItem;
     _quantity = editingItem?.quantity ?? 1;
     _selectedSauceIds = {
@@ -122,6 +148,16 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
         sauce.id,
     };
     _explicitlyNoSauces = editingItem?.explicitlyNoSauces ?? false;
+    _selectedBeverageIds = {
+      for (final beverage in editingItem?.selectedBeverages ?? const [])
+        beverage.id,
+    };
+    _explicitlyNoBeverages = editingItem?.explicitlyNoBeverages ?? false;
+    _selectedExtraPortionIds = {
+      for (final extraPortion in editingItem?.selectedExtraPortions ?? const [])
+        extraPortion.id,
+    };
+    _explicitlyNoExtraPortions = editingItem?.explicitlyNoExtraPortions ?? false;
     _commentController = TextEditingController(
       text: editingItem?.comment ?? '',
     );
@@ -133,43 +169,94 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
     super.dispose();
   }
 
-  /// El producto exige una elección real (al menos una salsa, o "Sin
-  /// salsas") solo cuando ofrece catálogo de salsas — productos sin
-  /// catálogo (`item.sauces.isEmpty`) nunca quedan bloqueados por esto.
-  bool get _hasRequiredSauceChoice =>
-      widget.item.sauces.isEmpty ||
-      _selectedSauceIds.isNotEmpty ||
-      _explicitlyNoSauces;
-
-  void _toggleSauce(String sauceId) {
-    setState(() {
-      if (!_selectedSauceIds.remove(sauceId)) {
-        _selectedSauceIds.add(sauceId);
-      }
-      // Mutuamente excluyente con "Sin salsas": elegir cualquier salsa real
-      // desmarca esa opción si estaba activa.
-      _explicitlyNoSauces = false;
-    });
+  /// Mensaje de la violación actual del grupo de salsas, o `null` si la
+  /// selección es válida — mismo shape que
+  /// [_beverageChoiceViolation]/[_extraPortionChoiceViolation], pero sin las
+  /// ramas de obligatoriedad/máximo: el contrato del backend no expone
+  /// `groupRequired`/`groupMaxSelectable` para salsas (solo para
+  /// bebidas/porciones extras, ver `menu.service.ts`), así que acá el único
+  /// requisito de negocio sigue siendo el de siempre — el producto exige una
+  /// elección real (al menos una salsa, o "Sin salsas") solo cuando ofrece
+  /// catálogo de salsas.
+  String? get _sauceChoiceViolation {
+    if (widget.item.sauces.isEmpty) return null;
+    if (_selectedSauceIds.isEmpty && !_explicitlyNoSauces) {
+      return 'Elige tus salsas o toca "Sin salsas" para continuar';
+    }
+    return null;
   }
 
-  void _toggleNoSauces() {
-    setState(() {
-      if (_explicitlyNoSauces) {
-        _explicitlyNoSauces = false;
-      } else {
-        _explicitlyNoSauces = true;
-        // Mutuamente excluyente con las salsas reales: limpia cualquier
-        // selección previa.
-        _selectedSauceIds.clear();
-      }
-    });
+  /// Mensaje de la violación actual del grupo de bebidas, o `null` si la
+  /// selección es válida — mismo orden de chequeo que
+  /// `OrdersService.validateGroupSelection` en el backend: primero
+  /// obligatoriedad, después máximo. Sin bebidas ofrecidas, la validación
+  /// no aplica (siempre `null`). Con el grupo NO obligatorio, igual exige
+  /// una elección real (alguna bebida o "Sin bebida") antes de continuar —
+  /// mismo criterio de negocio que ya aplican las salsas
+  /// (`_sauceChoiceViolation`).
+  String? get _beverageChoiceViolation {
+    final item = widget.item;
+    if (item.beverages.isEmpty) return null;
+    if (item.beverageGroupRequired && _selectedBeverageIds.isEmpty) {
+      return 'Elige al menos 1 bebida (obligatorio)';
+    }
+    if (_selectedBeverageIds.length > item.beverageGroupMaxSelectable) {
+      return 'Máximo ${item.beverageGroupMaxSelectable} bebida(s) — quita '
+          'alguna para continuar';
+    }
+    if (!item.beverageGroupRequired &&
+        _selectedBeverageIds.isEmpty &&
+        !_explicitlyNoBeverages) {
+      return 'Elige tus bebidas o toca "Sin bebida" para continuar';
+    }
+    return null;
   }
+
+  /// Mismo criterio que [_beverageChoiceViolation], para porciones extras.
+  String? get _extraPortionChoiceViolation {
+    final item = widget.item;
+    if (item.extraPortions.isEmpty) return null;
+    if (item.extraPortionsGroupRequired && _selectedExtraPortionIds.isEmpty) {
+      return 'Elige al menos 1 porción extra (obligatorio)';
+    }
+    if (_selectedExtraPortionIds.length >
+        item.extraPortionsGroupMaxSelectable) {
+      return 'Máximo ${item.extraPortionsGroupMaxSelectable} porción(es) '
+          'extra — quita alguna para continuar';
+    }
+    if (!item.extraPortionsGroupRequired &&
+        _selectedExtraPortionIds.isEmpty &&
+        !_explicitlyNoExtraPortions) {
+      return 'Elige tus porciones extras o toca "Sin porciones extras" '
+          'para continuar';
+    }
+    return null;
+  }
+
+  double get _selectedBeveragesUnitPrice => widget.item.beverages
+      .where((beverage) => _selectedBeverageIds.contains(beverage.id))
+      .fold(0.0, (sum, beverage) => sum + beverage.price);
+
+  double get _selectedExtraPortionsUnitPrice => widget.item.extraPortions
+      .where(
+        (extraPortion) => _selectedExtraPortionIds.contains(extraPortion.id),
+      )
+      .fold(0.0, (sum, extraPortion) => sum + extraPortion.price);
 
   void _addToCart() {
     final item = widget.item;
     final editingItem = widget.editingItem;
     final selectedSauces = item.sauces
         .where((sauce) => _selectedSauceIds.contains(sauce.id))
+        .toList();
+    final selectedBeverages = item.beverages
+        .where((beverage) => _selectedBeverageIds.contains(beverage.id))
+        .toList();
+    final selectedExtraPortions = item.extraPortions
+        .where(
+          (extraPortion) =>
+              _selectedExtraPortionIds.contains(extraPortion.id),
+        )
         .toList();
     // Vacío o solo espacios = sin comentario — mismo criterio que el
     // backend (`OrdersService.resolveComment`, `create-order.dto.ts`), así
@@ -182,6 +269,10 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
             quantity: _quantity,
             selectedSauces: selectedSauces,
             explicitlyNoSauces: _explicitlyNoSauces,
+            selectedBeverages: selectedBeverages,
+            explicitlyNoBeverages: _explicitlyNoBeverages,
+            selectedExtraPortions: selectedExtraPortions,
+            explicitlyNoExtraPortions: _explicitlyNoExtraPortions,
             comment: comment,
           );
     } else {
@@ -190,6 +281,10 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
             quantity: _quantity,
             selectedSauces: selectedSauces,
             explicitlyNoSauces: _explicitlyNoSauces,
+            selectedBeverages: selectedBeverages,
+            explicitlyNoBeverages: _explicitlyNoBeverages,
+            selectedExtraPortions: selectedExtraPortions,
+            explicitlyNoExtraPortions: _explicitlyNoExtraPortions,
             comment: comment,
           );
     }
@@ -227,7 +322,13 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
-    final totalPrice = item.price * _quantity;
+    // Mismo cálculo que `CartItem.lineTotal`/el backend
+    // (`OrdersService.buildItems`): `(unitPrice + extrasUnitPrice) *
+    // quantity` — bebidas y porciones extras suman su precio una vez por
+    // unidad, las salsas no.
+    final totalPrice =
+        (item.price + _selectedBeveragesUnitPrice + _selectedExtraPortionsUnitPrice) *
+        _quantity;
 
     return Scaffold(
       // `top: false`: el hero de 400px es full-bleed a propósito (los
@@ -324,16 +425,101 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
                     ),
                     if (item.sauces.isNotEmpty) ...[
                       const SizedBox(height: 20),
-                      _SauceSelector(
-                        sauces: item.sauces,
+                      _OptionGroupDropdown(
+                        testKey: 'sauce',
+                        title: 'SALSAS Y CREMAS',
+                        hintText: 'Elige tus cremas',
+                        noneLabel: 'Sin salsas',
+                        options: [
+                          for (final sauce in item.sauces)
+                            _SelectableOption(id: sauce.id, name: sauce.name),
+                        ],
                         selectedIds: _selectedSauceIds,
-                        explicitlyNoSauces: _explicitlyNoSauces,
-                        onToggle: _toggleSauce,
-                        onToggleNoSauces: _toggleNoSauces,
+                        explicitlyNone: _explicitlyNoSauces,
+                        groupRequired: false,
+                        groupMaxSelectable: item.sauces.length,
+                        onApply: (selected, none) => setState(() {
+                          _selectedSauceIds
+                            ..clear()
+                            ..addAll(selected);
+                          _explicitlyNoSauces = none;
+                        }),
                       ),
-                      if (!_hasRequiredSauceChoice) ...[
+                      if (_sauceChoiceViolation case final message?) ...[
                         const SizedBox(height: 10),
-                        const _SauceChoiceNotice(),
+                        _ChoiceNotice(
+                          key: const ValueKey('detail-sauce-choice-notice'),
+                          message: message,
+                        ),
+                      ],
+                    ],
+                    if (item.beverages.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      _OptionGroupDropdown(
+                        testKey: 'beverage',
+                        title: 'BEBIDAS',
+                        hintText: 'Elige tus bebidas',
+                        noneLabel: 'Sin bebida',
+                        options: [
+                          for (final beverage in item.beverages)
+                            _SelectableOption(
+                              id: beverage.id,
+                              name: beverage.name,
+                              price: beverage.price,
+                            ),
+                        ],
+                        selectedIds: _selectedBeverageIds,
+                        explicitlyNone: _explicitlyNoBeverages,
+                        groupRequired: item.beverageGroupRequired,
+                        groupMaxSelectable: item.beverageGroupMaxSelectable,
+                        onApply: (selected, none) => setState(() {
+                          _selectedBeverageIds
+                            ..clear()
+                            ..addAll(selected);
+                          _explicitlyNoBeverages = none;
+                        }),
+                      ),
+                      if (_beverageChoiceViolation case final message?) ...[
+                        const SizedBox(height: 10),
+                        _ChoiceNotice(
+                          key: const ValueKey('detail-beverage-choice-notice'),
+                          message: message,
+                        ),
+                      ],
+                    ],
+                    if (item.extraPortions.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      _OptionGroupDropdown(
+                        testKey: 'extra',
+                        title: 'PORCIONES EXTRAS',
+                        hintText: 'Elige tus extras',
+                        noneLabel: 'Sin porciones extras',
+                        options: [
+                          for (final extraPortion in item.extraPortions)
+                            _SelectableOption(
+                              id: extraPortion.id,
+                              name: extraPortion.name,
+                              price: extraPortion.price,
+                            ),
+                        ],
+                        selectedIds: _selectedExtraPortionIds,
+                        explicitlyNone: _explicitlyNoExtraPortions,
+                        groupRequired: item.extraPortionsGroupRequired,
+                        groupMaxSelectable:
+                            item.extraPortionsGroupMaxSelectable,
+                        onApply: (selected, none) => setState(() {
+                          _selectedExtraPortionIds
+                            ..clear()
+                            ..addAll(selected);
+                          _explicitlyNoExtraPortions = none;
+                        }),
+                      ),
+                      if (_extraPortionChoiceViolation case final message?) ...[
+                        const SizedBox(height: 10),
+                        _ChoiceNotice(
+                          key: const ValueKey('detail-extra-choice-notice'),
+                          message: message,
+                        ),
                       ],
                     ],
                     const SizedBox(height: 20),
@@ -388,17 +574,30 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
                 // usuario cuando falta elegir salsas, en vez de ignorar el
                 // toque en silencio (`onPressed: null` no dispara el
                 // `InkWell` en absoluto). Ver doc de `CeltasButton.enabled`.
-                enabled: _hasRequiredSauceChoice,
+                enabled:
+                    _sauceChoiceViolation == null &&
+                    _beverageChoiceViolation == null &&
+                    _extraPortionChoiceViolation == null,
                 onPressed: () {
-                  if (!_hasRequiredSauceChoice) {
-                    // Mismo texto que el aviso inline bajo el selector
-                    // (`_SauceChoiceNotice`) y mismo estilo/comportamiento
-                    // que el resto de SnackBars de esta pantalla — mismo
-                    // criterio que el aviso de cupón de `cart_screen.dart`.
-                    showCeltasSnackBar(
-                      context,
-                      'Elige tus salsas o toca "Sin salsas" para continuar',
-                    );
+                  // Mismo orden en que las secciones aparecen en pantalla:
+                  // salsas, después bebidas, después porciones extras. El
+                  // mensaje mostrado es el mismo texto que el aviso inline
+                  // bajo el dropdown correspondiente (`_ChoiceNotice`) —
+                  // mismo criterio que el aviso de cupón de
+                  // `cart_screen.dart`.
+                  final sauceViolation = _sauceChoiceViolation;
+                  if (sauceViolation != null) {
+                    showCeltasSnackBar(context, sauceViolation);
+                    return;
+                  }
+                  final beverageViolation = _beverageChoiceViolation;
+                  if (beverageViolation != null) {
+                    showCeltasSnackBar(context, beverageViolation);
+                    return;
+                  }
+                  final extraPortionViolation = _extraPortionChoiceViolation;
+                  if (extraPortionViolation != null) {
+                    showCeltasSnackBar(context, extraPortionViolation);
                     return;
                   }
                   _addToCart();
@@ -549,34 +748,200 @@ class _QuantityStepper extends StatelessWidget {
   }
 }
 
-/// Selector de salsas/cremas. Solo se construye cuando `item.sauces` no está
-/// vacío — ver `_ProductDetailBody.build`. Multi-selección entre las salsas
-/// reales, más un chip adicional "Sin salsas" mutuamente excluyente con
-/// ellas (ver `_ProductDetailBodyState._toggleSauce`/`_toggleNoSauces`): el
-/// producto exige una elección real (al menos una salsa, o "Sin salsas")
-/// antes de poder agregar/guardar.
-class _SauceSelector extends StatelessWidget {
-  const _SauceSelector({
-    required this.sauces,
+/// Opción seleccionable dentro de un [_OptionGroupDropdown] — shape mínimo
+/// común entre `SauceOption` (sin precio) y `BeverageOption`/
+/// `ExtraPortionOption` (con precio), para que el dropdown/diálogo sea
+/// genérico sobre las 3 categorías sin acoplarse a ninguno de los 3 modelos
+/// reales de `home/data/models/`. `price == null` (caso salsas) omite el
+/// precio del label dentro del diálogo.
+class _SelectableOption {
+  const _SelectableOption({required this.id, required this.name, this.price});
+
+  final String id;
+  final String name;
+  final double? price;
+
+  String get label =>
+      price == null ? name : '$name — S/${price!.toStringAsFixed(2)}';
+}
+
+/// Selector de una categoría de opciones (salsas, bebidas o porciones
+/// extras) como campo tipo "dropdown": un input de solo lectura que muestra
+/// un resumen de la selección actual y, al tocarlo, abre un diálogo con
+/// checkboxes para editarla — reemplaza el selector de chips horizontales
+/// usado en una iteración anterior (ver doc de `_ProductDetailBody`).
+///
+/// Multi-selección real entre `options`, más un checkbox "Sin X"
+/// (`noneLabel`) mutuamente excluyente con ellas — mismo criterio de
+/// negocio de siempre: el producto exige una elección real (alguna opción,
+/// o "Sin X") antes de poder agregar/guardar, salvo que `groupRequired` sea
+/// `true`, en cuyo caso "Sin X" ni se ofrece (elegir "ninguna" no es válido
+/// ahí) y hace falta elegir al menos una opción real.
+///
+/// El diálogo mantiene su propio estado temporal (`tempSelected`/
+/// `tempExplicitlyNone`) hasta que se toca "ACEPTAR" — tocar "CANCELAR" o
+/// cerrar el diálogo descarta los cambios sin tocar el estado real de
+/// [_ProductDetailBodyState], mismo comportamiento esperable de cualquier
+/// diálogo de confirmación.
+class _OptionGroupDropdown extends StatelessWidget {
+  const _OptionGroupDropdown({
+    required this.testKey,
+    required this.title,
+    required this.hintText,
+    required this.noneLabel,
+    required this.options,
     required this.selectedIds,
-    required this.explicitlyNoSauces,
-    required this.onToggle,
-    required this.onToggleNoSauces,
+    required this.explicitlyNone,
+    required this.groupRequired,
+    required this.groupMaxSelectable,
+    required this.onApply,
   });
 
-  final List<SauceOption> sauces;
+  /// Prefijo de los `ValueKey` de este grupo (`sauce`/`beverage`/`extra`).
+  final String testKey;
+  final String title;
+  /// Texto del campo cuando no hay nada elegido todavía (ej. "Elige tus
+  /// bebidas") — distinto por categoría, a diferencia del hint genérico
+  /// "Selecciona…" que tenía antes.
+  final String hintText;
+  final String noneLabel;
+  final List<_SelectableOption> options;
   final Set<String> selectedIds;
-  final bool explicitlyNoSauces;
-  final ValueChanged<String> onToggle;
-  final VoidCallback onToggleNoSauces;
+  final bool explicitlyNone;
+  final bool groupRequired;
+  final int groupMaxSelectable;
+  final void Function(Set<String> selectedIds, bool explicitlyNone) onApply;
+
+  /// "Elige las que quieras" cuando el máximo configurado cubre TODO el
+  /// catálogo (caso salsas, que no tienen máximo real — ver
+  /// `_ProductDetailBodyState._sauceChoiceViolation`) — sin esto, un
+  /// catálogo de 2 salsas con `groupMaxSelectable: 2` diría "elige hasta 2",
+  /// una distinción sin sentido para el cliente si de todas formas no hay
+  /// más de 2 para elegir.
+  ///
+  /// Cuando el grupo es obligatorio, ya no repite la palabra "Obligatorio"
+  /// acá — el campo la muestra a su izquierda (ver `build`), así que
+  /// repetirla en el subtítulo sería ruido.
+  String get _subtitle {
+    if (groupRequired) {
+      return 'Elige entre 1 y $groupMaxSelectable';
+    }
+    if (groupMaxSelectable >= options.length) {
+      return 'Elige las que quieras, o "$noneLabel"';
+    }
+    return 'Elige hasta $groupMaxSelectable, o "$noneLabel"';
+  }
+
+  String get _summaryText {
+    if (explicitlyNone) return noneLabel;
+    if (selectedIds.isEmpty) return hintText;
+    return options
+        .where((option) => selectedIds.contains(option.id))
+        .map((option) => option.name)
+        .join(', ');
+  }
+
+  Future<void> _openDialog(BuildContext context) async {
+    final tempSelected = Set<String>.from(selectedIds);
+    var tempExplicitlyNone = explicitlyNone;
+    final applied = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: CeltasColors.surface,
+          title: Text(
+            title,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: CeltasColors.cream,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final option in options)
+                  CheckboxListTile(
+                    key: ValueKey('detail-$testKey-option-${option.id}'),
+                    value: tempSelected.contains(option.id),
+                    dense: true,
+                    activeColor: CeltasColors.orange,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: Text(
+                      option.label,
+                      style: const TextStyle(color: CeltasColors.cream),
+                    ),
+                    onChanged: (checked) {
+                      setDialogState(() {
+                        if (checked ?? false) {
+                          tempSelected.add(option.id);
+                          // Mutuamente excluyente con "Sin X": elegir
+                          // cualquier opción real desmarca ese checkbox si
+                          // estaba activo.
+                          tempExplicitlyNone = false;
+                        } else {
+                          tempSelected.remove(option.id);
+                        }
+                      });
+                    },
+                  ),
+                if (!groupRequired)
+                  CheckboxListTile(
+                    key: ValueKey('detail-$testKey-option-none'),
+                    value: tempExplicitlyNone,
+                    dense: true,
+                    activeColor: CeltasColors.orange,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: Text(
+                      noneLabel,
+                      style: const TextStyle(color: CeltasColors.cream),
+                    ),
+                    onChanged: (checked) {
+                      setDialogState(() {
+                        tempExplicitlyNone = checked ?? false;
+                        // Mutuamente excluyente con las opciones reales:
+                        // limpia cualquier selección previa.
+                        if (tempExplicitlyNone) tempSelected.clear();
+                      });
+                    },
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              key: ValueKey('detail-$testKey-dialog-cancel'),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text(
+                'CANCELAR',
+                style: TextStyle(color: CeltasColors.textMuted),
+              ),
+            ),
+            TextButton(
+              key: ValueKey('detail-$testKey-dialog-ok'),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text(
+                'ACEPTAR',
+                style: TextStyle(color: CeltasColors.orange),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (applied == true) {
+      onApply(tempSelected, tempExplicitlyNone);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final hasSelection = explicitlyNone || selectedIds.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'SALSAS Y CREMAS',
+          title,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
             fontSize: 13,
             fontWeight: FontWeight.w700,
@@ -586,29 +951,80 @@ class _SauceSelector extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Elige las que quieras, o "Sin salsas"',
+          _subtitle,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
             fontSize: 12,
             color: CeltasColors.textMuted,
           ),
         ),
         const SizedBox(height: 10),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
+        Row(
           children: [
-            for (final sauce in sauces)
-              _SauceChip(
-                key: ValueKey('detail-sauce-${sauce.id}'),
-                label: sauce.name,
-                selected: selectedIds.contains(sauce.id),
-                onTap: () => onToggle(sauce.id),
+            // Etiqueta "Obligatorio" a la izquierda del campo — solo cuando
+            // el grupo lo exige (`groupRequired`); con el grupo opcional no
+            // se muestra nada acá (el subtítulo de arriba ya explica el
+            // límite/la opción "Sin X", no hace falta un tag "Opcional"
+            // redundante en cada campo).
+            if (groupRequired)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Text(
+                  'Obligatorio',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: CeltasColors.orange,
+                  ),
+                ),
               ),
-            _SauceChip(
-              key: const ValueKey('detail-sauce-none'),
-              label: 'Sin salsas',
-              selected: explicitlyNoSauces,
-              onTap: onToggleNoSauces,
+            Expanded(
+              child: GestureDetector(
+                key: ValueKey('detail-$testKey-dropdown'),
+                onTap: () => _openDialog(context),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: CeltasColors.surface,
+                    border: Border.all(
+                      color: hasSelection
+                          ? CeltasColors.orange
+                          : CeltasColors.border,
+                      width: hasSelection ? 1.5 : 1,
+                    ),
+                    borderRadius: BorderRadius.circular(CeltasRadii.input),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _summaryText,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: hasSelection
+                                    ? CeltasColors.orange
+                                    : CeltasColors.textMuted,
+                              ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 20,
+                        color: hasSelection
+                            ? CeltasColors.orange
+                            : CeltasColors.textSubtle,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -617,70 +1033,21 @@ class _SauceSelector extends StatelessWidget {
   }
 }
 
-/// Chip individual de salsa (o del chip especial "Sin salsas", mismo
-/// lenguaje visual). Mismo criterio que el círculo de selección de
-/// `_AddressCard` (checkout_screen.dart) y el chip "VER MIS CUPONES" del
-/// carrito: borde dorado/naranja cuando está activo.
-class _SauceChip extends StatelessWidget {
-  const _SauceChip({
-    super.key,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
+/// Aviso de elección pendiente/inválida para salsas, bebidas o porciones
+/// extras — mismo patrón visual (card + ícono + texto, tono gold de
+/// advertencia) que `_MissingAddressNotice` en `checkout_screen.dart`,
+/// parametrizado por mensaje porque el texto depende de CUÁL regla se
+/// violó (obligatoriedad, máximo, o simplemente "elige algo") — ver
+/// `_sauceChoiceViolation`/`_beverageChoiceViolation`/
+/// `_extraPortionChoiceViolation`.
+class _ChoiceNotice extends StatelessWidget {
+  const _ChoiceNotice({super.key, required this.message});
 
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        decoration: BoxDecoration(
-          color: selected
-              ? CeltasColors.orange.withValues(alpha: 0.15)
-              : CeltasColors.surface,
-          border: Border.all(
-            color: selected ? CeltasColors.orange : CeltasColors.border,
-            width: selected ? 1.5 : 1,
-          ),
-          borderRadius: BorderRadius.circular(CeltasRadii.pill),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (selected) ...[
-              const Icon(Icons.check, size: 14, color: CeltasColors.orange),
-              const SizedBox(width: 6),
-            ],
-            Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: selected ? CeltasColors.orange : CeltasColors.cream,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Aviso de que falta elegir salsas antes de poder agregar/guardar — mismo
-/// patrón visual (card + ícono + texto, tono gold de advertencia) que
-/// `_MissingAddressNotice` en `checkout_screen.dart`.
-class _SauceChoiceNotice extends StatelessWidget {
-  const _SauceChoiceNotice();
+  final String message;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      key: const ValueKey('detail-sauce-choice-notice'),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: CeltasColors.gold.withValues(alpha: 0.12),
@@ -697,7 +1064,7 @@ class _SauceChoiceNotice extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Elige tus salsas o toca "Sin salsas" para continuar',
+              message,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: CeltasColors.gold,
                 fontWeight: FontWeight.w700,

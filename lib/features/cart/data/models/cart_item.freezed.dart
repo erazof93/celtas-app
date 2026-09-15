@@ -21,7 +21,16 @@ mixin _$CartItem {
 // `false` siempre) de "el cliente eligió deliberadamente ninguna". Ver
 // `order_repository.dart`: con `selectedSauces` vacío, este campo decide
 // si `sauceIds` se manda como `[]` explícito o se omite del todo.
- bool get explicitlyNoSauces;// Nota libre opcional del cliente para este ítem (ej. "sin cebolla"),
+ bool get explicitlyNoSauces;// Mismo shape que `selectedSauces`/`explicitlyNoSauces`, pero para
+// bebidas y porciones extras — a diferencia de las salsas, SÍ suman
+// precio (ver `lineTotal`). `explicitlyNoBeverages`/
+// `explicitlyNoExtraPortions` solo pueden ser `true` cuando el
+// producto ofrece esa categoría Y no es obligatoria
+// (`PublicMenuItem.beverageGroupRequired`/`extraPortionsGroupRequired`
+// en `false`) Y el cliente tocó el chip "Sin X" a propósito — con el
+// grupo obligatorio ese chip ni se muestra en el selector (ver
+// `product_detail_screen.dart`).
+ List<BeverageOption> get selectedBeverages; bool get explicitlyNoBeverages; List<ExtraPortionOption> get selectedExtraPortions; bool get explicitlyNoExtraPortions;// Nota libre opcional del cliente para este ítem (ej. "sin cebolla"),
 // espejo de `OrderItem.comment` en el backend. `null`/vacío = sin
 // comentario — se normaliza a `null` al agregar/editar la fila (ver
 // `CartNotifier`), nunca se guarda como string vacío o solo espacios.
@@ -41,16 +50,16 @@ $CartItemCopyWith<CartItem> get copyWith => _$CartItemCopyWithImpl<CartItem>(thi
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is CartItem&&(identical(other.menuItemId, menuItemId) || other.menuItemId == menuItemId)&&(identical(other.name, name) || other.name == name)&&(identical(other.unitPrice, unitPrice) || other.unitPrice == unitPrice)&&(identical(other.quantity, quantity) || other.quantity == quantity)&&(identical(other.image, image) || other.image == image)&&const DeepCollectionEquality().equals(other.selectedSauces, selectedSauces)&&(identical(other.explicitlyNoSauces, explicitlyNoSauces) || other.explicitlyNoSauces == explicitlyNoSauces)&&(identical(other.comment, comment) || other.comment == comment)&&(identical(other.rewardRedemptionId, rewardRedemptionId) || other.rewardRedemptionId == rewardRedemptionId));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is CartItem&&(identical(other.menuItemId, menuItemId) || other.menuItemId == menuItemId)&&(identical(other.name, name) || other.name == name)&&(identical(other.unitPrice, unitPrice) || other.unitPrice == unitPrice)&&(identical(other.quantity, quantity) || other.quantity == quantity)&&(identical(other.image, image) || other.image == image)&&const DeepCollectionEquality().equals(other.selectedSauces, selectedSauces)&&(identical(other.explicitlyNoSauces, explicitlyNoSauces) || other.explicitlyNoSauces == explicitlyNoSauces)&&const DeepCollectionEquality().equals(other.selectedBeverages, selectedBeverages)&&(identical(other.explicitlyNoBeverages, explicitlyNoBeverages) || other.explicitlyNoBeverages == explicitlyNoBeverages)&&const DeepCollectionEquality().equals(other.selectedExtraPortions, selectedExtraPortions)&&(identical(other.explicitlyNoExtraPortions, explicitlyNoExtraPortions) || other.explicitlyNoExtraPortions == explicitlyNoExtraPortions)&&(identical(other.comment, comment) || other.comment == comment)&&(identical(other.rewardRedemptionId, rewardRedemptionId) || other.rewardRedemptionId == rewardRedemptionId));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,menuItemId,name,unitPrice,quantity,image,const DeepCollectionEquality().hash(selectedSauces),explicitlyNoSauces,comment,rewardRedemptionId);
+int get hashCode => Object.hash(runtimeType,menuItemId,name,unitPrice,quantity,image,const DeepCollectionEquality().hash(selectedSauces),explicitlyNoSauces,const DeepCollectionEquality().hash(selectedBeverages),explicitlyNoBeverages,const DeepCollectionEquality().hash(selectedExtraPortions),explicitlyNoExtraPortions,comment,rewardRedemptionId);
 
 @override
 String toString() {
-  return 'CartItem(menuItemId: $menuItemId, name: $name, unitPrice: $unitPrice, quantity: $quantity, image: $image, selectedSauces: $selectedSauces, explicitlyNoSauces: $explicitlyNoSauces, comment: $comment, rewardRedemptionId: $rewardRedemptionId)';
+  return 'CartItem(menuItemId: $menuItemId, name: $name, unitPrice: $unitPrice, quantity: $quantity, image: $image, selectedSauces: $selectedSauces, explicitlyNoSauces: $explicitlyNoSauces, selectedBeverages: $selectedBeverages, explicitlyNoBeverages: $explicitlyNoBeverages, selectedExtraPortions: $selectedExtraPortions, explicitlyNoExtraPortions: $explicitlyNoExtraPortions, comment: $comment, rewardRedemptionId: $rewardRedemptionId)';
 }
 
 
@@ -61,7 +70,7 @@ abstract mixin class $CartItemCopyWith<$Res>  {
   factory $CartItemCopyWith(CartItem value, $Res Function(CartItem) _then) = _$CartItemCopyWithImpl;
 @useResult
 $Res call({
- String menuItemId, String name, double unitPrice, int quantity, String? image, List<SauceOption> selectedSauces, bool explicitlyNoSauces, String? comment, String? rewardRedemptionId
+ String menuItemId, String name, double unitPrice, int quantity, String? image, List<SauceOption> selectedSauces, bool explicitlyNoSauces, List<BeverageOption> selectedBeverages, bool explicitlyNoBeverages, List<ExtraPortionOption> selectedExtraPortions, bool explicitlyNoExtraPortions, String? comment, String? rewardRedemptionId
 });
 
 
@@ -78,7 +87,7 @@ class _$CartItemCopyWithImpl<$Res>
 
 /// Create a copy of CartItem
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? menuItemId = null,Object? name = null,Object? unitPrice = null,Object? quantity = null,Object? image = freezed,Object? selectedSauces = null,Object? explicitlyNoSauces = null,Object? comment = freezed,Object? rewardRedemptionId = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? menuItemId = null,Object? name = null,Object? unitPrice = null,Object? quantity = null,Object? image = freezed,Object? selectedSauces = null,Object? explicitlyNoSauces = null,Object? selectedBeverages = null,Object? explicitlyNoBeverages = null,Object? selectedExtraPortions = null,Object? explicitlyNoExtraPortions = null,Object? comment = freezed,Object? rewardRedemptionId = freezed,}) {
   return _then(_self.copyWith(
 menuItemId: null == menuItemId ? _self.menuItemId : menuItemId // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -87,6 +96,10 @@ as double,quantity: null == quantity ? _self.quantity : quantity // ignore: cast
 as int,image: freezed == image ? _self.image : image // ignore: cast_nullable_to_non_nullable
 as String?,selectedSauces: null == selectedSauces ? _self.selectedSauces : selectedSauces // ignore: cast_nullable_to_non_nullable
 as List<SauceOption>,explicitlyNoSauces: null == explicitlyNoSauces ? _self.explicitlyNoSauces : explicitlyNoSauces // ignore: cast_nullable_to_non_nullable
+as bool,selectedBeverages: null == selectedBeverages ? _self.selectedBeverages : selectedBeverages // ignore: cast_nullable_to_non_nullable
+as List<BeverageOption>,explicitlyNoBeverages: null == explicitlyNoBeverages ? _self.explicitlyNoBeverages : explicitlyNoBeverages // ignore: cast_nullable_to_non_nullable
+as bool,selectedExtraPortions: null == selectedExtraPortions ? _self.selectedExtraPortions : selectedExtraPortions // ignore: cast_nullable_to_non_nullable
+as List<ExtraPortionOption>,explicitlyNoExtraPortions: null == explicitlyNoExtraPortions ? _self.explicitlyNoExtraPortions : explicitlyNoExtraPortions // ignore: cast_nullable_to_non_nullable
 as bool,comment: freezed == comment ? _self.comment : comment // ignore: cast_nullable_to_non_nullable
 as String?,rewardRedemptionId: freezed == rewardRedemptionId ? _self.rewardRedemptionId : rewardRedemptionId // ignore: cast_nullable_to_non_nullable
 as String?,
@@ -174,10 +187,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String menuItemId,  String name,  double unitPrice,  int quantity,  String? image,  List<SauceOption> selectedSauces,  bool explicitlyNoSauces,  String? comment,  String? rewardRedemptionId)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String menuItemId,  String name,  double unitPrice,  int quantity,  String? image,  List<SauceOption> selectedSauces,  bool explicitlyNoSauces,  List<BeverageOption> selectedBeverages,  bool explicitlyNoBeverages,  List<ExtraPortionOption> selectedExtraPortions,  bool explicitlyNoExtraPortions,  String? comment,  String? rewardRedemptionId)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _CartItem() when $default != null:
-return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that.image,_that.selectedSauces,_that.explicitlyNoSauces,_that.comment,_that.rewardRedemptionId);case _:
+return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that.image,_that.selectedSauces,_that.explicitlyNoSauces,_that.selectedBeverages,_that.explicitlyNoBeverages,_that.selectedExtraPortions,_that.explicitlyNoExtraPortions,_that.comment,_that.rewardRedemptionId);case _:
   return orElse();
 
 }
@@ -195,10 +208,10 @@ return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String menuItemId,  String name,  double unitPrice,  int quantity,  String? image,  List<SauceOption> selectedSauces,  bool explicitlyNoSauces,  String? comment,  String? rewardRedemptionId)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String menuItemId,  String name,  double unitPrice,  int quantity,  String? image,  List<SauceOption> selectedSauces,  bool explicitlyNoSauces,  List<BeverageOption> selectedBeverages,  bool explicitlyNoBeverages,  List<ExtraPortionOption> selectedExtraPortions,  bool explicitlyNoExtraPortions,  String? comment,  String? rewardRedemptionId)  $default,) {final _that = this;
 switch (_that) {
 case _CartItem():
-return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that.image,_that.selectedSauces,_that.explicitlyNoSauces,_that.comment,_that.rewardRedemptionId);case _:
+return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that.image,_that.selectedSauces,_that.explicitlyNoSauces,_that.selectedBeverages,_that.explicitlyNoBeverages,_that.selectedExtraPortions,_that.explicitlyNoExtraPortions,_that.comment,_that.rewardRedemptionId);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -215,10 +228,10 @@ return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String menuItemId,  String name,  double unitPrice,  int quantity,  String? image,  List<SauceOption> selectedSauces,  bool explicitlyNoSauces,  String? comment,  String? rewardRedemptionId)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String menuItemId,  String name,  double unitPrice,  int quantity,  String? image,  List<SauceOption> selectedSauces,  bool explicitlyNoSauces,  List<BeverageOption> selectedBeverages,  bool explicitlyNoBeverages,  List<ExtraPortionOption> selectedExtraPortions,  bool explicitlyNoExtraPortions,  String? comment,  String? rewardRedemptionId)?  $default,) {final _that = this;
 switch (_that) {
 case _CartItem() when $default != null:
-return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that.image,_that.selectedSauces,_that.explicitlyNoSauces,_that.comment,_that.rewardRedemptionId);case _:
+return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that.image,_that.selectedSauces,_that.explicitlyNoSauces,_that.selectedBeverages,_that.explicitlyNoBeverages,_that.selectedExtraPortions,_that.explicitlyNoExtraPortions,_that.comment,_that.rewardRedemptionId);case _:
   return null;
 
 }
@@ -230,7 +243,7 @@ return $default(_that.menuItemId,_that.name,_that.unitPrice,_that.quantity,_that
 
 
 class _CartItem extends CartItem {
-  const _CartItem({required this.menuItemId, required this.name, required this.unitPrice, required this.quantity, this.image, final  List<SauceOption> selectedSauces = const <SauceOption>[], this.explicitlyNoSauces = false, this.comment, this.rewardRedemptionId}): _selectedSauces = selectedSauces,super._();
+  const _CartItem({required this.menuItemId, required this.name, required this.unitPrice, required this.quantity, this.image, final  List<SauceOption> selectedSauces = const <SauceOption>[], this.explicitlyNoSauces = false, final  List<BeverageOption> selectedBeverages = const <BeverageOption>[], this.explicitlyNoBeverages = false, final  List<ExtraPortionOption> selectedExtraPortions = const <ExtraPortionOption>[], this.explicitlyNoExtraPortions = false, this.comment, this.rewardRedemptionId}): _selectedSauces = selectedSauces,_selectedBeverages = selectedBeverages,_selectedExtraPortions = selectedExtraPortions,super._();
   
 
 @override final  String menuItemId;
@@ -253,6 +266,40 @@ class _CartItem extends CartItem {
 // `order_repository.dart`: con `selectedSauces` vacío, este campo decide
 // si `sauceIds` se manda como `[]` explícito o se omite del todo.
 @override@JsonKey() final  bool explicitlyNoSauces;
+// Mismo shape que `selectedSauces`/`explicitlyNoSauces`, pero para
+// bebidas y porciones extras — a diferencia de las salsas, SÍ suman
+// precio (ver `lineTotal`). `explicitlyNoBeverages`/
+// `explicitlyNoExtraPortions` solo pueden ser `true` cuando el
+// producto ofrece esa categoría Y no es obligatoria
+// (`PublicMenuItem.beverageGroupRequired`/`extraPortionsGroupRequired`
+// en `false`) Y el cliente tocó el chip "Sin X" a propósito — con el
+// grupo obligatorio ese chip ni se muestra en el selector (ver
+// `product_detail_screen.dart`).
+ final  List<BeverageOption> _selectedBeverages;
+// Mismo shape que `selectedSauces`/`explicitlyNoSauces`, pero para
+// bebidas y porciones extras — a diferencia de las salsas, SÍ suman
+// precio (ver `lineTotal`). `explicitlyNoBeverages`/
+// `explicitlyNoExtraPortions` solo pueden ser `true` cuando el
+// producto ofrece esa categoría Y no es obligatoria
+// (`PublicMenuItem.beverageGroupRequired`/`extraPortionsGroupRequired`
+// en `false`) Y el cliente tocó el chip "Sin X" a propósito — con el
+// grupo obligatorio ese chip ni se muestra en el selector (ver
+// `product_detail_screen.dart`).
+@override@JsonKey() List<BeverageOption> get selectedBeverages {
+  if (_selectedBeverages is EqualUnmodifiableListView) return _selectedBeverages;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_selectedBeverages);
+}
+
+@override@JsonKey() final  bool explicitlyNoBeverages;
+ final  List<ExtraPortionOption> _selectedExtraPortions;
+@override@JsonKey() List<ExtraPortionOption> get selectedExtraPortions {
+  if (_selectedExtraPortions is EqualUnmodifiableListView) return _selectedExtraPortions;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_selectedExtraPortions);
+}
+
+@override@JsonKey() final  bool explicitlyNoExtraPortions;
 // Nota libre opcional del cliente para este ítem (ej. "sin cebolla"),
 // espejo de `OrderItem.comment` en el backend. `null`/vacío = sin
 // comentario — se normaliza a `null` al agregar/editar la fila (ver
@@ -275,16 +322,16 @@ _$CartItemCopyWith<_CartItem> get copyWith => __$CartItemCopyWithImpl<_CartItem>
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _CartItem&&(identical(other.menuItemId, menuItemId) || other.menuItemId == menuItemId)&&(identical(other.name, name) || other.name == name)&&(identical(other.unitPrice, unitPrice) || other.unitPrice == unitPrice)&&(identical(other.quantity, quantity) || other.quantity == quantity)&&(identical(other.image, image) || other.image == image)&&const DeepCollectionEquality().equals(other._selectedSauces, _selectedSauces)&&(identical(other.explicitlyNoSauces, explicitlyNoSauces) || other.explicitlyNoSauces == explicitlyNoSauces)&&(identical(other.comment, comment) || other.comment == comment)&&(identical(other.rewardRedemptionId, rewardRedemptionId) || other.rewardRedemptionId == rewardRedemptionId));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _CartItem&&(identical(other.menuItemId, menuItemId) || other.menuItemId == menuItemId)&&(identical(other.name, name) || other.name == name)&&(identical(other.unitPrice, unitPrice) || other.unitPrice == unitPrice)&&(identical(other.quantity, quantity) || other.quantity == quantity)&&(identical(other.image, image) || other.image == image)&&const DeepCollectionEquality().equals(other._selectedSauces, _selectedSauces)&&(identical(other.explicitlyNoSauces, explicitlyNoSauces) || other.explicitlyNoSauces == explicitlyNoSauces)&&const DeepCollectionEquality().equals(other._selectedBeverages, _selectedBeverages)&&(identical(other.explicitlyNoBeverages, explicitlyNoBeverages) || other.explicitlyNoBeverages == explicitlyNoBeverages)&&const DeepCollectionEquality().equals(other._selectedExtraPortions, _selectedExtraPortions)&&(identical(other.explicitlyNoExtraPortions, explicitlyNoExtraPortions) || other.explicitlyNoExtraPortions == explicitlyNoExtraPortions)&&(identical(other.comment, comment) || other.comment == comment)&&(identical(other.rewardRedemptionId, rewardRedemptionId) || other.rewardRedemptionId == rewardRedemptionId));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,menuItemId,name,unitPrice,quantity,image,const DeepCollectionEquality().hash(_selectedSauces),explicitlyNoSauces,comment,rewardRedemptionId);
+int get hashCode => Object.hash(runtimeType,menuItemId,name,unitPrice,quantity,image,const DeepCollectionEquality().hash(_selectedSauces),explicitlyNoSauces,const DeepCollectionEquality().hash(_selectedBeverages),explicitlyNoBeverages,const DeepCollectionEquality().hash(_selectedExtraPortions),explicitlyNoExtraPortions,comment,rewardRedemptionId);
 
 @override
 String toString() {
-  return 'CartItem(menuItemId: $menuItemId, name: $name, unitPrice: $unitPrice, quantity: $quantity, image: $image, selectedSauces: $selectedSauces, explicitlyNoSauces: $explicitlyNoSauces, comment: $comment, rewardRedemptionId: $rewardRedemptionId)';
+  return 'CartItem(menuItemId: $menuItemId, name: $name, unitPrice: $unitPrice, quantity: $quantity, image: $image, selectedSauces: $selectedSauces, explicitlyNoSauces: $explicitlyNoSauces, selectedBeverages: $selectedBeverages, explicitlyNoBeverages: $explicitlyNoBeverages, selectedExtraPortions: $selectedExtraPortions, explicitlyNoExtraPortions: $explicitlyNoExtraPortions, comment: $comment, rewardRedemptionId: $rewardRedemptionId)';
 }
 
 
@@ -295,7 +342,7 @@ abstract mixin class _$CartItemCopyWith<$Res> implements $CartItemCopyWith<$Res>
   factory _$CartItemCopyWith(_CartItem value, $Res Function(_CartItem) _then) = __$CartItemCopyWithImpl;
 @override @useResult
 $Res call({
- String menuItemId, String name, double unitPrice, int quantity, String? image, List<SauceOption> selectedSauces, bool explicitlyNoSauces, String? comment, String? rewardRedemptionId
+ String menuItemId, String name, double unitPrice, int quantity, String? image, List<SauceOption> selectedSauces, bool explicitlyNoSauces, List<BeverageOption> selectedBeverages, bool explicitlyNoBeverages, List<ExtraPortionOption> selectedExtraPortions, bool explicitlyNoExtraPortions, String? comment, String? rewardRedemptionId
 });
 
 
@@ -312,7 +359,7 @@ class __$CartItemCopyWithImpl<$Res>
 
 /// Create a copy of CartItem
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? menuItemId = null,Object? name = null,Object? unitPrice = null,Object? quantity = null,Object? image = freezed,Object? selectedSauces = null,Object? explicitlyNoSauces = null,Object? comment = freezed,Object? rewardRedemptionId = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? menuItemId = null,Object? name = null,Object? unitPrice = null,Object? quantity = null,Object? image = freezed,Object? selectedSauces = null,Object? explicitlyNoSauces = null,Object? selectedBeverages = null,Object? explicitlyNoBeverages = null,Object? selectedExtraPortions = null,Object? explicitlyNoExtraPortions = null,Object? comment = freezed,Object? rewardRedemptionId = freezed,}) {
   return _then(_CartItem(
 menuItemId: null == menuItemId ? _self.menuItemId : menuItemId // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -321,6 +368,10 @@ as double,quantity: null == quantity ? _self.quantity : quantity // ignore: cast
 as int,image: freezed == image ? _self.image : image // ignore: cast_nullable_to_non_nullable
 as String?,selectedSauces: null == selectedSauces ? _self._selectedSauces : selectedSauces // ignore: cast_nullable_to_non_nullable
 as List<SauceOption>,explicitlyNoSauces: null == explicitlyNoSauces ? _self.explicitlyNoSauces : explicitlyNoSauces // ignore: cast_nullable_to_non_nullable
+as bool,selectedBeverages: null == selectedBeverages ? _self._selectedBeverages : selectedBeverages // ignore: cast_nullable_to_non_nullable
+as List<BeverageOption>,explicitlyNoBeverages: null == explicitlyNoBeverages ? _self.explicitlyNoBeverages : explicitlyNoBeverages // ignore: cast_nullable_to_non_nullable
+as bool,selectedExtraPortions: null == selectedExtraPortions ? _self._selectedExtraPortions : selectedExtraPortions // ignore: cast_nullable_to_non_nullable
+as List<ExtraPortionOption>,explicitlyNoExtraPortions: null == explicitlyNoExtraPortions ? _self.explicitlyNoExtraPortions : explicitlyNoExtraPortions // ignore: cast_nullable_to_non_nullable
 as bool,comment: freezed == comment ? _self.comment : comment // ignore: cast_nullable_to_non_nullable
 as String?,rewardRedemptionId: freezed == rewardRedemptionId ? _self.rewardRedemptionId : rewardRedemptionId // ignore: cast_nullable_to_non_nullable
 as String?,

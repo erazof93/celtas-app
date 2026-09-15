@@ -23,12 +23,13 @@ import 'package:go_router/go_router.dart';
 /// (módulo 5).
 ///
 /// Mejora post-cierre pedida por el dueño del negocio (probando en
-/// dispositivo real): cada fila cuyo producto ofrece salsas muestra un
-/// ícono de lápiz junto al nombre (`_CartItemRow._offersSauces`) que abre
-/// `/product/:id` en modo edición (`extra: item`, ver `app_router.dart` y
-/// el doc de `editingItem` en `product_detail_screen.dart`) — permite
-/// cambiar cantidad/salsas de una fila ya agregada sin borrarla y repetir
-/// el flujo desde cero.
+/// dispositivo real): cada fila cuyo producto ofrece salsas, bebidas o
+/// porciones extras muestra un ícono de lápiz junto al nombre
+/// (`_CartItemRow._offersEditableOptions`) que abre `/product/:id` en modo
+/// edición (`extra: item`, ver `app_router.dart` y el doc de `editingItem`
+/// en `product_detail_screen.dart`) — permite cambiar cantidad/salsas/
+/// bebidas/extras de una fila ya agregada sin borrarla y repetir el flujo
+/// desde cero.
 class CartScreen extends ConsumerStatefulWidget {
   const CartScreen({super.key});
 
@@ -279,26 +280,35 @@ class _CartItemRow extends ConsumerWidget {
 
   final CartItem item;
 
-  /// El ícono de editar salsas solo tiene sentido si el producto ofrece
-  /// salsas — ya tenga alguna seleccionada (`item.selectedSauces`, snapshot
-  /// de cuando se agregó) o el menú público lo siga ofreciendo aunque el
-  /// cliente no haya elegido ninguna todavía (ej. agregado desde el "+"
-  /// rápido del Home antes de este cambio, o con todas las salsas
-  /// deseleccionadas a propósito). Un producto sin salsas (ej. arroz
+  /// El ícono de editar solo tiene sentido si el producto ofrece salsas,
+  /// bebidas O porciones extras — ya tenga alguna elección hecha
+  /// (`item.selectedSauces`/`selectedBeverages`/`selectedExtraPortions`,
+  /// snapshot de cuando se agregó) o el menú público lo siga ofreciendo
+  /// aunque el cliente no haya elegido nada todavía (ej. agregado desde el
+  /// "+" rápido del Home antes de este cambio, o con todo deseleccionado a
+  /// propósito). Un producto sin ninguna de las tres categorías (ej. arroz
   /// chaufa) no tiene nada que editar acá — la fila se queda como está.
   ///
   /// Un ítem de premio (`rewardRedemptionId != null`) nunca ofrece este
   /// ícono: `ProductDetailScreen` no tiene un modo de edición para premios
-  /// (cantidad fija en 1, sin selector de salsas propio), así que empujarlo
-  /// ahí solo rompería el flujo de canje.
-  bool _offersSauces(WidgetRef ref) {
+  /// (cantidad fija en 1, sin selector propio), así que empujarlo ahí solo
+  /// rompería el flujo de canje.
+  bool _offersEditableOptions(WidgetRef ref) {
     if (item.rewardRedemptionId != null) return false;
-    if (item.selectedSauces.isNotEmpty) return true;
+    if (item.selectedSauces.isNotEmpty ||
+        item.selectedBeverages.isNotEmpty ||
+        item.selectedExtraPortions.isNotEmpty) {
+      return true;
+    }
     final categories = ref.watch(publicMenuProvider).valueOrNull;
     if (categories == null) return false;
     for (final category in categories) {
       for (final menuItem in category.items) {
-        if (menuItem.id == item.menuItemId) return menuItem.sauces.isNotEmpty;
+        if (menuItem.id == item.menuItemId) {
+          return menuItem.sauces.isNotEmpty ||
+              menuItem.beverages.isNotEmpty ||
+              menuItem.extraPortions.isNotEmpty;
+        }
       }
     }
     return false;
@@ -306,7 +316,7 @@ class _CartItemRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final offersSauces = _offersSauces(ref);
+    final offersEditableOptions = _offersEditableOptions(ref);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
@@ -329,7 +339,7 @@ class _CartItemRow extends ConsumerWidget {
                             ),
                       ),
                     ),
-                    if (offersSauces)
+                    if (offersEditableOptions)
                       GestureDetector(
                         key: ValueKey('cart-edit-${item.lineKey}'),
                         onTap: () {

@@ -18,14 +18,40 @@ _PublicMenuItem _$PublicMenuItemFromJson(Map<String, dynamic> json) =>
               ?.map((e) => SauceOption.fromJson(e as Map<String, dynamic>))
               .toList() ??
           const <SauceOption>[],
+      beverages:
+          (json['beverages'] as List<dynamic>?)
+              ?.map((e) => BeverageOption.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const <BeverageOption>[],
+      beverageGroupRequired: json['beverageGroupRequired'] as bool? ?? false,
+      beverageGroupMaxSelectable:
+          (json['beverageGroupMaxSelectable'] as num?)?.toInt() ?? 0,
+      extraPortions:
+          (json['extraPortions'] as List<dynamic>?)
+              ?.map(
+                (e) => ExtraPortionOption.fromJson(e as Map<String, dynamic>),
+              )
+              .toList() ??
+          const <ExtraPortionOption>[],
+      extraPortionsGroupRequired:
+          json['extraPortionsGroupRequired'] as bool? ?? false,
+      extraPortionsGroupMaxSelectable:
+          (json['extraPortionsGroupMaxSelectable'] as num?)?.toInt() ?? 0,
     );
 
-Map<String, dynamic> _$PublicMenuItemToJson(_PublicMenuItem instance) =>
-    <String, dynamic>{
-      'id': instance.id,
-      'name': instance.name,
-      'description': instance.description,
-      'price': instance.price,
-      'image': instance.image,
-      'sauces': instance.sauces,
-    };
+Map<String, dynamic> _$PublicMenuItemToJson(
+  _PublicMenuItem instance,
+) => <String, dynamic>{
+  'id': instance.id,
+  'name': instance.name,
+  'description': instance.description,
+  'price': instance.price,
+  'image': instance.image,
+  'sauces': instance.sauces,
+  'beverages': instance.beverages,
+  'beverageGroupRequired': instance.beverageGroupRequired,
+  'beverageGroupMaxSelectable': instance.beverageGroupMaxSelectable,
+  'extraPortions': instance.extraPortions,
+  'extraPortionsGroupRequired': instance.extraPortionsGroupRequired,
+  'extraPortionsGroupMaxSelectable': instance.extraPortionsGroupMaxSelectable,
+};

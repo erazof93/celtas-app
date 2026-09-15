@@ -7,6 +7,7 @@ import 'package:celtas_mobile/features/addresses/data/models/address.dart';
 import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
 import 'package:celtas_mobile/features/home/application/home_providers.dart';
 import 'package:celtas_mobile/features/home/data/models/banner.dart';
+import 'package:celtas_mobile/features/home/data/models/beverage_option.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_category.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
 import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
@@ -367,6 +368,72 @@ void main() {
       expect(find.text('DETAIL i-5'), findsOneWidget);
       // No agregó directo: el carrito sigue vacío, la elección de salsas
       // queda en manos del detalle.
+      expect(container.read(cartProvider).items, isEmpty);
+    },
+  );
+
+  testWidgets(
+    'botón "+" en un producto SIN salsas pero CON bebidas/porciones extras '
+    'obligatorias → navega al detalle en vez de agregar directo (mismo bug '
+    'de clase que ya se había corregido una vez para salsas, extendido acá '
+    'a las dos categorías nuevas)',
+    (tester) async {
+      const withRequiredBeverage = PublicMenuCategory(
+        id: 'c-6',
+        name: 'Con bebida obligatoria',
+        items: [
+          PublicMenuItem(
+            id: 'i-6',
+            name: 'Combo Bebida Obligatoria',
+            price: 20,
+            beverages: [
+              BeverageOption(id: 'b-1', name: 'Coca-Cola 500ml', price: 3),
+            ],
+            beverageGroupRequired: true,
+            beverageGroupMaxSelectable: 1,
+          ),
+        ],
+      );
+      final container = ProviderContainer(
+        overrides: [
+          activeBannersProvider.overrideWith((ref) async => const []),
+          publicMenuProvider.overrideWith((ref) async => [withRequiredBeverage]),
+          businessHoursProvider.overrideWith(
+            (ref) async => const BusinessHours(
+              open: true,
+              message: null,
+              nextChangeAt: null,
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final router = GoRouter(
+        initialLocation: '/home',
+        routes: [
+          GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
+          GoRoute(
+            path: '/product/:id',
+            builder: (_, state) =>
+                Scaffold(body: Text('DETAIL ${state.pathParameters['id']}')),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('add-i-6')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('DETAIL i-6'), findsOneWidget);
+      // No agregó directo: sin esto, un producto con bebidas obligatorias
+      // quedaría en el carrito en un estado que el backend recién rechaza
+      // con 400 al confirmar el pedido.
       expect(container.read(cartProvider).items, isEmpty);
     },
   );

@@ -1,3 +1,5 @@
+import 'package:celtas_mobile/features/home/data/models/beverage_option.dart';
+import 'package:celtas_mobile/features/home/data/models/extra_portion_option.dart';
 import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
@@ -37,6 +39,20 @@ abstract class CartItem with _$CartItem {
     // `order_repository.dart`: con `selectedSauces` vacío, este campo decide
     // si `sauceIds` se manda como `[]` explícito o se omite del todo.
     @Default(false) bool explicitlyNoSauces,
+    // Mismo shape que `selectedSauces`/`explicitlyNoSauces`, pero para
+    // bebidas y porciones extras — a diferencia de las salsas, SÍ suman
+    // precio (ver `lineTotal`). `explicitlyNoBeverages`/
+    // `explicitlyNoExtraPortions` solo pueden ser `true` cuando el
+    // producto ofrece esa categoría Y no es obligatoria
+    // (`PublicMenuItem.beverageGroupRequired`/`extraPortionsGroupRequired`
+    // en `false`) Y el cliente tocó el chip "Sin X" a propósito — con el
+    // grupo obligatorio ese chip ni se muestra en el selector (ver
+    // `product_detail_screen.dart`).
+    @Default(<BeverageOption>[]) List<BeverageOption> selectedBeverages,
+    @Default(false) bool explicitlyNoBeverages,
+    @Default(<ExtraPortionOption>[])
+    List<ExtraPortionOption> selectedExtraPortions,
+    @Default(false) bool explicitlyNoExtraPortions,
     // Nota libre opcional del cliente para este ítem (ej. "sin cebolla"),
     // espejo de `OrderItem.comment` en el backend. `null`/vacío = sin
     // comentario — se normaliza a `null` al agregar/editar la fila (ver
@@ -67,6 +83,20 @@ abstract class CartItem with _$CartItem {
             .map((e) => SauceOption.fromJson(e as Map<String, dynamic>))
             .toList(),
         explicitlyNoSauces: json['explicitlyNoSauces'] as bool? ?? false,
+        selectedBeverages:
+            (json['selectedBeverages'] as List<dynamic>? ?? const [])
+                .map((e) => BeverageOption.fromJson(e as Map<String, dynamic>))
+                .toList(),
+        explicitlyNoBeverages: json['explicitlyNoBeverages'] as bool? ?? false,
+        selectedExtraPortions:
+            (json['selectedExtraPortions'] as List<dynamic>? ?? const [])
+                .map(
+                  (e) =>
+                      ExtraPortionOption.fromJson(e as Map<String, dynamic>),
+                )
+                .toList(),
+        explicitlyNoExtraPortions:
+            json['explicitlyNoExtraPortions'] as bool? ?? false,
         comment: json['comment'] as String?,
         rewardRedemptionId: json['rewardRedemptionId'] as String?,
       );
@@ -84,30 +114,50 @@ abstract class CartItem with _$CartItem {
             for (final sauce in selectedSauces) sauce.toJson(),
           ],
         if (explicitlyNoSauces) 'explicitlyNoSauces': true,
+        if (selectedBeverages.isNotEmpty)
+          'selectedBeverages': [
+            for (final beverage in selectedBeverages) beverage.toJson(),
+          ],
+        if (explicitlyNoBeverages) 'explicitlyNoBeverages': true,
+        if (selectedExtraPortions.isNotEmpty)
+          'selectedExtraPortions': [
+            for (final extraPortion in selectedExtraPortions)
+              extraPortion.toJson(),
+          ],
+        if (explicitlyNoExtraPortions) 'explicitlyNoExtraPortions': true,
         if (comment != null) 'comment': comment,
         if (rewardRedemptionId != null)
           'rewardRedemptionId': rewardRedemptionId,
       };
 
-  /// Subtotal del ítem (precio unitario × cantidad).
-  double get lineTotal => unitPrice * quantity;
+  /// Subtotal del ítem: `(unitPrice + extrasUnitPrice) * quantity`, mismo
+  /// cálculo que hace el backend en `OrdersService.buildItems` para
+  /// `OrderItem.subtotal` — las bebidas/porciones extras suman su precio
+  /// una vez por unidad, aunque `unitPrice` sea 0 por un premio canjeado
+  /// (el premio cubre el producto base, no lo que el cliente agregó
+  /// encima). Preview local para la UI — el total real siempre lo calcula
+  /// el backend al crear el pedido.
+  double get extrasUnitPrice =>
+      selectedBeverages.fold(0.0, (sum, option) => sum + option.price) +
+      selectedExtraPortions.fold(0.0, (sum, option) => sum + option.price);
+
+  double get lineTotal => (unitPrice + extrasUnitPrice) * quantity;
 
   /// Identifica una fila única del carrito. El mismo producto CON la misma
-  /// combinación de salsas Y el mismo comentario se fusiona en una sola fila
-  /// (suma cantidad); si cualquiera de los dos difiere, queda en una fila
-  /// aparte — ej. una Celtas Burguesa con mayonesa y otra sin nada son dos
-  /// líneas distintas del carrito, igual que una Celtas Burguesa con nota
-  /// "sin cebolla" y otra sin nota, cada una con su propio stepper de
-  /// cantidad.
+  /// combinación de salsas, bebidas Y porciones extras, Y el mismo
+  /// comentario, se fusiona en una sola fila (suma cantidad); si cualquiera
+  /// de los cuatro difiere, queda en una fila aparte — ej. una Celtas
+  /// Burguesa con mayonesa y otra sin nada son dos líneas distintas del
+  /// carrito, igual que una Celtas Burguesa con nota "sin cebolla" y otra
+  /// sin nota, cada una con su propio stepper de cantidad.
   ///
-  /// Sin salsas ni comentario, la key es igual al `menuItemId` puro — mismo
-  /// valor que ya usaban `increment`/`decrement`/`removeItem` y los
-  /// `ValueKey` del carrito antes de que existieran las salsas/el
-  /// comentario, así ningún producto sin ninguno de los dos cambia de
-  /// comportamiento con este agregado. Con solo salsas (sin comentario) la
-  /// key tampoco cambia respecto a antes de este agregado (`menuItemId::
-  /// idsOrdenados`) — el comentario solo agrega un segmento extra cuando
-  /// hay uno, en vez de ensuciar la key con un separador vacío de más.
+  /// Sin salsas, bebidas, extras ni comentario, la key es igual al
+  /// `menuItemId` puro — mismo valor que ya usaban
+  /// `increment`/`decrement`/`removeItem` y los `ValueKey` del carrito antes
+  /// de que existieran las salsas/el comentario, así ningún producto sin
+  /// ninguno de los cuatro cambia de comportamiento con este agregado. Cada
+  /// categoría solo agrega su propio segmento cuando tiene selección, en
+  /// vez de ensuciar la key con un separador vacío de más.
   ///
   /// Un ítem de premio (`rewardRedemptionId != null`) corta ANTES de esta
   /// lógica: cada `RewardRedemption` es una entidad real separada, así que
@@ -116,10 +166,29 @@ abstract class CartItem with _$CartItem {
   /// la cantidad de su fila queda siempre en 1.
   String get lineKey {
     if (rewardRedemptionId != null) return 'reward::$rewardRedemptionId';
-    if (selectedSauces.isEmpty && comment == null) return menuItemId;
+    if (selectedSauces.isEmpty &&
+        selectedBeverages.isEmpty &&
+        selectedExtraPortions.isEmpty &&
+        comment == null) {
+      return menuItemId;
+    }
     final parts = [menuItemId];
     if (selectedSauces.isNotEmpty) {
       final sortedIds = selectedSauces.map((sauce) => sauce.id).toList()
+        ..sort();
+      parts.add(sortedIds.join(','));
+    }
+    if (selectedBeverages.isNotEmpty) {
+      final sortedIds = selectedBeverages
+          .map((beverage) => beverage.id)
+          .toList()
+        ..sort();
+      parts.add(sortedIds.join(','));
+    }
+    if (selectedExtraPortions.isNotEmpty) {
+      final sortedIds = selectedExtraPortions
+          .map((extraPortion) => extraPortion.id)
+          .toList()
         ..sort();
       parts.add(sortedIds.join(','));
     }

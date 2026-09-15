@@ -1018,6 +1018,297 @@ enmascarar un fallo del checkout por UI en el emulador preview Android 17 (`laun
 **Veredicto de `@tester`: LISTO.** Los 2 checkboxes de arriba quedan marcados; el checkbox del
 `ROADMAP.md` ("selección de salsas/cremas en el detalle de producto", Módulo 4) pasa a `[x]`.
 
+#### Auditoría puntual: migración de chips horizontales a dropdown + diálogo de checkboxes (unifica salsas/bebidas/porciones extras)
+
+Alcance de esta auditoría: SOLO el refactor de la capa de interacción/UI del selector de
+salsas/bebidas/porciones extras en `product_detail_screen.dart` — reemplaza `_SauceSelector`/
+`_SauceChip`/`_SauceChoiceNotice`/`_BeverageSelector`/`_ExtraPortionSelector`/`_OptionChip` (chips
+horizontales con `Wrap`) por `_SelectableOption` (shape mínimo común) + `_OptionGroupDropdown`
+(campo tipo input + `AlertDialog` con `CheckboxListTile`, reusado por las 3 categorías) + la
+unificación de las 3 validaciones al mismo shape `String?` (`_sauceChoiceViolation`/
+`_beverageChoiceViolation`/`_extraPortionChoiceViolation`). No toca `cart_provider.dart`,
+`order_repository.dart` ni el cálculo de precio — confirmado por lectura completa del diff, esos
+archivos no aparecen tocados en este cambio.
+
+`flutter analyze`: `No issues found!` (salida cruda propia). `flutter test` (suite completa):
+`608: All tests passed!` (salida cruda propia — 605 antes de este refactor + 2 tests netos del
+refactor + 1 test agregado por `@tester`, ver hallazgo de cobertura abajo).
+
+✅ Pasó:
+- **Barrido de todo el proyecto por artefactos de la iteración anterior de chips** (regla del
+  proyecto de no dar por cerrado un refactor sin barrer el patrón completo): `grep -rn
+  "_SauceSelector|_SauceChip|_SauceChoiceNotice|_BeverageSelector|_ExtraPortionSelector|
+  _OptionChip"` en todo el repo — cero resultados en `lib/`/`test/` (solo quedan menciones
+  históricas dentro de este mismo `docs/testing-checklist.md` y de `ROADMAP.md`, que documentan
+  auditorías previas y no deben tocarse). El único otro archivo que matchea `Icons.check` es
+  `address_form_card.dart`/`checkout_screen.dart`/`reward_terms_sheet.dart`, cada uno con su
+  propio checkbox no relacionado a este selector — no dependen de la estructura vieja de chips.
+  `celtasapp.patch` (archivo commiteado desde antes, no tocado por este refactor) sigue
+  conteniendo una referencia textual a `ValueKey('detail-sauce-${sauce.id}')` (patrón de key
+  viejo, de un parche histórico) — es un archivo suelto en la raíz del repo sin relación con el
+  build real (no se aplica en CI ni se referencia desde ningún script), riesgo cero de romper
+  nada, pero vale la pena que la sesión principal confirme si sigue teniendo sentido conservarlo.
+- **Contrato de API confirmado contra el backend real**, no asumido: `BeverageOption`/
+  `ExtraPortionOption` (`{id, name, price}`) coinciden exactamente con la interfaz
+  `PublicMenuCategory['items']` de `backend-celtas/src/modules/menu/menu.service.ts:30-35`. El
+  orden de validación de `_beverageChoiceViolation`/`_extraPortionChoiceViolation` (obligatoriedad
+  primero, máximo después) coincide con `OrdersService.validateGroupSelection`
+  (`orders.service.ts:763-784`) — mismo orden de chequeo, confirmado leyendo el código fuente
+  real del backend, no el comentario del archivo mobile.
+- **Fidelidad de diseño**: N/A para el patrón de dropdown/diálogo en sí — esta sección no existe
+  en `design-reference/` (12 pantallas, confirmado por el propio doc-comment de la clase). Sí
+  aplica el chequeo de tokens: `grep -n "Color(0x" product_detail_screen.dart` → sin resultados,
+  todo el archivo usa `CeltasColors.*` (incluido el `AlertDialog` nuevo:
+  `backgroundColor: CeltasColors.surface`, `activeColor: CeltasColors.orange`, texto
+  `CeltasColors.cream`/`textMuted`). Sin texto en inglés (`ACEPTAR`/`CANCELAR`/labels, todo en
+  español).
+- **No hubo regresión de texto/orden en la unificación de validación**: confirmado con `git diff`
+  línea por línea, no solo por lectura del código final — el mensaje de salsas
+  (`'Elige tus salsas o toca "Sin salsas" para continuar'`) aparece byte-idéntico en las líneas
+  removidas (`_hasRequiredSauceChoice`, shape `bool`) y en las agregadas (`_sauceChoiceViolation`,
+  shape `String?`); `enabled: _hasRequiredSauceChoice` → `enabled: _sauceChoiceViolation == null`
+  es la misma condición expresada en el shape nuevo, no un cambio de comportamiento. El orden de
+  chequeo del `SnackBar` en `onPressed` (salsas → bebidas → extras) coincide con el orden en que
+  las 3 secciones aparecen en pantalla, sin cambios.
+- **Patrón dropdown + diálogo con estado temporal, bien cubierto**: diálogo confirma solo al tocar
+  "ACEPTAR" (`applied == true`), descarta al "CANCELAR" o cerrar — cubierto con test explícito
+  nuevo (`'CANCELAR descarta la marca hecha dentro del diálogo...'`) que no existía en la versión
+  de chips (ahí no aplicaba, no había estado temporal que descartar). Mutua exclusión "Sin X" ↔
+  opciones reales **dentro del mismo diálogo, antes de confirmar**, cubierta en ambos sentidos con
+  tests explícitos (`'"Sin salsas" y las salsas reales son mutuamente excluyentes...'` y
+  `'Mayonesa → "Sin salsas" ... limpia la selección real'`) — confirma que
+  `tempSelected`/`tempExplicitlyNone` dentro del `StatefulBuilder` se comportan como excluyentes
+  sin necesidad de cerrar y reabrir el diálogo.
+- **Hallazgo de cobertura real, corregido por `@tester`**: ningún test del refactor original
+  verificaba una selección múltiple GENUINA (2+ opciones reales a la vez, no una detrás de otra en
+  pasadas separadas) aplicada correctamente al carrito — los únicos arrays con 2 ids del archivo
+  (`['b-1','b-2']`, `['e-1','e-2']`) existían solo para provocar la violación de "Máximo X", nunca
+  para confirmar el camino feliz de multi-selección. Dado que la multi-selección real es
+  justamente la razón de ser del diálogo (frente a los chips, que ya la tenían pero de forma
+  distinta), agregué el test `'elegir DOS salsas reales a la vez (multi-selección genuina...)'`
+  (usa salsas porque no tienen máximo configurado, así ninguna de las dos entra en conflicto con
+  `groupMaxSelectable`) — confirma que el resumen del dropdown concatena `'Mayonesa, Mostaza'` y
+  que ambas viajan a `selectedSauces` del `CartItem`. Pasa limpio junto al resto de la suite
+  (608/608).
+
+❌ Falló:
+- Ninguno.
+
+⚠️ Riesgos / casos borde no cubiertos, no bloqueantes:
+- **Sin test en viewport angosto real** (ej. ~320-360dp lógicos, gama baja): la suite entera usa
+  el mismo viewport de `pumpDetail` (390×844 lógicos). El `AlertDialog` envuelve su contenido en
+  `SingleChildScrollView`, así que un catálogo grande de opciones debería scrollear en vez de
+  desbordar — pero esto es una inferencia por lectura de código, no está confirmado con un test en
+  un viewport angosto ni en dispositivo real. Mismo tipo de riesgo que el proyecto ya documentó
+  como pendiente para otras pantallas (ver home/banners).
+- **Truncamiento del resumen del dropdown (`_summaryText` + `TextOverflow.ellipsis`) sin ejercitar
+  con una lista realmente larga**: el único test que junta 2+ nombres en el resumen es el que
+  agregué en esta auditoría (`'Mayonesa, Mostaza'`, texto corto, no se acerca al límite de ancho
+  del campo). No hay evidencia (test ni dispositivo) de cómo se ve el campo con, por ejemplo, 5-6
+  bebidas elegidas a la vez con nombres largos — es un caso de negocio real y alcanzable si el
+  admin configura catálogos grandes con `groupMaxSelectable` alto.
+- **El diálogo no bloquea en vivo seleccionar más del máximo permitido** (solo se detecta después,
+  vía `_beverageChoiceViolation`/`_extraPortionChoiceViolation` al cerrar y evaluar el botón) — no
+  es una regresión de este refactor (mismo comportamiento post-hoc que ya existía, confirmado
+  contra el test `'seleccionar más bebidas que el máximo permitido...'` que ya pasaba con esta
+  mecánica antes de la migración), pero sigue siendo una oportunidad de UX no aprovechada por el
+  patrón nuevo: un diálogo con checkboxes se presta más naturalmente a deshabilitar las opciones no
+  marcadas una vez alcanzado el máximo que un `Wrap` de chips. No bloqueante, sugerencia a futuro.
+- **Verificación manual en dispositivo real pendiente**, reportada explícitamente por la sesión
+  principal (`adb devices` sin dispositivos conectados en esta sesión) — en particular el caso
+  concreto que pidió el encargo original ("abre un producto con bebidas obligatorias, verifica que
+  el dropdown muestre la alerta"): cubierto por widget test
+  (`'bebidas obligatorias: el diálogo no ofrece el checkbox "Sin bebida" y el botón arranca
+  deshabilitado con el aviso "obligatorio"'`), pero no confirmado visualmente en pantalla real.
+- `celtasapp.patch` en la raíz del repo, con una referencia textual desactualizada al patrón de
+  key viejo de chips (`detail-sauce-${sauce.id}`) — no afecta el build ni los tests, mencionado
+  arriba, sin acción requerida salvo que la sesión principal decida limpiarlo.
+
+**Veredicto: LISTO.** Lo crítico pasa: `analyze` limpio, suite verde (608/608 tras el test que
+agregué), contrato de API y orden de validación confirmados contra el código fuente real del
+backend (no contra el resumen del encargo), fidelidad de tokens de color sin `Color(0xFF...)`
+sueltos, sin texto en inglés, sin artefactos huérfanos de la iteración anterior de chips en
+`lib/`/`test/`, sin regresión de texto/orden en la unificación de validación, y el patrón de
+estado temporal del diálogo (confirmar/cancelar/exclusión mutua) bien cubierto — incluido el caso
+de multi-selección genuina que faltaba y quedó cerrado en esta auditoría. Pendiente, no
+bloqueante: verificación visual en dispositivo real (fuera del alcance de este agente, requiere
+`adb` con un dispositivo conectado) y los 3 riesgos de UX/cobertura listados arriba (viewport
+angosto, truncamiento con listas largas, sin bloqueo en vivo del máximo dentro del diálogo). No se
+marca ningún checkbox nuevo del `ROADMAP.md`: el módulo "Selección de salsas/cremas en el detalle
+de producto" (Módulo 4) ya estaba `[x]` desde antes de este refactor puntual de UI.
+
+### Bebidas y porciones extras (selector en el detalle + carrito + payload) — ✅ LISTO
+
+Actualización post-auditoría: los 2 bugs de clase reportados abajo (gates de "¿necesita pasar por
+el selector?"/"¿muestra el ícono de editar?" que solo miraban `sauces`) ya se corrigieron en
+`home_screen.dart:1000` y `cart_screen.dart` (`_offersSauces` renombrado a
+`_offersEditableOptions`, ahora considera `beverages`/`extraPortions` además de `sauces` en ambos
+archivos). Se agregaron tests de regresión permanentes (no temporales) que reproducen exactamente
+los dos casos fallidos que encontró `@tester`:
+- `home_screen_test.dart`: producto sin salsas pero con bebida obligatoria → el "+" navega al
+  detalle en vez de agregar directo.
+- `cart_screen_test.dart`: ítem con `selectedBeverages`/`selectedExtraPortions` (o un producto que
+  las ofrece) → muestra el ícono de editar.
+- `cart_screen_test.dart`: además se cerró el hueco de cobertura de precio que señalaba
+  `@tester` (nadie verificaba que el subtotal/total mostrado en `/cart` para una fila con
+  bebidas/extras fuera el correcto) — nuevo test confirma `S/ 47.00` (15.5 + 3 + 5 = 23.5 × 2) en
+  las 3 posiciones (fila, subtotal general, total general).
+
+`flutter analyze`: `No issues found!`. `flutter test` (suite completa): `605: All tests passed!`
+(605 = 600 de la primera pasada de esta feature + 4 tests de regresión de los 2 bugs + 1 test de
+cobertura de precio). `flutter build apk --debug`: build exitoso.
+
+Riesgo pendiente no bloqueante que se mantiene igual que antes de este fix (ver más abajo):
+combinación salsas+bebidas+extras en un mismo ítem sin un test que las junte las 3 a la vez, e
+ítem de premio canjeado + bebidas/extras (no alcanzable desde la UI hoy, no es un bug).
+
+---
+
+#### Auditoría original (`@tester`) — contexto histórico, ya resuelto arriba
+
+Extensión del patrón 1:1 de "Salsas/cremas" (sección de arriba) a dos categorías nuevas de
+opciones que SÍ suman precio: `beverages`/`extraPortions` en `PublicMenuItem`,
+`selectedBeverages`/`explicitlyNoBeverages` y `selectedExtraPortions`/`explicitlyNoExtraPortions`
+en `CartItem`, `beverageIds`/`extraPortionIds` (tri-state) en el payload de `POST /orders`.
+Archivos nuevos: `lib/features/home/data/models/beverage_option.dart`,
+`extra_portion_option.dart` (freezed, mismo shape `{id, name, price}`).
+
+`flutter analyze`: `No issues found! (ran in 14.1s)` (salida cruda propia, estado final del repo
+tras revertir los 2 tests de sondeo descritos abajo). `flutter test` (suite completa): `600: All
+tests passed!` (salida cruda propia). `dart run build_runner build --delete-conflicting-outputs`:
+`Built with build_runner/aot in 18s; wrote 0 outputs.` — sin drift en los `.freezed.dart`/`.g.dart`
+ya escritos.
+
+✅ Pasó:
+- **Contrato de API verificado contra el código fuente real del backend** (no contra el resumen
+  del encargo): `beverageIds`/`extraPortionIds` en `create-order.dto.ts` (tri-state
+  `@IsOptional() @IsArray()`, mismo criterio que `sauceIds`), `selectedBeverages`/
+  `selectedExtraPortions` como `{ name, price }[] | null` en `order-item.entity.ts`,
+  `beverageGroupRequired`/`beverageGroupMaxSelectable`/`extraPortionsGroupRequired`/
+  `extraPortionsGroupMaxSelectable` en `menu.service.ts` — todos los nombres de campo coinciden
+  carácter por carácter con los modelos Dart nuevos.
+- **`CartItem.lineTotal`/`extrasUnitPrice`** implementa exactamente `(unitPrice + suma de precios
+  de selectedBeverages + suma de precios de selectedExtraPortions) * quantity`, el mismo cálculo
+  que `OrdersService.buildItems` en el backend (confirmado leyendo el código real, incluyendo el
+  comentario del backend de que esto suma incluso sobre un ítem de premio con `unitPrice` forzado
+  a 0). El preview de precio en el botón "AGREGAR AL CARRITO" de `product_detail_screen.dart`
+  replica el mismo cálculo de forma independiente (`_selectedBeveragesUnitPrice` +
+  `_selectedExtraPortionsUnitPrice`), y ambos coinciden en los tests (`i-4`: 18 + 3 = 21; `i-6`: 22
+  + 5 = 27).
+- **Payload tri-state real** (`order_repository.dart`): `beverageIds`/`extraPortionIds` se OMITEN
+  cuando no aplica, se mandan `[]` explícito con `explicitlyNoBeverages`/`explicitlyNoExtraPortions`,
+  se mandan los ids cuando hay selección — igual que `sauceIds`, cubierto con 5 tests nuevos en
+  `order_repository_test.dart` (omitido, `[]` explícito para bebidas, `[]` explícito para extras,
+  ambas categorías juntas mandando ids reales, y varios ítems con selección independiente entre
+  sí).
+- **Validación local (UX) de `groupRequired`/`groupMaxSelectable`** espeja el orden real de
+  `OrdersService.validateGroupSelection` (obligatoriedad primero, máximo después) y el chip "Sin
+  bebida"/"Sin porciones extras" NO se muestra cuando el grupo es obligatorio — cubierto con 12
+  tests nuevos en `product_detail_screen_test.dart` (grupos "selector de bebidas"/"selector de
+  porciones extras"): sin catálogo → sin sección, catálogo opcional → chips con precio + botón
+  arranca deshabilitado con aviso de elección pendiente, tocar una opción habilita y suma el
+  precio, "Sin X" habilita con el tri-state correcto en el `CartItem` resultante, exceder el
+  máximo bloquea con el aviso "Máximo X", grupo obligatorio oculta el chip "Sin X" y exige al
+  menos una elección real.
+- **`lineKey`/fusión de filas del carrito** (`cart_item.dart`, `cart_provider.dart`): mismo
+  criterio OR que ya existía para `explicitlyNoSauces` extendido a `explicitlyNoBeverages`/
+  `explicitlyNoExtraPortions` en `addItem`/`updateLine`, y `lineKey` incluye los ids ordenados de
+  cada categoría con selección — leído línea por línea, es el mismo patrón ya auditado y aprobado
+  para salsas, sin desviaciones.
+- **Colores**: todo el UI nuevo (`_BeverageSelector`, `_ExtraPortionSelector`, `_OptionChip`,
+  `_ChoiceNotice`) usa constantes de `CeltasColors` ya existentes (`orange`, `surface`, `border`,
+  `cream`, `textLabel`, `textMuted`, `gold`) — sin `Color(0xFF...)` sueltos, confirmado por
+  lectura completa del diff.
+- Fidelidad de diseño: N/A — mismo caso que el campo de comentario libre, sin precedente en
+  `design-reference/` (las 12 pantallas originales no incluían esta funcionalidad); reutiliza el
+  lenguaje visual del selector de salsas ya validado contra el mockup en la auditoría anterior.
+
+❌ Falló — **2 bugs de clase reales, mismo patrón ya corregido una vez para salsas y no extendido
+a las dos categorías nuevas** (`grep -rn "sauces.isNotEmpty" lib/` encuentra 4 sitios; 2 de ellos
+—los gates de "¿este producto necesita pasar por el selector?"— nunca se actualizaron al agregar
+bebidas/porciones extras):
+- `lib/features/home/presentation/home_screen.dart:997` — el botón "+" rápido del Home solo
+  bifurca en `item.sauces.isNotEmpty`. Para un producto SIN salsas pero CON bebidas y/o porciones
+  extras (incluso con el grupo `groupRequired: true`), el "+" agrega directo al carrito sin dejar
+  elegir, exactamente el mismo bug ya encontrado y corregido una vez para salsas ("se sentía roto
+  en dispositivo real", ver comentario en la línea 988 del mismo archivo) — reproducido con
+  evidencia cruda, no solo lectura de código: agregué un test temporal (`SCRATCH @tester`, con un
+  producto `beverageGroupRequired: true` sin salsas) en `home_screen_test.dart`, lo corrí y
+  confirmé la falla real, y lo revertí después de capturar la evidencia (no queda en el repo):
+  ```
+  Expected: exactly one matching candidate
+    Actual: _TextWidgetFinder:<Found 0 widgets with text "DETAIL i-6": []>
+  ```
+  (no navegó al detalle — agregó directo). Para un grupo `groupRequired`, esto dEJA el ítem en el
+  carrito en un estado que el backend va a RECHAZAR con 400 recién en el checkout
+  (`validateGroupSelection` lanza si `selected === null` con `groupRequired`), forzando al cliente
+  a volver al carrito, borrar la fila y repetirla desde el detalle — mala UX, sin pérdida de
+  integridad de datos (el backend protege el pedido), pero el mismo defecto que ya se había
+  arreglado una vez y volvió a aparecer con la categoría nueva.
+- `lib/features/cart/presentation/cart_screen.dart:294-304` (`_CartItemRow._offersSauces`) — el
+  ícono de lápiz para editar una fila ya agregada al carrito solo aparece si
+  `item.selectedSauces.isNotEmpty` o `menuItem.sauces.isNotEmpty` en el menú público. Un ítem con
+  `selectedBeverages`/`selectedExtraPortions` (o un producto que las ofrece) NUNCA muestra el
+  ícono — el cliente no tiene forma de corregir su elección de bebidas/porciones extras desde el
+  carrito, tiene que borrar la fila entera y repetir el flujo desde el detalle (exactamente el
+  "Hallazgo 2" que ya se había arreglado una vez para salsas, ver auditoría de arriba). Reproducido
+  con evidencia cruda: test temporal (`SCRATCH @tester`) en `cart_screen_test.dart`, un `CartItem`
+  con `selectedBeverages: [Coca-Cola]` sobre un producto SIN salsas, revertido después de capturar
+  la evidencia:
+  ```
+  Expected: exactly one matching candidate
+    Actual: _KeyWidgetFinder:<Found 0 widgets with key [<'cart-edit-i-1::b-1'>]: []>
+  ```
+  El método debería llamarse algo como `_offersEditableOptions` y chequear las 3 categorías, no
+  solo salsas.
+
+Ninguno de los 2 hallazgos corrompe datos ni bypasea el cálculo del backend (que sigue siendo la
+única fuente de verdad real), pero ambos son regresiones funcionales reales de una feature que el
+encargo describe como "patrón 1:1" — el patrón correcto (navegar al selector en vez de agregar
+directo; mostrar el ícono de editar) ya existe en el código para salsas y simplemente no se
+replicó a las dos categorías nuevas en los 2 puntos de entrada fuera de
+`product_detail_screen.dart`.
+
+⚠️ Riesgos / casos borde no cubiertos, no bloqueantes:
+- **Combinación salsas + bebidas + extras en el mismo ítem**: no hay un test único que agregue las
+  3 categorías a la vez y confirme `lineKey`/`lineTotal`/el payload juntos — cada categoría está
+  bien cubierta por separado (salsas en la sección de arriba, bebidas/extras en esta). Riesgo bajo:
+  las 3 secciones del código son independientes entre sí (cada `if` de `lineKey`/cada llave del
+  payload se arma por separado, sin ramas compartidas que puedan interferir), pero sigue siendo un
+  hueco de cobertura real, no solo teórico.
+- **`cartTotal` (`cart_provider.dart`, suma de `item.lineTotal` de todo el carrito) y la fila del
+  carrito/checkout (`cart_screen.dart`/`checkout_screen.dart`, que muestran `item.lineTotal`) no
+  tienen NINGÚN test que ejercite un `CartItem` con `selectedBeverages`/`selectedExtraPortions`** —
+  toda la cobertura de precio de esta feature vive en `product_detail_screen_test.dart` (el
+  preview ANTES de agregar) y `order_repository_test.dart` (el payload). La lógica de
+  `CartItem.lineTotal`/`extrasUnitPrice` en sí (`cart_item.dart`) no tiene un archivo de test
+  dedicado (`cart_item_test.dart` no existe, tampoco existía antes de esta feature) ni
+  `cart_provider_test.dart` fue tocado — confirmado que no se rompió nada porque los parámetros
+  nuevos tienen default `const []`/`false`, pero también significa que nadie verifica con un test
+  que el total mostrado en `/cart` o `/checkout` para una fila con bebidas/extras sea el correcto.
+- **Ítem de premio canjeado (`rewardRedemptionId != null`) con bebidas/porciones extras**: el
+  backend documenta explícitamente que esto suma precio incluso con `unitPrice` forzado a 0
+  (`order-item.entity.ts:94-99`), pero HOY no es alcanzable desde la app — `CartNotifier.
+  addRewardItem` (usado únicamente por `reward_redeem_screen.dart`) no acepta parámetros de
+  bebidas/extras, y no hay ningún flujo de UI que lleve del canje de un premio al selector de
+  `product_detail_screen.dart`. No es un bug (nada en la UI puede producir ese estado hoy), pero
+  vale la pena confirmarlo explícitamente si en el futuro se agrega esa capacidad — el cálculo de
+  `lineTotal` ya lo soportaría bien (`extrasUnitPrice` no depende de `unitPrice`), solo faltaría
+  cablear el selector.
+- No se tocó `ROADMAP.md`: no existe todavía una entrada dedicada para "Bebidas y porciones
+  extras" ahí (confirmado con `grep -i` sin resultados) — no se inventó una para no alterar el
+  orden/alcance del roadmap real.
+
+**Veredicto: PENDIENTE.** Lo que se pidió construir (modelos, contrato del payload, cálculo de
+precio, selector con validación de grupo) está bien implementado y bien cubierto por tests nuevos
+— no hay nada que corregir ahí. Lo que falta para "LISTO" es puntual y ya diagnosticado con
+evidencia exacta, no un rediseño: extender las 2 bifurcaciones "¿el producto tiene opciones para
+elegir?" que ya existen para salsas (`home_screen.dart:997`, `_AddButton.onTap`; y
+`cart_screen.dart:294`, `_offersSauces`) para que también consideren `item.beverages`/
+`item.extraPortions` (y `selectedBeverages`/`selectedExtraPortions` en el segundo caso) — mismo
+criterio que la app ya usa para salsas, sin necesidad de un patrón nuevo. Tras ese fix puntual,
+re-auditar solo esos 2 archivos (no hace falta repetir el resto de esta auditoría).
+
 ### Refactor: `showCeltasSnackBar` compartido (limpieza de deuda técnica)
 
 Consolida el bloque `ScaffoldMessenger.of(context)..hideCurrentSnackBar()..showSnackBar(...)`,

@@ -1,6 +1,8 @@
 import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/features/cart/data/models/cart_item.dart';
 import 'package:celtas_mobile/features/checkout/data/order_repository.dart';
+import 'package:celtas_mobile/features/home/data/models/beverage_option.dart';
+import 'package:celtas_mobile/features/home/data/models/extra_portion_option.dart';
 import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -448,6 +450,183 @@ void main() {
       expect(result.whatsappUrl, 'https://wa.me/51999999999');
     });
   });
+
+  group(
+    'createOrder — payload de items con bebidas/porciones extras (mismo '
+    'tri-state que sauceIds)',
+    () {
+      test(
+        'ítem sin bebidas ni extras seleccionados → no manda '
+        '"beverageIds" ni "extraPortionIds"',
+        () async {
+          mockPostSuccess();
+
+          await repository.createOrder(
+            items: const [
+              CartItem(
+                menuItemId: 'i-1',
+                name: 'Berserker Burger',
+                unitPrice: 15.5,
+                quantity: 1,
+              ),
+            ],
+            addressId: 'addr-1',
+          );
+
+          final captured = verify(
+            () => dio.post<Map<String, dynamic>>(
+              '/orders',
+              data: captureAny(named: 'data'),
+            ),
+          ).captured.single as Map<String, dynamic>;
+          final item = (captured['items'] as List).single as Map<String, dynamic>;
+          expect(item.containsKey('beverageIds'), isFalse);
+          expect(item.containsKey('extraPortionIds'), isFalse);
+        },
+      );
+
+      test(
+        'ítem con explicitlyNoBeverages=true y selectedBeverages vacío → '
+        'manda "beverageIds": [] explícito (no ausente)',
+        () async {
+          mockPostSuccess();
+
+          await repository.createOrder(
+            items: const [
+              CartItem(
+                menuItemId: 'i-1',
+                name: 'Combo Burger',
+                unitPrice: 18,
+                quantity: 1,
+                explicitlyNoBeverages: true,
+              ),
+            ],
+            addressId: 'addr-1',
+          );
+
+          final captured = verify(
+            () => dio.post<Map<String, dynamic>>(
+              '/orders',
+              data: captureAny(named: 'data'),
+            ),
+          ).captured.single as Map<String, dynamic>;
+          final item = (captured['items'] as List).single as Map<String, dynamic>;
+          expect(item.containsKey('beverageIds'), isTrue);
+          expect(item['beverageIds'], <String>[]);
+        },
+      );
+
+      test(
+        'ítem con explicitlyNoExtraPortions=true y selectedExtraPortions '
+        'vacío → manda "extraPortionIds": [] explícito (no ausente)',
+        () async {
+          mockPostSuccess();
+
+          await repository.createOrder(
+            items: const [
+              CartItem(
+                menuItemId: 'i-1',
+                name: 'Combo Burger',
+                unitPrice: 18,
+                quantity: 1,
+                explicitlyNoExtraPortions: true,
+              ),
+            ],
+            addressId: 'addr-1',
+          );
+
+          final captured = verify(
+            () => dio.post<Map<String, dynamic>>(
+              '/orders',
+              data: captureAny(named: 'data'),
+            ),
+          ).captured.single as Map<String, dynamic>;
+          final item = (captured['items'] as List).single as Map<String, dynamic>;
+          expect(item.containsKey('extraPortionIds'), isTrue);
+          expect(item['extraPortionIds'], <String>[]);
+        },
+      );
+
+      test(
+        'ítem con bebidas y porciones extras seleccionadas → manda los ids '
+        '(no los nombres ni los precios)',
+        () async {
+          mockPostSuccess();
+
+          await repository.createOrder(
+            items: const [
+              CartItem(
+                menuItemId: 'i-1',
+                name: 'Combo Burger',
+                unitPrice: 18,
+                quantity: 2,
+                selectedBeverages: [
+                  BeverageOption(id: 'b-1', name: 'Coca-Cola 500ml', price: 3),
+                ],
+                selectedExtraPortions: [
+                  ExtraPortionOption(
+                    id: 'e-1',
+                    name: 'Papas extra',
+                    price: 5,
+                  ),
+                ],
+              ),
+            ],
+            addressId: 'addr-1',
+          );
+
+          final captured = verify(
+            () => dio.post<Map<String, dynamic>>(
+              '/orders',
+              data: captureAny(named: 'data'),
+            ),
+          ).captured.single as Map<String, dynamic>;
+          final item = (captured['items'] as List).single as Map<String, dynamic>;
+          expect(item['beverageIds'], ['b-1']);
+          expect(item['extraPortionIds'], ['e-1']);
+        },
+      );
+
+      test(
+        'varios ítems: cada uno manda su propia selección de bebidas/extras '
+        'de forma independiente',
+        () async {
+          mockPostSuccess();
+
+          await repository.createOrder(
+            items: const [
+              CartItem(
+                menuItemId: 'i-1',
+                name: 'Combo Burger',
+                unitPrice: 18,
+                quantity: 1,
+                selectedBeverages: [
+                  BeverageOption(id: 'b-1', name: 'Coca-Cola 500ml', price: 3),
+                ],
+              ),
+              CartItem(
+                menuItemId: 'i-2',
+                name: 'Arroz Chaufa',
+                unitPrice: 18,
+                quantity: 1,
+              ),
+            ],
+            addressId: 'addr-1',
+          );
+
+          final captured = verify(
+            () => dio.post<Map<String, dynamic>>(
+              '/orders',
+              data: captureAny(named: 'data'),
+            ),
+          ).captured.single as Map<String, dynamic>;
+          final items = (captured['items'] as List).cast<Map<String, dynamic>>();
+          expect(items[0]['beverageIds'], ['b-1']);
+          expect(items[1].containsKey('beverageIds'), isFalse);
+        },
+      );
+    },
+  );
 
   group('createOrder — 409 local cerrado', () {
     /// Contrato verificado contra `orders.service.ts` (`create`): el check

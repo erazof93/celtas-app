@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:celtas_mobile/features/cart/data/cart_storage.dart';
 import 'package:celtas_mobile/features/cart/data/models/cart_item.dart';
 import 'package:celtas_mobile/features/coupons/data/models/validated_coupon.dart';
+import 'package:celtas_mobile/features/home/data/models/beverage_option.dart';
+import 'package:celtas_mobile/features/home/data/models/extra_portion_option.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
 import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
 import 'package:celtas_mobile/features/rewards/data/models/reward_catalog_item.dart';
@@ -116,6 +118,10 @@ class CartNotifier extends Notifier<CartState> {
     int quantity = 1,
     List<SauceOption> selectedSauces = const [],
     bool explicitlyNoSauces = false,
+    List<BeverageOption> selectedBeverages = const [],
+    bool explicitlyNoBeverages = false,
+    List<ExtraPortionOption> selectedExtraPortions = const [],
+    bool explicitlyNoExtraPortions = false,
     String? comment,
   }) {
     if (quantity <= 0) return;
@@ -127,6 +133,10 @@ class CartNotifier extends Notifier<CartState> {
       image: item.image,
       selectedSauces: selectedSauces,
       explicitlyNoSauces: explicitlyNoSauces,
+      selectedBeverages: selectedBeverages,
+      explicitlyNoBeverages: explicitlyNoBeverages,
+      selectedExtraPortions: selectedExtraPortions,
+      explicitlyNoExtraPortions: explicitlyNoExtraPortions,
       comment: comment,
     );
     final items = state.items;
@@ -140,6 +150,11 @@ class CartNotifier extends Notifier<CartState> {
                 quantity: items[i].quantity + quantity,
                 explicitlyNoSauces:
                     items[i].explicitlyNoSauces || explicitlyNoSauces,
+                explicitlyNoBeverages:
+                    items[i].explicitlyNoBeverages || explicitlyNoBeverages,
+                explicitlyNoExtraPortions:
+                    items[i].explicitlyNoExtraPortions ||
+                    explicitlyNoExtraPortions,
               )
             else
               items[i],
@@ -169,6 +184,10 @@ class CartNotifier extends Notifier<CartState> {
     required int quantity,
     required List<SauceOption> selectedSauces,
     bool explicitlyNoSauces = false,
+    List<BeverageOption> selectedBeverages = const [],
+    bool explicitlyNoBeverages = false,
+    List<ExtraPortionOption> selectedExtraPortions = const [],
+    bool explicitlyNoExtraPortions = false,
     String? comment,
   }) {
     if (quantity <= 0) return;
@@ -179,6 +198,10 @@ class CartNotifier extends Notifier<CartState> {
       quantity: quantity,
       selectedSauces: selectedSauces,
       explicitlyNoSauces: explicitlyNoSauces,
+      selectedBeverages: selectedBeverages,
+      explicitlyNoBeverages: explicitlyNoBeverages,
+      selectedExtraPortions: selectedExtraPortions,
+      explicitlyNoExtraPortions: explicitlyNoExtraPortions,
       comment: comment,
     );
     final mergeIndex = items.indexWhere((i) => i.lineKey == updated.lineKey);
@@ -191,6 +214,11 @@ class CartNotifier extends Notifier<CartState> {
                 quantity: items[i].quantity + quantity,
                 explicitlyNoSauces:
                     items[i].explicitlyNoSauces || explicitlyNoSauces,
+                explicitlyNoBeverages:
+                    items[i].explicitlyNoBeverages || explicitlyNoBeverages,
+                explicitlyNoExtraPortions:
+                    items[i].explicitlyNoExtraPortions ||
+                    explicitlyNoExtraPortions,
               )
             else if (i != oldIndex)
               items[i],

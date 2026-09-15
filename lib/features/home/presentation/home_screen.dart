@@ -28,15 +28,18 @@ import 'package:url_launcher/url_launcher.dart';
 /// Módulo 3: consume `GET /banners/active` (carrusel con indicador de puntos)
 /// y `GET /menu` (categorías con tarjetas de producto). El botón "+" de cada
 /// tarjeta agrega directo al carrito local (`cartProvider`, módulo 4) SIN
-/// pasar por el selector de salsas del detalle SOLO si el producto no ofrece
-/// salsas (`item.sauces.isEmpty`) — es el atajo de "agregar rápido" ya
-/// existente y probado, y agregar sin salsas es un estado válido para el
-/// backend (`selectedSauces: null`, ver `orders.service.ts`). Si el producto
-/// SÍ ofrece salsas, el "+" navega al detalle (`/product/:id`) en vez de
-/// agregar directo — hallazgo real probando en dispositivo (dueño del
-/// negocio): el atajo se sentía roto en un producto con salsas porque nunca
-/// dejaba elegirlas. Tocar la tarjeta ya abría el detalle antes de este
-/// cambio, y lo sigue haciendo para cualquier producto. El ícono de carrito
+/// pasar por el selector del detalle SOLO si el producto no ofrece salsas,
+/// bebidas NI porciones extras (`item.sauces.isEmpty && item.beverages.
+/// isEmpty && item.extraPortions.isEmpty`) — es el atajo de "agregar rápido"
+/// ya existente y probado, y agregar así es un estado válido para el backend
+/// (`selectedSauces`/`selectedBeverages`/`selectedExtraPortions: null`, ver
+/// `orders.service.ts`). Si el producto SÍ ofrece cualquiera de las tres, el
+/// "+" navega al detalle (`/product/:id`) en vez de agregar directo —
+/// hallazgo real probando en dispositivo (dueño del negocio): el atajo se
+/// sentía roto en un producto con salsas porque nunca dejaba elegirlas
+/// (mismo criterio extendido después a bebidas/extras, que además pueden ser
+/// obligatorias). Tocar la tarjeta ya abría el detalle antes de este cambio,
+/// y lo sigue haciendo para cualquier producto. El ícono de carrito
 /// del header muestra el total de unidades en un badge.
 ///
 /// Mejora post-cierre: tap sobre cada banner según su `actionType`
@@ -985,16 +988,21 @@ class _ProductCard extends ConsumerWidget {
             ),
             const SizedBox(width: 12),
             // Botón "+" rápido: agrega al carrito local sin entrar al detalle
-            // SOLO si el producto no ofrece salsas. Si las ofrece, navega al
-            // detalle en vez de agregar directo (mismo `push` que el tap
-            // sobre la tarjeta) para que el cliente pueda elegirlas — antes
-            // agregaba siempre directo, sin importar si el producto tenía
-            // salsas, y eso se sentía roto en dispositivo real.
+            // SOLO si el producto no ofrece salsas, bebidas NI porciones
+            // extras. Si ofrece cualquiera de las tres, navega al detalle en
+            // vez de agregar directo (mismo `push` que el tap sobre la
+            // tarjeta) para que el cliente pueda elegir — antes solo miraba
+            // `sauces`, y un producto con bebidas/extras (incluso
+            // obligatorias) se agregaba directo sin selector, mismo bug de
+            // clase que ya se había encontrado y corregido una vez para
+            // salsas ("se sentía roto en dispositivo real").
             _AddButton(
               key: ValueKey('add-${item.id}'),
               onTap: () {
                 ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                if (item.sauces.isNotEmpty) {
+                if (item.sauces.isNotEmpty ||
+                    item.beverages.isNotEmpty ||
+                    item.extraPortions.isNotEmpty) {
                   context.push('/product/${item.id}');
                   return;
                 }
