@@ -33,7 +33,7 @@ class CeltasColors {
   static const textSubtle = Color(0xFF6B6357); // tabs inactivas, menos énfasis
   static const textLabel = Color(0xFFC9A96A); // labels de formularios (EMAIL, etc.)
 
-  /// Único color fuera de la paleta cálida, y a propósito: el mockup original
+  /// Primer color fuera de la paleta cálida, y a propósito: el mockup original
   /// pintaba `confirmado` (naranja relleno) y `en_camino` (naranja contorno)
   /// con el MISMO color, distinguibles solo por relleno vs. contorno, y
   /// `en_camino`/`cancelado` compartían el estilo de contorno con colores
@@ -43,6 +43,17 @@ class CeltasColors {
   /// `OrderStatusBadge` (`lib/features/orders/presentation/widgets/
   /// order_status_badge.dart`) para el mapeo completo de los 5 estados.
   static const statusEnCamino = Color(0xFF3B7DDE);
+
+  /// Segundo color fuera de la paleta cálida, mismo criterio que
+  /// `statusEnCamino`: hace falta una señal de "completo/listo" que no
+  /// comparta hue con `orange` (selección activa dentro de un chip/campo) ni
+  /// con `gold`/`redLight` (aviso/error) — usar naranja o dorado para "ya
+  /// resolviste esto" sería indistinguible de "esto está seleccionado" o
+  /// "esto tiene un problema". Único uso hoy: el badge "Listo" del dropdown
+  /// de opciones obligatorias en `product_detail_screen.dart`
+  /// (`_OptionGroupDropdown`), que reemplaza el badge "Obligatorio" (naranja)
+  /// una vez que el cliente ya eligió algo en ese grupo.
+  static const success = Color(0xFF4CAF50);
 }
 
 /// Radios que se repiten en el mockup (`border-radius` real del CSS).

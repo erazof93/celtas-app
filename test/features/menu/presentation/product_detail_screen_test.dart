@@ -12,6 +12,7 @@ import 'package:celtas_mobile/features/menu/presentation/product_detail_screen.d
 import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
 import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -521,7 +522,10 @@ void main() {
         final (container, _) = await pumpDetail(tester, productId: 'i-3');
 
         await tester.tap(find.byKey(const ValueKey('detail-add')));
-        await tester.pump();
+        // `pumpAndSettle`, no un solo `pump`: el toque ahora dispara un
+        // scroll real de 300ms hacia el campo (`Scrollable.ensureVisible`
+        // en `_handleValidationFailure`) antes de mostrar el SnackBar.
+        await tester.pumpAndSettle();
 
         expect(container.read(cartProvider).items, isEmpty);
         // El mismo texto aparece dos veces: el aviso inline bajo el
@@ -537,6 +541,12 @@ void main() {
           ),
           findsOneWidget,
         );
+
+        // `pumpAndSettle` se detiene antes de que dispare el
+        // `Future.delayed(800ms)` que limpia el resalte (ver doc de
+        // `_handleValidationFailure`) — sin dejarlo correr, el test
+        // terminaría con ese timer todavía pendiente.
+        await tester.pump(const Duration(milliseconds: 900));
       },
     );
 
@@ -835,12 +845,28 @@ void main() {
     );
 
     testWidgets(
-      'bebidas obligatorias: el campo muestra la etiqueta "Obligatorio" a '
-      'la izquierda del dropdown',
+      'bebidas obligatorias: el campo muestra el badge "Obligatorio" '
+      'dentro del dropdown mientras no hay nada elegido',
       (tester) async {
         await pumpDetail(tester, productId: 'i-5');
 
         expect(find.text('Obligatorio'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'bebidas obligatorias: el badge del campo pasa de "Obligatorio" '
+      '(nada elegido) a "Listo" (verde) apenas se elige una bebida',
+      (tester) async {
+        await pumpDetail(tester, productId: 'i-5');
+
+        expect(find.text('Obligatorio'), findsOneWidget);
+        expect(find.text('Listo'), findsNothing);
+
+        await selectDialogOptions(tester, 'beverage', ['b-1']);
+
+        expect(find.text('Obligatorio'), findsNothing);
+        expect(find.text('Listo'), findsOneWidget);
       },
     );
 
@@ -978,8 +1004,8 @@ void main() {
     );
 
     testWidgets(
-      'porciones extras obligatorias: el campo muestra la etiqueta '
-      '"Obligatorio" a la izquierda del dropdown',
+      'porciones extras obligatorias: el campo muestra el badge '
+      '"Obligatorio" dentro del dropdown mientras no hay nada elegido',
       (tester) async {
         await pumpDetail(tester, productId: 'i-7');
 
@@ -1031,6 +1057,165 @@ void main() {
       },
     );
   });
+
+  group(
+    'aviso de campo bloqueante al tocar Agregar (scroll + vibración + '
+    'resalte rojo temporal)',
+    () {
+      late List<MethodCall> platformCalls;
+
+      setUp(() {
+        platformCalls = [];
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+              platformCalls.add(call);
+              return null;
+            });
+      });
+
+      tearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(SystemChannels.platform, null);
+      });
+
+      /// Color de borde del campo dropdown en este momento — lee la
+      /// `decoration` del `Container` con `fieldKey` (ver
+      /// `_OptionGroupDropdown.build`). El campo puede envolver OTRO
+      /// `Container` más adentro (el badge "Obligatorio"/"Listo" de
+      /// `_RequiredBadge`), así que se toma el primero en orden de árbol
+      /// (el del campo en sí, hijo directo del `GestureDetector`), no
+      /// `find...single`.
+      Color? fieldBorderColor(WidgetTester tester, String testKey) {
+        final container = tester
+            .widgetList<Container>(
+              find.descendant(
+                of: find.byKey(ValueKey('detail-$testKey-dropdown')),
+                matching: find.byType(Container),
+              ),
+            )
+            .first;
+        final decoration = container.decoration as BoxDecoration?;
+        return (decoration?.border as Border?)?.top.color;
+      }
+
+      testWidgets(
+        'tocar "Agregar" con una bebida obligatoria sin elegir vibra '
+        '(HapticFeedback.mediumImpact) y resalta el campo en rojo por '
+        'un momento, sin agregar nada al carrito',
+        (tester) async {
+          final (container, _) = await pumpDetail(tester, productId: 'i-5');
+
+          // Borde normal antes de tocar "Agregar" (sin selección, sin
+          // resalte todavía).
+          expect(fieldBorderColor(tester, 'beverage'), CeltasColors.border);
+
+          await tester.tap(find.byKey(const ValueKey('detail-add')));
+          // `pumpAndSettle` deja correr el scroll real hacia el campo
+          // (`Scrollable.ensureVisible`, 300ms) y la animación de entrada
+          // del SnackBar hasta que no queda ningún frame pendiente — se
+          // detiene ahí, ANTES del `Future.delayed(800ms)` que revierte el
+          // resalte (ese temporizador no mantiene un frame agendado
+          // mientras espera), así que el resalte sigue capturado.
+          await tester.pumpAndSettle();
+
+          expect(
+            platformCalls.any((c) => c.method == 'HapticFeedback.vibrate'),
+            isTrue,
+            reason: 'debe llamar HapticFeedback.mediumImpact() al bloquear',
+          );
+          expect(
+            fieldBorderColor(tester, 'beverage'),
+            CeltasColors.redLight,
+            reason: 'el campo bloqueante se resalta en rojo tras el toque',
+          );
+          expect(container.read(cartProvider).items, isEmpty);
+
+          // Pasado el momento de resalte (800ms), vuelve al borde normal.
+          await tester.pump(const Duration(milliseconds: 900));
+          await tester.pump();
+          expect(fieldBorderColor(tester, 'beverage'), CeltasColors.border);
+        },
+      );
+
+      testWidgets(
+        'con dos grupos obligatorios sin elegir, resalta primero el que '
+        'aparece antes en pantalla (bebidas antes que porciones extras)',
+        (tester) async {
+          const comboDoble = PublicMenuItem(
+            id: 'i-8',
+            name: 'Combo Doble Obligatorio',
+            price: 30,
+            beverages: [
+              BeverageOption(id: 'b-1', name: 'Coca-Cola 500ml', price: 3),
+            ],
+            beverageGroupRequired: true,
+            beverageGroupMaxSelectable: 1,
+            extraPortions: [
+              ExtraPortionOption(id: 'e-1', name: 'Papas extra', price: 5),
+            ],
+            extraPortionsGroupRequired: true,
+            extraPortionsGroupMaxSelectable: 1,
+          );
+          const categoriaDoble = PublicMenuCategory(
+            id: 'c-2',
+            name: 'Combos',
+            items: [comboDoble],
+          );
+          final containerDoble = ProviderContainer(
+            overrides: [
+              publicMenuProvider.overrideWith(
+                (ref) async => [categoriaDoble],
+              ),
+            ],
+          );
+          addTearDown(containerDoble.dispose);
+          final goRouter = GoRouter(
+            initialLocation: '/home',
+            routes: [
+              GoRoute(
+                path: '/home',
+                builder: (_, _) => const Scaffold(body: Text('HOME')),
+              ),
+              GoRoute(
+                path: '/product/:id',
+                builder: (_, state) => ProductDetailScreen(
+                  productId: state.pathParameters['id']!,
+                ),
+              ),
+            ],
+          );
+          tester.view.physicalSize = const Size(1170, 2532);
+          tester.view.devicePixelRatio = 3.0;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          await tester.pumpWidget(
+            UncontrolledProviderScope(
+              container: containerDoble,
+              child: MaterialApp.router(
+                theme: AppTheme.dark,
+                routerConfig: goRouter,
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          unawaited(goRouter.push('/product/i-8'));
+          await tester.pumpAndSettle();
+
+          await tester.tap(find.byKey(const ValueKey('detail-add')));
+          // Mismo motivo que el test anterior: deja correr el scroll real
+          // y la animación del SnackBar antes de comprobar el resalte.
+          await tester.pumpAndSettle();
+
+          expect(fieldBorderColor(tester, 'beverage'), CeltasColors.redLight);
+          expect(fieldBorderColor(tester, 'extra'), CeltasColors.border);
+
+          // Deja correr el `Future.delayed(800ms)` que limpia el resalte
+          // antes de que termine el test — mismo motivo que arriba.
+          await tester.pump(const Duration(milliseconds: 900));
+        },
+      );
+    },
+  );
 
   group('nota para el pedido (comentario libre por línea)', () {
     testWidgets(

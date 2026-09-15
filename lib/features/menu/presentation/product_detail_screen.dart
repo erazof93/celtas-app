@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
@@ -9,6 +11,7 @@ import 'package:celtas_mobile/shared/widgets/celtas_snackbar.dart';
 import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
 import 'package:celtas_mobile/shared/widgets/svg_stroke_icon.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -133,6 +136,21 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
   late bool _explicitlyNoExtraPortions;
   late final TextEditingController _commentController;
 
+  // Una `GlobalKey` por campo dropdown — necesaria para poder hacer
+  // `Scrollable.ensureVisible` hacia el campo concreto que está bloqueando
+  // el "Agregar"/"Guardar cambios" (ver `_handleValidationFailure`). No se
+  // puede resolver esto con un solo `BuildContext` porque las 3 secciones
+  // son condicionales (`if (item.sauces.isNotEmpty) ...`) y pueden o no
+  // estar montadas.
+  final GlobalKey _sauceFieldKey = GlobalKey();
+  final GlobalKey _beverageFieldKey = GlobalKey();
+  final GlobalKey _extraFieldKey = GlobalKey();
+
+  /// Id del grupo (`'sauce'`/`'beverage'`/`'extra'`) actualmente resaltado
+  /// con borde rojo tras un intento fallido de "Agregar"/"Guardar cambios"
+  /// — `null` en cualquier otro momento. Ver `_handleValidationFailure`.
+  String? _highlightedViolation;
+
   @override
   void initState() {
     super.initState();
@@ -231,6 +249,62 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
           'para continuar';
     }
     return null;
+  }
+
+  /// Ids de los grupos con una violación pendiente ahora mismo, en el mismo
+  /// orden en que las secciones aparecen en pantalla (salsas → bebidas →
+  /// porciones extras). El primero de esta lista es el que
+  /// `_handleValidationFailure` resalta/hacia el que hace scroll al tocar
+  /// "Agregar"/"Guardar cambios" con algo pendiente.
+  List<String> get _violatedGroupKeys => [
+    if (_sauceChoiceViolation != null) 'sauce',
+    if (_beverageChoiceViolation != null) 'beverage',
+    if (_extraPortionChoiceViolation != null) 'extra',
+  ];
+
+  String? _violationMessageFor(String groupKey) => switch (groupKey) {
+    'sauce' => _sauceChoiceViolation,
+    'beverage' => _beverageChoiceViolation,
+    'extra' => _extraPortionChoiceViolation,
+    _ => null,
+  };
+
+  GlobalKey _fieldKeyFor(String groupKey) => switch (groupKey) {
+    'sauce' => _sauceFieldKey,
+    'beverage' => _beverageFieldKey,
+    _ => _extraFieldKey,
+  };
+
+  /// Feedback de "esto está bloqueando el Agregar" cuando el cliente toca
+  /// el botón con una elección obligatoria pendiente: hace scroll hasta el
+  /// campo violado, vibra (`HapticFeedback.mediumImpact`), resalta su
+  /// borde en rojo por 800ms, y muestra el mismo mensaje de siempre en un
+  /// SnackBar — el SnackBar y el aviso inline bajo el dropdown
+  /// (`_ChoiceNotice`) ya existían; esto es feedback ADICIONAL para que el
+  /// cliente encuentre el campo problemático sin tener que leer el mensaje
+  /// y buscarlo él mismo entre 3 secciones.
+  Future<void> _handleValidationFailure(String groupKey) async {
+    final message = _violationMessageFor(groupKey);
+    if (message == null) return;
+    final fieldContext = _fieldKeyFor(groupKey).currentContext;
+    if (fieldContext != null) {
+      await Scrollable.ensureVisible(
+        fieldContext,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        // 0.3 en vez de 0.0/1.0: deja el campo visible con algo de aire
+        // arriba (no pegado al borde superior del viewport), más fácil de
+        // leer junto con el título/subtítulo de la sección.
+        alignment: 0.3,
+      );
+    }
+    HapticFeedback.mediumImpact();
+    if (!mounted) return;
+    setState(() => _highlightedViolation = groupKey);
+    showCeltasSnackBar(context, message);
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (!mounted) return;
+    setState(() => _highlightedViolation = null);
   }
 
   double get _selectedBeveragesUnitPrice => widget.item.beverages
@@ -426,6 +500,7 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
                     if (item.sauces.isNotEmpty) ...[
                       const SizedBox(height: 20),
                       _OptionGroupDropdown(
+                        fieldKey: _sauceFieldKey,
                         testKey: 'sauce',
                         title: 'SALSAS Y CREMAS',
                         hintText: 'Elige tus cremas',
@@ -438,6 +513,7 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
                         explicitlyNone: _explicitlyNoSauces,
                         groupRequired: false,
                         groupMaxSelectable: item.sauces.length,
+                        isHighlighted: _highlightedViolation == 'sauce',
                         onApply: (selected, none) => setState(() {
                           _selectedSauceIds
                             ..clear()
@@ -456,6 +532,7 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
                     if (item.beverages.isNotEmpty) ...[
                       const SizedBox(height: 20),
                       _OptionGroupDropdown(
+                        fieldKey: _beverageFieldKey,
                         testKey: 'beverage',
                         title: 'BEBIDAS',
                         hintText: 'Elige tus bebidas',
@@ -472,6 +549,7 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
                         explicitlyNone: _explicitlyNoBeverages,
                         groupRequired: item.beverageGroupRequired,
                         groupMaxSelectable: item.beverageGroupMaxSelectable,
+                        isHighlighted: _highlightedViolation == 'beverage',
                         onApply: (selected, none) => setState(() {
                           _selectedBeverageIds
                             ..clear()
@@ -490,6 +568,7 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
                     if (item.extraPortions.isNotEmpty) ...[
                       const SizedBox(height: 20),
                       _OptionGroupDropdown(
+                        fieldKey: _extraFieldKey,
                         testKey: 'extra',
                         title: 'PORCIONES EXTRAS',
                         hintText: 'Elige tus extras',
@@ -507,6 +586,7 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
                         groupRequired: item.extraPortionsGroupRequired,
                         groupMaxSelectable:
                             item.extraPortionsGroupMaxSelectable,
+                        isHighlighted: _highlightedViolation == 'extra',
                         onApply: (selected, none) => setState(() {
                           _selectedExtraPortionIds
                             ..clear()
@@ -580,24 +660,16 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
                     _extraPortionChoiceViolation == null,
                 onPressed: () {
                   // Mismo orden en que las secciones aparecen en pantalla:
-                  // salsas, después bebidas, después porciones extras. El
-                  // mensaje mostrado es el mismo texto que el aviso inline
-                  // bajo el dropdown correspondiente (`_ChoiceNotice`) —
-                  // mismo criterio que el aviso de cupón de
-                  // `cart_screen.dart`.
-                  final sauceViolation = _sauceChoiceViolation;
-                  if (sauceViolation != null) {
-                    showCeltasSnackBar(context, sauceViolation);
-                    return;
-                  }
-                  final beverageViolation = _beverageChoiceViolation;
-                  if (beverageViolation != null) {
-                    showCeltasSnackBar(context, beverageViolation);
-                    return;
-                  }
-                  final extraPortionViolation = _extraPortionChoiceViolation;
-                  if (extraPortionViolation != null) {
-                    showCeltasSnackBar(context, extraPortionViolation);
+                  // salsas, después bebidas, después porciones extras — ver
+                  // `_violatedGroupKeys`. Con algo pendiente,
+                  // `_handleValidationFailure` hace scroll/vibra/resalta el
+                  // PRIMER grupo violado y muestra su mensaje (mismo texto
+                  // que el aviso inline bajo el dropdown, `_ChoiceNotice`)
+                  // en un SnackBar — este es feedback adicional, no lo
+                  // reemplaza.
+                  final violatedGroups = _violatedGroupKeys;
+                  if (violatedGroups.isNotEmpty) {
+                    unawaited(_handleValidationFailure(violatedGroups.first));
                     return;
                   }
                   _addToCart();
@@ -785,6 +857,7 @@ class _SelectableOption {
 /// diálogo de confirmación.
 class _OptionGroupDropdown extends StatelessWidget {
   const _OptionGroupDropdown({
+    required this.fieldKey,
     required this.testKey,
     required this.title,
     required this.hintText,
@@ -794,8 +867,14 @@ class _OptionGroupDropdown extends StatelessWidget {
     required this.explicitlyNone,
     required this.groupRequired,
     required this.groupMaxSelectable,
+    required this.isHighlighted,
     required this.onApply,
   });
+
+  /// `GlobalKey` del campo (Container) en sí — `_ProductDetailBodyState` la
+  /// usa para `Scrollable.ensureVisible` cuando este grupo bloquea el
+  /// "Agregar"/"Guardar cambios" (ver `_handleValidationFailure`).
+  final GlobalKey fieldKey;
 
   /// Prefijo de los `ValueKey` de este grupo (`sauce`/`beverage`/`extra`).
   final String testKey;
@@ -810,6 +889,12 @@ class _OptionGroupDropdown extends StatelessWidget {
   final bool explicitlyNone;
   final bool groupRequired;
   final int groupMaxSelectable;
+
+  /// `true` mientras este es el grupo que acaba de bloquear un intento de
+  /// "Agregar"/"Guardar cambios" — el campo se resalta con borde rojo por
+  /// un momento (ver `_ProductDetailBodyState._handleValidationFailure`).
+  final bool isHighlighted;
+
   final void Function(Set<String> selectedIds, bool explicitlyNone) onApply;
 
   /// "Elige las que quieras" cuando el máximo configurado cubre TODO el
@@ -820,8 +905,8 @@ class _OptionGroupDropdown extends StatelessWidget {
   /// más de 2 para elegir.
   ///
   /// Cuando el grupo es obligatorio, ya no repite la palabra "Obligatorio"
-  /// acá — el campo la muestra a su izquierda (ver `build`), así que
-  /// repetirla en el subtítulo sería ruido.
+  /// acá — el campo la muestra como badge dentro de sí mismo, a la derecha
+  /// (ver `build`/`_badge`), así que repetirla en el subtítulo sería ruido.
   String get _subtitle {
     if (groupRequired) {
       return 'Elige entre 1 y $groupMaxSelectable';
@@ -839,6 +924,20 @@ class _OptionGroupDropdown extends StatelessWidget {
         .where((option) => selectedIds.contains(option.id))
         .map((option) => option.name)
         .join(', ');
+  }
+
+  /// Badge dentro del campo, a la derecha (ver `build`) — `null` cuando el
+  /// grupo es opcional (nada que marcar ahí; el subtítulo ya cubre ese
+  /// caso). Con el grupo obligatorio, pasa de "Obligatorio" (naranja) a
+  /// "Listo" (`CeltasColors.success`, ver justificación en
+  /// `app_theme.dart`) apenas hay alguna opción real elegida — el grupo
+  /// obligatorio nunca ofrece el checkbox "Sin X" (ver `_openDialog`), así
+  /// que `selectedIds.isNotEmpty` es la única señal real de "completo" acá.
+  ({String label, Color color})? get _badge {
+    if (!groupRequired) return null;
+    return selectedIds.isNotEmpty
+        ? (label: 'Listo', color: CeltasColors.success)
+        : (label: 'Obligatorio', color: CeltasColors.orange);
   }
 
   Future<void> _openDialog(BuildContext context) async {
@@ -937,6 +1036,17 @@ class _OptionGroupDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasSelection = explicitlyNone || selectedIds.isNotEmpty;
+    // El borde rojo de `isHighlighted` (violación recién resaltada por
+    // `_handleValidationFailure`) manda sobre el naranja de "hay selección"
+    // — son mutuamente excluyentes en la práctica (un campo resaltado
+    // siempre está incompleto), pero el orden deja explícito cuál gana si
+    // algún día dejaran de serlo.
+    final borderColor = isHighlighted
+        ? CeltasColors.redLight
+        : hasSelection
+        ? CeltasColors.orange
+        : CeltasColors.border;
+    final borderWidth = isHighlighted ? 2.0 : (hasSelection ? 1.5 : 1.0);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -958,77 +1068,93 @@ class _OptionGroupDropdown extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        Row(
-          children: [
-            // Etiqueta "Obligatorio" a la izquierda del campo — solo cuando
-            // el grupo lo exige (`groupRequired`); con el grupo opcional no
-            // se muestra nada acá (el subtítulo de arriba ya explica el
-            // límite/la opción "Sin X", no hace falta un tag "Opcional"
-            // redundante en cada campo).
-            if (groupRequired)
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Text(
-                  'Obligatorio',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: CeltasColors.orange,
-                  ),
-                ),
-              ),
-            Expanded(
-              child: GestureDetector(
-                key: ValueKey('detail-$testKey-dropdown'),
-                onTap: () => _openDialog(context),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: CeltasColors.surface,
-                    border: Border.all(
+        GestureDetector(
+          key: ValueKey('detail-$testKey-dropdown'),
+          onTap: () => _openDialog(context),
+          child: Container(
+            // `fieldKey`, no el `ValueKey` de arriba — es el que
+            // `_ProductDetailBodyState._handleValidationFailure` usa para
+            // `Scrollable.ensureVisible` hacia este campo concreto.
+            key: fieldKey,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+            decoration: BoxDecoration(
+              color: CeltasColors.surface,
+              border: Border.all(color: borderColor, width: borderWidth),
+              borderRadius: BorderRadius.circular(CeltasRadii.input),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    _summaryText,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
                       color: hasSelection
                           ? CeltasColors.orange
-                          : CeltasColors.border,
-                      width: hasSelection ? 1.5 : 1,
+                          : CeltasColors.textMuted,
                     ),
-                    borderRadius: BorderRadius.circular(CeltasRadii.input),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _summaryText,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: hasSelection
-                                    ? CeltasColors.orange
-                                    : CeltasColors.textMuted,
-                              ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        size: 20,
-                        color: hasSelection
-                            ? CeltasColors.orange
-                            : CeltasColors.textSubtle,
-                      ),
-                    ],
                   ),
                 ),
-              ),
+                // Badge "Obligatorio"/"Listo" dentro del campo, a la
+                // derecha — reemplaza la etiqueta fija que antes vivía
+                // afuera, a la izquierda del campo (ver `_badge`).
+                if (_badge case final badge?) ...[
+                  const SizedBox(width: 8),
+                  _RequiredBadge(label: badge.label, color: badge.color),
+                ],
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 20,
+                  color: hasSelection
+                      ? CeltasColors.orange
+                      : CeltasColors.textSubtle,
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ],
+    );
+  }
+}
+
+/// Badge inline "Obligatorio"/"Listo" dentro de [_OptionGroupDropdown] — ver
+/// `_OptionGroupDropdown._badge`. Mismo lenguaje visual que
+/// `OrderStatusBadge` (`lib/features/orders/presentation/widgets/
+/// order_status_badge.dart`: pill + color de estado), pero con relleno
+/// translúcido en vez de sólido y a menor escala, para caber dentro de un
+/// campo de una sola línea sin competir visualmente con el texto del resumen.
+class _RequiredBadge extends StatelessWidget {
+  const _RequiredBadge({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        border: Border.all(color: color),
+        borderRadius: BorderRadius.circular(CeltasRadii.pill),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          fontSize: 10.5,
+          fontWeight: FontWeight.w800,
+          color: color,
+          letterSpacing: 0.2,
+        ),
+      ),
     );
   }
 }
