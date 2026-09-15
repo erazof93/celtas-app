@@ -26,12 +26,11 @@ import 'package:go_router/go_router.dart';
 ///     `rgba(13,13,13,.5) 0% → transparent 30% → rgba(13,13,13,.95) 100%` y
 ///     botones circulares de volver (38px, fondo `rgba(13,13,13,.6)`). El
 ///     mockup original pedía 400px, pero eso empujaba el selector de salsas
-///     (agregado post-mockup, ver más abajo) y su aviso de elección
-///     pendiente fuera de la pantalla visible sin deslizar en celulares
-///     comunes (hallazgo de UX real en dispositivo, no del mockup) — se
-///     redujo a 270px, que sí deja selector + aviso visibles sin deslizar en
-///     un producto con salsas en un celular de ~6.1", y sigue siendo un
-///     hero grande y reconocible.
+///     (agregado post-mockup, ver más abajo) fuera de la pantalla visible
+///     sin deslizar en celulares comunes (hallazgo de UX real en
+///     dispositivo, no del mockup) — se redujo a 270px, que sí deja el
+///     selector visible sin deslizar en un producto con salsas en un
+///     celular de ~6.1", y sigue siendo un hero grande y reconocible.
 ///   - Nombre en Cinzel 24px, descripción 14px muted, precio dorado 22px.
 ///   - Selector de salsas/bebidas/porciones extras (cada uno solo si
 ///     `item.sauces`/`item.beverages`/`item.extraPortions` no está vacío —
@@ -39,29 +38,32 @@ import 'package:go_router/go_router.dart';
 ///     mockup original (12 pantallas, sin esta funcionalidad todavía). Cada
 ///     categoría es un `_OptionGroupDropdown`: un campo tipo "dropdown"
 ///     (mismo lenguaje visual de input que el resto de la pantalla — borde,
-///     `CeltasColors.surface`, `CeltasRadii.input`) que muestra un resumen
-///     de la selección actual y, al tocarlo, abre un diálogo con checkboxes
-///     (multi-selección real, más un checkbox "Sin X" mutuamente excluyente
-///     con las opciones reales). Reemplazó un selector de chips horizontales
-///     usado en una iteración anterior — chips no escalan bien cuando el
-///     catálogo de opciones crece (ej. muchas bebidas), y el diálogo permite
-///     ver todas las opciones sin que la pantalla crezca con el catálogo.
-///     Bebidas/porciones extras tienen dos diferencias reales de negocio
-///     frente a salsas, no solo de estilo — (1) cada opción elegida SÍ suma
-///     precio al total (el ítem del diálogo muestra el precio, ej.
-///     "Coca-Cola 500ml — S/3.00") y (2) el grupo puede ser obligatorio
-///     (`beverageGroupRequired`/`extraPortionsGroupRequired`) y/o tener un
-///     máximo de opciones (`beverageGroupMaxSelectable`/
+///     `CeltasColors.surface`, `CeltasRadii.input`) que muestra si la
+///     elección ya quedó resuelta ("Listo") o no (vacío) y, al tocarlo, abre
+///     un diálogo con checkboxes para editarla (multi-selección real, más
+///     un checkbox "Sin X" mutuamente excluyente con las opciones reales).
+///     Las 3 secciones se ordenan con los grupos OBLIGATORIOS primero
+///     (`_ProductDetailBodyState._sectionOrder`) — dato por producto, así
+///     que el orden se recalcula por producto, no es fijo. Bebidas/porciones
+///     extras tienen dos diferencias reales de negocio frente a salsas, no
+///     solo de estilo — (1) cada opción elegida SÍ suma precio al total (el
+///     ítem del diálogo muestra el precio, ej. "Coca-Cola 500ml — S/3.00") y
+///     (2) el grupo puede ser obligatorio
+///     (`beverageGroupRequired`/`extraPortionsGroupRequired`), en cuyo caso
+///     el checkbox "Sin X" ni se ofrece (elegir "ninguna" no es válido ahí)
+///     y hace falta elegir al menos una opción real, y/o tener un máximo de
+///     opciones (`beverageGroupMaxSelectable`/
 ///     `extraPortionsGroupMaxSelectable`) — configurado por el admin,
 ///     contrato verificado contra `OrdersService.validateGroupSelection` en
-///     el backend. El checkbox "Sin X" ni se muestra cuando el grupo es
-///     obligatorio (elegir "ninguna" no es una opción válida ahí). La
-///     validación se espeja acá SOLO para UX inmediata (aviso
-///     "Obligatorio"/"Máximo X" antes de tocar "Agregar") — el backend
-///     vuelve a validar lo mismo al crear el pedido y es la única fuente de
-///     verdad real, mismo principio que el resto del proyecto ("el total y
-///     los subtotales se calculan SIEMPRE en el backend, nunca se confía en
-///     el frontend").
+///     el backend. Un grupo OPCIONAL (`groupRequired: false`, el único caso
+///     posible para salsas) nunca bloquea "Agregar" sin importar la
+///     selección — el cliente puede dejarlo sin tocar. La validación se
+///     espeja acá SOLO para UX inmediata (badge "Obligatorio"/"Listo" en el
+///     campo, SnackBar al tocar "Agregar" con algo obligatorio pendiente) —
+///     el backend vuelve a validar lo mismo al crear el pedido y es la única
+///     fuente de verdad real, mismo principio que el resto del proyecto ("el
+///     total y los subtotales se calculan SIEMPRE en el backend, nunca se
+///     confía en el frontend").
 ///   - Selector de cantidad (stepper `#17130F` borde `#2A231C` radio 12).
 ///   - Barra inferior fija con botón angled "AGREGAR AL CARRITO · S/ X.XX"
 ///     donde el precio ya viene multiplicado por la cantidad seleccionada.
@@ -188,30 +190,24 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
   }
 
   /// Mensaje de la violación actual del grupo de salsas, o `null` si la
-  /// selección es válida — mismo shape que
-  /// [_beverageChoiceViolation]/[_extraPortionChoiceViolation], pero sin las
-  /// ramas de obligatoriedad/máximo: el contrato del backend no expone
+  /// selección es válida. El contrato del backend no expone
   /// `groupRequired`/`groupMaxSelectable` para salsas (solo para
-  /// bebidas/porciones extras, ver `menu.service.ts`), así que acá el único
-  /// requisito de negocio sigue siendo el de siempre — el producto exige una
-  /// elección real (al menos una salsa, o "Sin salsas") solo cuando ofrece
-  /// catálogo de salsas.
-  String? get _sauceChoiceViolation {
-    if (widget.item.sauces.isEmpty) return null;
-    if (_selectedSauceIds.isEmpty && !_explicitlyNoSauces) {
-      return 'Elige tus salsas o toca "Sin salsas" para continuar';
-    }
-    return null;
-  }
+  /// bebidas/porciones extras, ver `menu.service.ts`) — el grupo es
+  /// conceptualmente igual a un grupo `groupRequired: false`, así que, con
+  /// la misma regla que [_beverageChoiceViolation]/
+  /// [_extraPortionChoiceViolation], nunca bloquea "Agregar" sin importar la
+  /// selección (antes exigía elegir algo real o "Sin salsas" incluso siendo
+  /// opcional — regla de negocio revertida a pedido del dueño del negocio).
+  String? get _sauceChoiceViolation => null;
 
   /// Mensaje de la violación actual del grupo de bebidas, o `null` si la
   /// selección es válida — mismo orden de chequeo que
   /// `OrdersService.validateGroupSelection` en el backend: primero
   /// obligatoriedad, después máximo. Sin bebidas ofrecidas, la validación
-  /// no aplica (siempre `null`). Con el grupo NO obligatorio, igual exige
-  /// una elección real (alguna bebida o "Sin bebida") antes de continuar —
-  /// mismo criterio de negocio que ya aplican las salsas
-  /// (`_sauceChoiceViolation`).
+  /// no aplica (siempre `null`). Con el grupo NO obligatorio y sin nada
+  /// elegido, YA NO es una violación — solo bloquea (1) faltar una elección
+  /// en un grupo obligatorio, o (2) pasarse del máximo permitido, sea el
+  /// grupo obligatorio u opcional.
   String? get _beverageChoiceViolation {
     final item = widget.item;
     if (item.beverages.isEmpty) return null;
@@ -221,11 +217,6 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
     if (_selectedBeverageIds.length > item.beverageGroupMaxSelectable) {
       return 'Máximo ${item.beverageGroupMaxSelectable} bebida(s) — quita '
           'alguna para continuar';
-    }
-    if (!item.beverageGroupRequired &&
-        _selectedBeverageIds.isEmpty &&
-        !_explicitlyNoBeverages) {
-      return 'Elige tus bebidas o toca "Sin bebida" para continuar';
     }
     return null;
   }
@@ -242,24 +233,17 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
       return 'Máximo ${item.extraPortionsGroupMaxSelectable} porción(es) '
           'extra — quita alguna para continuar';
     }
-    if (!item.extraPortionsGroupRequired &&
-        _selectedExtraPortionIds.isEmpty &&
-        !_explicitlyNoExtraPortions) {
-      return 'Elige tus porciones extras o toca "Sin porciones extras" '
-          'para continuar';
-    }
     return null;
   }
 
   /// Ids de los grupos con una violación pendiente ahora mismo, en el mismo
-  /// orden en que las secciones aparecen en pantalla (salsas → bebidas →
-  /// porciones extras). El primero de esta lista es el que
+  /// orden en que las secciones aparecen en pantalla (`_sectionOrder`: los
+  /// grupos obligatorios primero). El primero de esta lista es el que
   /// `_handleValidationFailure` resalta/hacia el que hace scroll al tocar
   /// "Agregar"/"Guardar cambios" con algo pendiente.
   List<String> get _violatedGroupKeys => [
-    if (_sauceChoiceViolation != null) 'sauce',
-    if (_beverageChoiceViolation != null) 'beverage',
-    if (_extraPortionChoiceViolation != null) 'extra',
+    for (final key in _sectionOrder)
+      if (_violationMessageFor(key) != null) key,
   ];
 
   String? _violationMessageFor(String groupKey) => switch (groupKey) {
@@ -278,11 +262,10 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
   /// Feedback de "esto está bloqueando el Agregar" cuando el cliente toca
   /// el botón con una elección obligatoria pendiente: hace scroll hasta el
   /// campo violado, vibra (`HapticFeedback.mediumImpact`), resalta su
-  /// borde en rojo por 800ms, y muestra el mismo mensaje de siempre en un
-  /// SnackBar — el SnackBar y el aviso inline bajo el dropdown
-  /// (`_ChoiceNotice`) ya existían; esto es feedback ADICIONAL para que el
-  /// cliente encuentre el campo problemático sin tener que leer el mensaje
-  /// y buscarlo él mismo entre 3 secciones.
+  /// borde en rojo por 800ms, y muestra el mensaje en un SnackBar — desde
+  /// que se quitó el aviso inline bajo el dropdown (antes `_ChoiceNotice`,
+  /// ver `_buildOptionSections`), este SnackBar es la única fuente textual
+  /// de qué falta, además del badge "Obligatorio" del campo.
   Future<void> _handleValidationFailure(String groupKey) async {
     final message = _violationMessageFor(groupKey);
     if (message == null) return;
@@ -393,6 +376,126 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
     });
   }
 
+  /// Orden final de las secciones de opciones (`sauce`/`beverage`/`extra`,
+  /// solo las que el producto realmente ofrece) — grupos OBLIGATORIOS
+  /// (`groupRequired: true`) primero, opcionales después, orden pedido por
+  /// el dueño del negocio: lo que bloquea "Agregar" debe verse antes que lo
+  /// que no. `groupRequired` es un dato por producto
+  /// (`item.beverageGroupRequired`/`extraPortionsGroupRequired`), así que
+  /// este orden se recalcula en cada build, no es fijo. Las salsas nunca son
+  /// obligatorias (el contrato del backend no expone ese flag para esa
+  /// categoría, ver `_sauceChoiceViolation`), así que siempre caen en el
+  /// grupo opcional. Partición manual en vez de `List.sort` (que en Dart no
+  /// garantiza estabilidad): así dos grupos opcionales, o dos obligatorios,
+  /// conservan su orden relativo original (salsas → bebidas → porciones
+  /// extras). Fuente única de verdad del orden en pantalla — la usan tanto
+  /// `_buildOptionSections` (para las secciones) como `_violatedGroupKeys`
+  /// (para decidir cuál grupo resaltar primero al tocar "Agregar" con algo
+  /// pendiente), así que nunca pueden desincronizarse entre sí.
+  List<String> get _sectionOrder {
+    final item = widget.item;
+    final required = <String>[];
+    final optional = <String>[];
+    if (item.sauces.isNotEmpty) optional.add('sauce');
+    if (item.beverages.isNotEmpty) {
+      (item.beverageGroupRequired ? required : optional).add('beverage');
+    }
+    if (item.extraPortions.isNotEmpty) {
+      (item.extraPortionsGroupRequired ? required : optional).add('extra');
+    }
+    return [...required, ...optional];
+  }
+
+  /// Secciones de `_OptionGroupDropdown`, ya intercaladas con su espaciado
+  /// (`SizedBox(height: 20)`) y ordenadas según `_sectionOrder`. Ya no arma
+  /// el aviso `_ChoiceNotice` bajo cada dropdown — el badge
+  /// "Obligatorio"/"Listo" dentro del campo ya cubre esa señal.
+  List<Widget> _buildOptionSections(PublicMenuItem item) {
+    final sections = <String, Widget>{
+      if (item.sauces.isNotEmpty)
+        'sauce': _OptionGroupDropdown(
+          fieldKey: _sauceFieldKey,
+          testKey: 'sauce',
+          title: 'SALSAS Y CREMAS',
+          noneLabel: 'Sin salsas',
+          options: [
+            for (final sauce in item.sauces)
+              _SelectableOption(id: sauce.id, name: sauce.name),
+          ],
+          selectedIds: _selectedSauceIds,
+          explicitlyNone: _explicitlyNoSauces,
+          groupRequired: false,
+          groupMaxSelectable: item.sauces.length,
+          isHighlighted: _highlightedViolation == 'sauce',
+          onApply: (selected, none) => setState(() {
+            _selectedSauceIds
+              ..clear()
+              ..addAll(selected);
+            _explicitlyNoSauces = none;
+          }),
+        ),
+      if (item.beverages.isNotEmpty)
+        'beverage': _OptionGroupDropdown(
+          fieldKey: _beverageFieldKey,
+          testKey: 'beverage',
+          title: 'BEBIDAS',
+          noneLabel: 'Sin bebida',
+          options: [
+            for (final beverage in item.beverages)
+              _SelectableOption(
+                id: beverage.id,
+                name: beverage.name,
+                price: beverage.price,
+              ),
+          ],
+          selectedIds: _selectedBeverageIds,
+          explicitlyNone: _explicitlyNoBeverages,
+          groupRequired: item.beverageGroupRequired,
+          groupMaxSelectable: item.beverageGroupMaxSelectable,
+          isHighlighted: _highlightedViolation == 'beverage',
+          onApply: (selected, none) => setState(() {
+            _selectedBeverageIds
+              ..clear()
+              ..addAll(selected);
+            _explicitlyNoBeverages = none;
+          }),
+        ),
+      if (item.extraPortions.isNotEmpty)
+        'extra': _OptionGroupDropdown(
+          fieldKey: _extraFieldKey,
+          testKey: 'extra',
+          title: 'PORCIONES EXTRAS',
+          noneLabel: 'Sin porciones extras',
+          options: [
+            for (final extraPortion in item.extraPortions)
+              _SelectableOption(
+                id: extraPortion.id,
+                name: extraPortion.name,
+                price: extraPortion.price,
+              ),
+          ],
+          selectedIds: _selectedExtraPortionIds,
+          explicitlyNone: _explicitlyNoExtraPortions,
+          groupRequired: item.extraPortionsGroupRequired,
+          groupMaxSelectable: item.extraPortionsGroupMaxSelectable,
+          isHighlighted: _highlightedViolation == 'extra',
+          onApply: (selected, none) => setState(() {
+            _selectedExtraPortionIds
+              ..clear()
+              ..addAll(selected);
+            _explicitlyNoExtraPortions = none;
+          }),
+        ),
+    };
+
+    return [
+      for (final key in _sectionOrder) ...[
+        const SizedBox(height: 20),
+        sections[key]!,
+      ],
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
@@ -497,111 +600,7 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
                         color: CeltasColors.gold,
                       ),
                     ),
-                    if (item.sauces.isNotEmpty) ...[
-                      const SizedBox(height: 20),
-                      _OptionGroupDropdown(
-                        fieldKey: _sauceFieldKey,
-                        testKey: 'sauce',
-                        title: 'SALSAS Y CREMAS',
-                        hintText: 'Elige tus cremas',
-                        noneLabel: 'Sin salsas',
-                        options: [
-                          for (final sauce in item.sauces)
-                            _SelectableOption(id: sauce.id, name: sauce.name),
-                        ],
-                        selectedIds: _selectedSauceIds,
-                        explicitlyNone: _explicitlyNoSauces,
-                        groupRequired: false,
-                        groupMaxSelectable: item.sauces.length,
-                        isHighlighted: _highlightedViolation == 'sauce',
-                        onApply: (selected, none) => setState(() {
-                          _selectedSauceIds
-                            ..clear()
-                            ..addAll(selected);
-                          _explicitlyNoSauces = none;
-                        }),
-                      ),
-                      if (_sauceChoiceViolation case final message?) ...[
-                        const SizedBox(height: 10),
-                        _ChoiceNotice(
-                          key: const ValueKey('detail-sauce-choice-notice'),
-                          message: message,
-                        ),
-                      ],
-                    ],
-                    if (item.beverages.isNotEmpty) ...[
-                      const SizedBox(height: 20),
-                      _OptionGroupDropdown(
-                        fieldKey: _beverageFieldKey,
-                        testKey: 'beverage',
-                        title: 'BEBIDAS',
-                        hintText: 'Elige tus bebidas',
-                        noneLabel: 'Sin bebida',
-                        options: [
-                          for (final beverage in item.beverages)
-                            _SelectableOption(
-                              id: beverage.id,
-                              name: beverage.name,
-                              price: beverage.price,
-                            ),
-                        ],
-                        selectedIds: _selectedBeverageIds,
-                        explicitlyNone: _explicitlyNoBeverages,
-                        groupRequired: item.beverageGroupRequired,
-                        groupMaxSelectable: item.beverageGroupMaxSelectable,
-                        isHighlighted: _highlightedViolation == 'beverage',
-                        onApply: (selected, none) => setState(() {
-                          _selectedBeverageIds
-                            ..clear()
-                            ..addAll(selected);
-                          _explicitlyNoBeverages = none;
-                        }),
-                      ),
-                      if (_beverageChoiceViolation case final message?) ...[
-                        const SizedBox(height: 10),
-                        _ChoiceNotice(
-                          key: const ValueKey('detail-beverage-choice-notice'),
-                          message: message,
-                        ),
-                      ],
-                    ],
-                    if (item.extraPortions.isNotEmpty) ...[
-                      const SizedBox(height: 20),
-                      _OptionGroupDropdown(
-                        fieldKey: _extraFieldKey,
-                        testKey: 'extra',
-                        title: 'PORCIONES EXTRAS',
-                        hintText: 'Elige tus extras',
-                        noneLabel: 'Sin porciones extras',
-                        options: [
-                          for (final extraPortion in item.extraPortions)
-                            _SelectableOption(
-                              id: extraPortion.id,
-                              name: extraPortion.name,
-                              price: extraPortion.price,
-                            ),
-                        ],
-                        selectedIds: _selectedExtraPortionIds,
-                        explicitlyNone: _explicitlyNoExtraPortions,
-                        groupRequired: item.extraPortionsGroupRequired,
-                        groupMaxSelectable:
-                            item.extraPortionsGroupMaxSelectable,
-                        isHighlighted: _highlightedViolation == 'extra',
-                        onApply: (selected, none) => setState(() {
-                          _selectedExtraPortionIds
-                            ..clear()
-                            ..addAll(selected);
-                          _explicitlyNoExtraPortions = none;
-                        }),
-                      ),
-                      if (_extraPortionChoiceViolation case final message?) ...[
-                        const SizedBox(height: 10),
-                        _ChoiceNotice(
-                          key: const ValueKey('detail-extra-choice-notice'),
-                          message: message,
-                        ),
-                      ],
-                    ],
+                    ..._buildOptionSections(item),
                     const SizedBox(height: 20),
                     _CommentField(controller: _commentController),
                     const SizedBox(height: 20),
@@ -659,14 +658,11 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
                     _beverageChoiceViolation == null &&
                     _extraPortionChoiceViolation == null,
                 onPressed: () {
-                  // Mismo orden en que las secciones aparecen en pantalla:
-                  // salsas, después bebidas, después porciones extras — ver
-                  // `_violatedGroupKeys`. Con algo pendiente,
-                  // `_handleValidationFailure` hace scroll/vibra/resalta el
-                  // PRIMER grupo violado y muestra su mensaje (mismo texto
-                  // que el aviso inline bajo el dropdown, `_ChoiceNotice`)
-                  // en un SnackBar — este es feedback adicional, no lo
-                  // reemplaza.
+                  // Mismo orden en que las secciones aparecen en pantalla
+                  // (`_sectionOrder`: obligatorios primero). Con algo
+                  // pendiente, `_handleValidationFailure` hace
+                  // scroll/vibra/resalta el PRIMER grupo violado y muestra
+                  // su mensaje en un SnackBar — ver `_violatedGroupKeys`.
                   final violatedGroups = _violatedGroupKeys;
                   if (violatedGroups.isNotEmpty) {
                     unawaited(_handleValidationFailure(violatedGroups.first));
@@ -839,16 +835,19 @@ class _SelectableOption {
 
 /// Selector de una categoría de opciones (salsas, bebidas o porciones
 /// extras) como campo tipo "dropdown": un input de solo lectura que muestra
-/// un resumen de la selección actual y, al tocarlo, abre un diálogo con
-/// checkboxes para editarla — reemplaza el selector de chips horizontales
-/// usado en una iteración anterior (ver doc de `_ProductDetailBody`).
+/// si la elección ya quedó resuelta ("Listo") o no (vacío) — ver
+/// `_summaryText` — y, al tocarlo, abre un diálogo con checkboxes para
+/// editarla — reemplaza el selector de chips horizontales usado en una
+/// iteración anterior (ver doc de `_ProductDetailBody`).
 ///
 /// Multi-selección real entre `options`, más un checkbox "Sin X"
-/// (`noneLabel`) mutuamente excluyente con ellas — mismo criterio de
-/// negocio de siempre: el producto exige una elección real (alguna opción,
-/// o "Sin X") antes de poder agregar/guardar, salvo que `groupRequired` sea
-/// `true`, en cuyo caso "Sin X" ni se ofrece (elegir "ninguna" no es válido
-/// ahí) y hace falta elegir al menos una opción real.
+/// (`noneLabel`) mutuamente excluyente con ellas. Con `groupRequired: true`
+/// hace falta elegir al menos una opción real para poder agregar/guardar
+/// ("Sin X" ni se ofrece ahí, ver `_openDialog` — elegir "ninguna" no es
+/// válido en un grupo obligatorio). Con `groupRequired: false` no hay
+/// ninguna elección forzada — el cliente puede dejarlo tal cual y seguir de
+/// largo, "Sin X" es solo una forma más de dejar constancia explícita de
+/// "no quiero nada de esto", no una obligación.
 ///
 /// El diálogo mantiene su propio estado temporal (`tempSelected`/
 /// `tempExplicitlyNone`) hasta que se toca "ACEPTAR" — tocar "CANCELAR" o
@@ -860,7 +859,6 @@ class _OptionGroupDropdown extends StatelessWidget {
     required this.fieldKey,
     required this.testKey,
     required this.title,
-    required this.hintText,
     required this.noneLabel,
     required this.options,
     required this.selectedIds,
@@ -879,10 +877,6 @@ class _OptionGroupDropdown extends StatelessWidget {
   /// Prefijo de los `ValueKey` de este grupo (`sauce`/`beverage`/`extra`).
   final String testKey;
   final String title;
-  /// Texto del campo cuando no hay nada elegido todavía (ej. "Elige tus
-  /// bebidas") — distinto por categoría, a diferencia del hint genérico
-  /// "Selecciona…" que tenía antes.
-  final String hintText;
   final String noneLabel;
   final List<_SelectableOption> options;
   final Set<String> selectedIds;
@@ -917,13 +911,19 @@ class _OptionGroupDropdown extends StatelessWidget {
     return 'Elige hasta $groupMaxSelectable, o "$noneLabel"';
   }
 
+  /// "Sin X" es siempre información propia (no solo "ya elegiste algo"), así
+  /// que se muestra igual sin importar `groupRequired`. Con una selección
+  /// real, la señal depende del tipo de grupo — un grupo OBLIGATORIO ya
+  /// tiene al badge ("Obligatorio"/"Listo", ver `_badge`) como única fuente
+  /// de esa señal, así que acá queda en blanco para no duplicarla; un grupo
+  /// OPCIONAL no tiene badge (`_badge` es `null` ahí), así que el resumen
+  /// SÍ necesita decir algo — "✓ Seleccionado" en vez del detalle real (ese
+  /// sigue disponible abriendo el diálogo, `_openDialog`).
   String get _summaryText {
     if (explicitlyNone) return noneLabel;
-    if (selectedIds.isEmpty) return hintText;
-    return options
-        .where((option) => selectedIds.contains(option.id))
-        .map((option) => option.name)
-        .join(', ');
+    if (groupRequired) return '';
+    if (selectedIds.isEmpty) return '';
+    return '✓ Seleccionado';
   }
 
   /// Badge dentro del campo, a la derecha (ver `build`) — `null` cuando el
@@ -1154,51 +1154,6 @@ class _RequiredBadge extends StatelessWidget {
           color: color,
           letterSpacing: 0.2,
         ),
-      ),
-    );
-  }
-}
-
-/// Aviso de elección pendiente/inválida para salsas, bebidas o porciones
-/// extras — mismo patrón visual (card + ícono + texto, tono gold de
-/// advertencia) que `_MissingAddressNotice` en `checkout_screen.dart`,
-/// parametrizado por mensaje porque el texto depende de CUÁL regla se
-/// violó (obligatoriedad, máximo, o simplemente "elige algo") — ver
-/// `_sauceChoiceViolation`/`_beverageChoiceViolation`/
-/// `_extraPortionChoiceViolation`.
-class _ChoiceNotice extends StatelessWidget {
-  const _ChoiceNotice({super.key, required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: CeltasColors.gold.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(CeltasRadii.input),
-        border: Border.all(color: CeltasColors.gold, width: 1.2),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.error_outline_rounded,
-            size: 18,
-            color: CeltasColors.gold,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: CeltasColors.gold,
-                fontWeight: FontWeight.w700,
-                fontSize: 12.5,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

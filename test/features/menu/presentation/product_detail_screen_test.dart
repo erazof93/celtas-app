@@ -400,11 +400,10 @@ void main() {
     );
 
     testWidgets(
-      'hero de 270px deja el selector de salsas y su aviso de elección '
-      'pendiente dentro del viewport visible SIN deslizar, en un producto '
-      'con salsas (mismo viewport 390×844 lógicos que usa `pumpDetail`, '
-      'hallazgo de UX real en dispositivo — ver doc-comment de '
-      '`_ProductDetailBody`)',
+      'hero de 270px deja el selector de salsas dentro del viewport '
+      'visible SIN deslizar, en un producto con salsas (mismo viewport '
+      '390×844 lógicos que usa `pumpDetail`, hallazgo de UX real en '
+      'dispositivo — ver doc-comment de `_ProductDetailBody`)',
       (tester) async {
         await pumpDetail(tester, productId: 'i-3');
 
@@ -413,26 +412,25 @@ void main() {
         final logicalHeight =
             tester.view.physicalSize.height / tester.view.devicePixelRatio;
 
-        final noticeBottom = tester
+        final dropdownBottom = tester
             .getBottomRight(
-              find.byKey(const ValueKey('detail-sauce-choice-notice')),
+              find.byKey(const ValueKey('detail-sauce-dropdown')),
             )
             .dy;
 
         expect(
-          noticeBottom,
+          dropdownBottom,
           lessThanOrEqualTo(logicalHeight),
           reason:
-              'El aviso de elección pendiente debe quedar visible sin '
-              'deslizar en un celular de ~6.1" (viewport de prueba: '
-              '390×844 lógicos)',
+              'El campo de salsas debe quedar visible sin deslizar en un '
+              'celular de ~6.1" (viewport de prueba: 390×844 lógicos)',
         );
       },
     );
 
     testWidgets(
-      'producto con salsas → muestra el campo dropdown con el hint '
-      '"Elige tus cremas" (nada elegido por defecto)',
+      'producto con salsas → muestra el campo dropdown vacío (nada '
+      'elegido por defecto, sin etiqueta "Obligatorio")',
       (tester) async {
         await pumpDetail(tester, productId: 'i-3');
 
@@ -441,7 +439,10 @@ void main() {
           find.byKey(const ValueKey('detail-sauce-dropdown')),
           findsOneWidget,
         );
-        expect(find.text('Elige tus cremas'), findsOneWidget);
+        // Sin nada elegido el resumen queda en blanco (ya no hay hint) — ver
+        // `_OptionGroupDropdown._summaryText`.
+        expect(find.text('Listo'), findsNothing);
+        expect(find.text('✓ Seleccionado'), findsNothing);
         // Las salsas nunca son obligatorias (el contrato del backend no
         // expone `groupRequired`/`Max` para esta categoría) — el campo
         // nunca muestra la etiqueta "Obligatorio".
@@ -476,14 +477,20 @@ void main() {
 
     testWidgets(
       'elegir una salsa y tocar ACEPTAR actualiza el resumen del dropdown '
-      'y agrega la fila con esa selección',
+      'a "✓ Seleccionado" (grupo opcional, sin badge propio) y agrega la '
+      'fila con esa selección',
       (tester) async {
         final (container, _) = await pumpDetail(tester, productId: 'i-3');
 
         await selectDialogOptions(tester, 'sauce', ['s-1']);
 
-        // Resumen del campo, ya cerrado el diálogo.
-        expect(find.text('Mayonesa'), findsOneWidget);
+        // Resumen del campo, ya cerrado el diálogo: "✓ Seleccionado", ni
+        // el nombre real ni "Listo" (las salsas nunca son obligatorias, así
+        // que tampoco hay badge acá) — el detalle de qué se eligió solo se
+        // ve abriendo el diálogo (ver `_OptionGroupDropdown._summaryText`).
+        expect(find.text('✓ Seleccionado'), findsOneWidget);
+        expect(find.text('Listo'), findsNothing);
+        expect(find.text('Mayonesa'), findsNothing);
 
         await tester.tap(find.byKey(const ValueKey('detail-add')));
         await tester.pumpAndSettle();
@@ -509,58 +516,41 @@ void main() {
         await tapDialogOption(tester, 'sauce', 's-1');
         await cancelDialog(tester, 'sauce');
 
-        // Sigue en el hint: la marca dentro del diálogo nunca se aplicó.
-        expect(find.text('Elige tus cremas'), findsOneWidget);
+        // Sigue en blanco: la marca dentro del diálogo nunca se aplicó.
+        expect(find.text('✓ Seleccionado'), findsNothing);
+        expect(find.text('Listo'), findsNothing);
       },
     );
 
     testWidgets(
-      'sin elegir ninguna opción, tocar el botón (visualmente gris) '
-      'muestra el SnackBar de aviso y no agrega nada al carrito — el '
-      'producto exige una elección real (salsa o "Sin salsas")',
+      'sin elegir ninguna opción, tocar "Agregar" agrega la fila igual '
+      '— las salsas son un grupo opcional (`groupRequired: false`) y ya '
+      'no bloquean nada sin importar la selección',
       (tester) async {
         final (container, _) = await pumpDetail(tester, productId: 'i-3');
 
         await tester.tap(find.byKey(const ValueKey('detail-add')));
-        // `pumpAndSettle`, no un solo `pump`: el toque ahora dispara un
-        // scroll real de 300ms hacia el campo (`Scrollable.ensureVisible`
-        // en `_handleValidationFailure`) antes de mostrar el SnackBar.
         await tester.pumpAndSettle();
 
-        expect(container.read(cartProvider).items, isEmpty);
-        // El mismo texto aparece dos veces: el aviso inline bajo el
-        // dropdown (sigue visible, la elección sigue pendiente) y el nuevo
-        // SnackBar de feedback del toque — se busca específicamente dentro
-        // del SnackBar para no depender de cuál de los dos textos matchea.
-        expect(
-          find.descendant(
-            of: find.byType(SnackBar),
-            matching: find.text(
-              'Elige tus salsas o toca "Sin salsas" para continuar',
-            ),
-          ),
-          findsOneWidget,
-        );
-
-        // `pumpAndSettle` se detiene antes de que dispare el
-        // `Future.delayed(800ms)` que limpia el resalte (ver doc de
-        // `_handleValidationFailure`) — sin dejarlo correr, el test
-        // terminaría con ese timer todavía pendiente.
-        await tester.pump(const Duration(milliseconds: 900));
+        final item = container.read(cartProvider).items.single;
+        expect(item.selectedSauces, isEmpty);
+        expect(item.explicitlyNoSauces, isFalse);
       },
     );
 
     testWidgets(
       'elegir DOS salsas reales a la vez (multi-selección genuina, no '
-      'solo una tras otra) actualiza el resumen del dropdown con ambas '
-      'concatenadas y agrega la fila con las dos',
+      'solo una tras otra) sigue mostrando "✓ Seleccionado" (no cuenta '
+      'cuántas) y agrega la fila con las dos',
       (tester) async {
         final (container, _) = await pumpDetail(tester, productId: 'i-3');
 
         await selectDialogOptions(tester, 'sauce', ['s-1', 's-2']);
 
-        // Resumen del campo: ambos nombres concatenados con ", ".
-        expect(find.text('Mayonesa, Mostaza'), findsOneWidget);
+        // Resumen del campo: "✓ Seleccionado", sin importar cuántas se
+        // eligieron — no es un contador.
+        expect(find.text('✓ Seleccionado'), findsOneWidget);
+        expect(find.text('Listo'), findsNothing);
 
         await tester.tap(find.byKey(const ValueKey('detail-add')));
         await tester.pumpAndSettle();
@@ -586,8 +576,7 @@ void main() {
           productId: 'i-3',
         );
 
-        // Primera pasada: "Sin salsas" explícito (ya no hay forma de
-        // agregar sin elegir con el producto ofreciendo salsas).
+        // Primera pasada: "Sin salsas" explícito.
         await selectDialogOptions(tester, 'sauce', ['none']);
         await tester.tap(find.byKey(const ValueKey('detail-add')));
         await tester.pumpAndSettle();
@@ -606,29 +595,24 @@ void main() {
     );
 
     testWidgets(
-      'producto con salsas: el botón de agregar arranca visualmente '
-      'deshabilitado (enabled: false) y muestra el aviso de elección '
-      'pendiente — pero sigue recibiendo el toque (onPressed no nulo)',
+      'producto con salsas: el botón de agregar arranca HABILITADO sin '
+      'elegir nada — grupo opcional, no hay elección forzada',
       (tester) async {
         await pumpDetail(tester, productId: 'i-3');
 
         final button = tester.widget<CeltasButton>(
           find.byKey(const ValueKey('detail-add')),
         );
-        expect(button.enabled, isFalse);
+        expect(button.enabled, isTrue);
         expect(button.onPressed, isNotNull);
-        expect(
-          find.byKey(const ValueKey('detail-sauce-choice-notice')),
-          findsOneWidget,
-        );
       },
     );
 
     testWidgets(
-      'elegir una salsa real habilita visualmente el botón y hace '
-      'desaparecer el aviso',
+      'elegir una salsa real mantiene el botón habilitado y agrega la '
+      'fila con esa selección',
       (tester) async {
-        await pumpDetail(tester, productId: 'i-3');
+        final (container, _) = await pumpDetail(tester, productId: 'i-3');
 
         await selectDialogOptions(tester, 'sauce', ['s-1']);
 
@@ -637,16 +621,19 @@ void main() {
         );
         expect(button.enabled, isTrue);
         expect(button.onPressed, isNotNull);
-        expect(
-          find.byKey(const ValueKey('detail-sauce-choice-notice')),
-          findsNothing,
-        );
+
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
+
+        expect(container.read(cartProvider).items.single.selectedSauces, [
+          mayo,
+        ]);
       },
     );
 
     testWidgets(
-      'elegir "Sin salsas" habilita el botón, hace desaparecer el aviso, y '
-      'agrega la fila con explicitlyNoSauces=true y selectedSauces vacío',
+      'elegir "Sin salsas" agrega la fila con explicitlyNoSauces=true y '
+      'selectedSauces vacío',
       (tester) async {
         final (container, _) = await pumpDetail(tester, productId: 'i-3');
 
@@ -656,10 +643,6 @@ void main() {
           find.byKey(const ValueKey('detail-add')),
         );
         expect(button.onPressed, isNotNull);
-        expect(
-          find.byKey(const ValueKey('detail-sauce-choice-notice')),
-          findsNothing,
-        );
 
         await tester.tap(find.byKey(const ValueKey('detail-add')));
         await tester.pumpAndSettle();
@@ -722,10 +705,6 @@ void main() {
         );
         expect(button.enabled, isTrue);
         expect(button.onPressed, isNotNull);
-        expect(
-          find.byKey(const ValueKey('detail-sauce-choice-notice')),
-          findsNothing,
-        );
       },
     );
   });
@@ -758,36 +737,42 @@ void main() {
     );
 
     testWidgets(
-      'bebidas opcionales: el campo no muestra la etiqueta "Obligatorio" '
-      'junto al dropdown, y el hint es "Elige tus bebidas"',
+      'bebidas opcionales: el campo no muestra la etiqueta "Obligatorio", '
+      'y arranca vacío (sin "Listo" ni "✓ Seleccionado") sin nada elegido',
       (tester) async {
         await pumpDetail(tester, productId: 'i-4');
 
         expect(find.text('Obligatorio'), findsNothing);
-        expect(find.text('Elige tus bebidas'), findsOneWidget);
+        expect(find.text('Listo'), findsNothing);
+        expect(find.text('✓ Seleccionado'), findsNothing);
       },
     );
 
     testWidgets(
-      'bebidas opcionales: el botón arranca deshabilitado con el aviso de '
-      'elección pendiente (mismo criterio de negocio que las salsas)',
+      'bebidas opcionales: el botón arranca HABILITADO sin elegir nada '
+      '— grupo opcional, no hay elección forzada (mismo criterio de '
+      'negocio que las salsas)',
       (tester) async {
-        await pumpDetail(tester, productId: 'i-4');
+        final (container, _) = await pumpDetail(tester, productId: 'i-4');
 
         final button = tester.widget<CeltasButton>(
           find.byKey(const ValueKey('detail-add')),
         );
-        expect(button.enabled, isFalse);
-        expect(
-          find.byKey(const ValueKey('detail-beverage-choice-notice')),
-          findsOneWidget,
-        );
+        expect(button.enabled, isTrue);
+
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
+
+        final item = container.read(cartProvider).items.single;
+        expect(item.selectedBeverages, isEmpty);
+        expect(item.explicitlyNoBeverages, isFalse);
       },
     );
 
     testWidgets(
-      'elegir una bebida y ACEPTAR habilita el botón, hace desaparecer el '
-      'aviso y suma el precio de la bebida al total del botón',
+      'elegir una bebida y ACEPTAR muestra "✓ Seleccionado" en el resumen '
+      '(grupo opcional, sin badge) y suma el precio de la bebida al total '
+      'del botón',
       (tester) async {
         await pumpDetail(tester, productId: 'i-4');
 
@@ -797,10 +782,9 @@ void main() {
           find.byKey(const ValueKey('detail-add')),
         );
         expect(button.enabled, isTrue);
-        expect(
-          find.byKey(const ValueKey('detail-beverage-choice-notice')),
-          findsNothing,
-        );
+        expect(find.text('✓ Seleccionado'), findsOneWidget);
+        expect(find.text('Listo'), findsNothing);
+        expect(find.text('Coca-Cola 500ml — S/3.00'), findsNothing);
         // 18 (i-4) + 3 (Coca-Cola) = 21.
         expect(find.text('AGREGAR AL CARRITO · S/ 21.00'), findsOneWidget);
       },
@@ -824,7 +808,9 @@ void main() {
 
     testWidgets(
       'seleccionar más bebidas que el máximo permitido dentro del mismo '
-      'diálogo muestra el aviso "Máximo X" y bloquea el botón',
+      'diálogo bloquea el botón y muestra el aviso "Máximo X" en el '
+      'SnackBar al tocar "Agregar" — esta validación NO cambió con el '
+      'punto 1 (es una regla distinta a la de "elección forzada")',
       (tester) async {
         await pumpDetail(tester, productId: 'i-4'); // max = 1
 
@@ -834,13 +820,19 @@ void main() {
           find.byKey(const ValueKey('detail-add')),
         );
         expect(button.enabled, isFalse);
+
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
         expect(
           find.descendant(
-            of: find.byKey(const ValueKey('detail-beverage-choice-notice')),
+            of: find.byType(SnackBar),
             matching: find.textContaining('Máximo 1 bebida'),
           ),
           findsOneWidget,
         );
+        // Deja correr el `Future.delayed(800ms)` del resalte antes de que
+        // termine el test (ver grupo "aviso de campo bloqueante...").
+        await tester.pump(const Duration(milliseconds: 900));
       },
     );
 
@@ -866,13 +858,19 @@ void main() {
         await selectDialogOptions(tester, 'beverage', ['b-1']);
 
         expect(find.text('Obligatorio'), findsNothing);
+        // Un solo "Listo": el badge (`_RequiredBadge`, verde) — el resumen
+        // del campo queda en blanco con una selección real en un grupo
+        // obligatorio (`_OptionGroupDropdown._summaryText` corta antes con
+        // `if (groupRequired) return '';`), nunca dice "✓ Seleccionado" (esa
+        // señal es solo para grupos opcionales, que no tienen badge).
         expect(find.text('Listo'), findsOneWidget);
+        expect(find.text('✓ Seleccionado'), findsNothing);
       },
     );
 
     testWidgets(
       'bebidas obligatorias: el diálogo no ofrece el checkbox "Sin bebida" '
-      'y el botón arranca deshabilitado con el aviso "obligatorio"',
+      'y el botón arranca deshabilitado',
       (tester) async {
         await pumpDetail(tester, productId: 'i-5');
 
@@ -887,13 +885,6 @@ void main() {
           find.byKey(const ValueKey('detail-add')),
         );
         expect(button.enabled, isFalse);
-        expect(
-          find.descendant(
-            of: find.byKey(const ValueKey('detail-beverage-choice-notice')),
-            matching: find.textContaining('obligatorio'),
-          ),
-          findsOneWidget,
-        );
       },
     );
 
@@ -932,8 +923,8 @@ void main() {
 
     testWidgets(
       'porciones extras opcionales → el diálogo muestra cada opción con su '
-      'precio y el botón arranca deshabilitado con el aviso de elección '
-      'pendiente',
+      'precio y el botón arranca HABILITADO sin elegir nada — grupo '
+      'opcional, no hay elección forzada',
       (tester) async {
         await pumpDetail(tester, productId: 'i-6');
 
@@ -945,28 +936,26 @@ void main() {
         final button = tester.widget<CeltasButton>(
           find.byKey(const ValueKey('detail-add')),
         );
-        expect(button.enabled, isFalse);
-        expect(
-          find.byKey(const ValueKey('detail-extra-choice-notice')),
-          findsOneWidget,
-        );
+        expect(button.enabled, isTrue);
       },
     );
 
     testWidgets(
       'porciones extras opcionales: el campo no muestra la etiqueta '
-      '"Obligatorio" junto al dropdown, y el hint es "Elige tus extras"',
+      '"Obligatorio", y arranca vacío (sin "Listo" ni "✓ Seleccionado") '
+      'sin nada elegido',
       (tester) async {
         await pumpDetail(tester, productId: 'i-6');
 
         expect(find.text('Obligatorio'), findsNothing);
-        expect(find.text('Elige tus extras'), findsOneWidget);
+        expect(find.text('Listo'), findsNothing);
+        expect(find.text('✓ Seleccionado'), findsNothing);
       },
     );
 
     testWidgets(
-      'elegir una porción extra habilita el botón y suma el precio al '
-      'total del botón',
+      'elegir una porción extra muestra "✓ Seleccionado" en el resumen '
+      '(grupo opcional, sin badge) y suma el precio al total del botón',
       (tester) async {
         await pumpDetail(tester, productId: 'i-6');
 
@@ -976,14 +965,18 @@ void main() {
           find.byKey(const ValueKey('detail-add')),
         );
         expect(button.enabled, isTrue);
+        expect(find.text('✓ Seleccionado'), findsOneWidget);
+        expect(find.text('Listo'), findsNothing);
+        expect(find.text('Papas extra — S/5.00'), findsNothing);
         // 22 (i-6) + 5 (Papas extra) = 27.
         expect(find.text('AGREGAR AL CARRITO · S/ 27.00'), findsOneWidget);
       },
     );
 
     testWidgets(
-      'seleccionar más porciones extras que el máximo permitido muestra '
-      'el aviso "Máximo X" y bloquea el botón',
+      'seleccionar más porciones extras que el máximo permitido bloquea '
+      'el botón y muestra el aviso "Máximo X" en el SnackBar al tocar '
+      '"Agregar" — esta validación no cambió con el punto 1',
       (tester) async {
         await pumpDetail(tester, productId: 'i-6'); // max = 1
 
@@ -993,13 +986,17 @@ void main() {
           find.byKey(const ValueKey('detail-add')),
         );
         expect(button.enabled, isFalse);
+
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
         expect(
           find.descendant(
-            of: find.byKey(const ValueKey('detail-extra-choice-notice')),
+            of: find.byType(SnackBar),
             matching: find.textContaining('Máximo 1 porción'),
           ),
           findsOneWidget,
         );
+        await tester.pump(const Duration(milliseconds: 900));
       },
     );
 
@@ -1015,8 +1012,7 @@ void main() {
 
     testWidgets(
       'porciones extras obligatorias: el diálogo no ofrece el checkbox '
-      '"Sin porciones extras" y el botón arranca deshabilitado con el '
-      'aviso "obligatorio"',
+      '"Sin porciones extras" y el botón arranca deshabilitado',
       (tester) async {
         await pumpDetail(tester, productId: 'i-7');
 
@@ -1031,13 +1027,6 @@ void main() {
           find.byKey(const ValueKey('detail-add')),
         );
         expect(button.enabled, isFalse);
-        expect(
-          find.descendant(
-            of: find.byKey(const ValueKey('detail-extra-choice-notice')),
-            matching: find.textContaining('obligatorio'),
-          ),
-          findsOneWidget,
-        );
       },
     );
 
@@ -1389,9 +1378,11 @@ void main() {
         // Botón de confirmar en modo edición, sin el precio.
         expect(find.text('GUARDAR CAMBIOS'), findsOneWidget);
         expect(find.textContaining('AGREGAR AL CARRITO'), findsNothing);
-        // Mayonesa (única salsa de la fila editada) aparece precargada en
-        // el resumen del dropdown, sin necesidad de abrir el diálogo.
-        expect(find.text('Mayonesa'), findsOneWidget);
+        // La salsa de la fila editada (Mayonesa) aparece precargada en el
+        // resumen del dropdown como "✓ Seleccionado" (grupo opcional, sin
+        // badge propio — ver `_OptionGroupDropdown._summaryText`), sin
+        // necesidad de abrir el diálogo.
+        expect(find.text('✓ Seleccionado'), findsOneWidget);
       },
     );
 
@@ -1419,10 +1410,6 @@ void main() {
         expect(button.enabled, isTrue);
         expect(button.onPressed, isNotNull);
         expect(find.text('Sin salsas'), findsOneWidget);
-        expect(
-          find.byKey(const ValueKey('detail-sauce-choice-notice')),
-          findsNothing,
-        );
       },
     );
 
