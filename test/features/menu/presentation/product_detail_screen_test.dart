@@ -429,8 +429,9 @@ void main() {
     );
 
     testWidgets(
-      'producto con salsas → muestra el campo dropdown vacío (nada '
-      'elegido por defecto, sin etiqueta "Obligatorio")',
+      'producto con salsas → muestra el campo dropdown con el placeholder '
+      '"Elige tus cremas" (nada elegido por defecto, sin etiqueta '
+      '"Obligatorio")',
       (tester) async {
         await pumpDetail(tester, productId: 'i-3');
 
@@ -439,8 +440,9 @@ void main() {
           find.byKey(const ValueKey('detail-sauce-dropdown')),
           findsOneWidget,
         );
-        // Sin nada elegido el resumen queda en blanco (ya no hay hint) — ver
-        // `_OptionGroupDropdown._summaryText`.
+        // Sin nada elegido el campo muestra el placeholder del grupo — ver
+        // `_OptionGroupDropdown.hintText`.
+        expect(find.text('Elige tus cremas'), findsOneWidget);
         expect(find.text('Listo'), findsNothing);
         expect(find.text('✓ Seleccionado'), findsNothing);
         // Las salsas nunca son obligatorias (el contrato del backend no
@@ -491,6 +493,8 @@ void main() {
         expect(find.text('✓ Seleccionado'), findsOneWidget);
         expect(find.text('Listo'), findsNothing);
         expect(find.text('Mayonesa'), findsNothing);
+        // El placeholder ya no se muestra: el campo dejó de estar vacío.
+        expect(find.text('Elige tus cremas'), findsNothing);
 
         await tester.tap(find.byKey(const ValueKey('detail-add')));
         await tester.pumpAndSettle();
@@ -738,13 +742,15 @@ void main() {
 
     testWidgets(
       'bebidas opcionales: el campo no muestra la etiqueta "Obligatorio", '
-      'y arranca vacío (sin "Listo" ni "✓ Seleccionado") sin nada elegido',
+      'y arranca con el placeholder "Elige tus bebidas" (sin "Listo" ni '
+      '"✓ Seleccionado") sin nada elegido',
       (tester) async {
         await pumpDetail(tester, productId: 'i-4');
 
         expect(find.text('Obligatorio'), findsNothing);
         expect(find.text('Listo'), findsNothing);
         expect(find.text('✓ Seleccionado'), findsNothing);
+        expect(find.text('Elige tus bebidas'), findsOneWidget);
       },
     );
 
@@ -785,6 +791,7 @@ void main() {
         expect(find.text('✓ Seleccionado'), findsOneWidget);
         expect(find.text('Listo'), findsNothing);
         expect(find.text('Coca-Cola 500ml — S/3.00'), findsNothing);
+        expect(find.text('Elige tus bebidas'), findsNothing);
         // 18 (i-4) + 3 (Coca-Cola) = 21.
         expect(find.text('AGREGAR AL CARRITO · S/ 21.00'), findsOneWidget);
       },
@@ -848,12 +855,16 @@ void main() {
 
     testWidgets(
       'bebidas obligatorias: el badge del campo pasa de "Obligatorio" '
-      '(nada elegido) a "Listo" (verde) apenas se elige una bebida',
+      '(nada elegido) a "Listo" (verde) apenas se elige una bebida, y el '
+      'placeholder "Elige tus bebidas" se mantiene en ambos casos (el '
+      'resumen de un grupo obligatorio siempre queda en blanco, el badge '
+      'lleva la señal real de "completo")',
       (tester) async {
         await pumpDetail(tester, productId: 'i-5');
 
         expect(find.text('Obligatorio'), findsOneWidget);
         expect(find.text('Listo'), findsNothing);
+        expect(find.text('Elige tus bebidas'), findsOneWidget);
 
         await selectDialogOptions(tester, 'beverage', ['b-1']);
 
@@ -862,9 +873,11 @@ void main() {
         // del campo queda en blanco con una selección real en un grupo
         // obligatorio (`_OptionGroupDropdown._summaryText` corta antes con
         // `if (groupRequired) return '';`), nunca dice "✓ Seleccionado" (esa
-        // señal es solo para grupos opcionales, que no tienen badge).
+        // señal es solo para grupos opcionales, que no tienen badge). El
+        // placeholder sigue mostrándose ahí en su lugar.
         expect(find.text('Listo'), findsOneWidget);
         expect(find.text('✓ Seleccionado'), findsNothing);
+        expect(find.text('Elige tus bebidas'), findsOneWidget);
       },
     );
 
@@ -942,14 +955,15 @@ void main() {
 
     testWidgets(
       'porciones extras opcionales: el campo no muestra la etiqueta '
-      '"Obligatorio", y arranca vacío (sin "Listo" ni "✓ Seleccionado") '
-      'sin nada elegido',
+      '"Obligatorio", y arranca con el placeholder "Elige tus porciones '
+      'extras" (sin "Listo" ni "✓ Seleccionado") sin nada elegido',
       (tester) async {
         await pumpDetail(tester, productId: 'i-6');
 
         expect(find.text('Obligatorio'), findsNothing);
         expect(find.text('Listo'), findsNothing);
         expect(find.text('✓ Seleccionado'), findsNothing);
+        expect(find.text('Elige tus porciones extras'), findsOneWidget);
       },
     );
 
@@ -968,6 +982,7 @@ void main() {
         expect(find.text('✓ Seleccionado'), findsOneWidget);
         expect(find.text('Listo'), findsNothing);
         expect(find.text('Papas extra — S/5.00'), findsNothing);
+        expect(find.text('Elige tus porciones extras'), findsNothing);
         // 22 (i-6) + 5 (Papas extra) = 27.
         expect(find.text('AGREGAR AL CARRITO · S/ 27.00'), findsOneWidget);
       },
@@ -1002,11 +1017,13 @@ void main() {
 
     testWidgets(
       'porciones extras obligatorias: el campo muestra el badge '
-      '"Obligatorio" dentro del dropdown mientras no hay nada elegido',
+      '"Obligatorio" y el placeholder "Elige tus porciones extras" '
+      'dentro del dropdown mientras no hay nada elegido',
       (tester) async {
         await pumpDetail(tester, productId: 'i-7');
 
         expect(find.text('Obligatorio'), findsOneWidget);
+        expect(find.text('Elige tus porciones extras'), findsOneWidget);
       },
     );
 

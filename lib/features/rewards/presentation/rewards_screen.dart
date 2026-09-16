@@ -104,99 +104,112 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
     return Stack(
       children: [
         Scaffold(
-          body: SafeArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(24, 14, 24, 4),
-                  child: _RewardsHeader(),
-                ),
-                Expanded(
-                  child: RefreshIndicator(
-                    color: CeltasColors.orange,
-                    backgroundColor: CeltasColors.surface,
-                    onRefresh: () async {
-                      ref.invalidate(rewardProgressProvider);
-                      try {
-                        await ref.read(rewardProgressProvider.future);
-                      } catch (_) {
-                        // El estado de error ya se muestra en el `.when` de
-                        // abajo.
-                      }
-                    },
-                    child: progressAsync.when(
-                      loading: () => ListView(
-                        padding: const EdgeInsets.all(24),
-                        children: const [SlowBackendNotice()],
-                      ),
-                      error: (error, _) => ListView(
-                        padding: const EdgeInsets.all(24),
-                        children: [
-                          _RewardsError(
-                            message: error is ApiException
-                                ? error.message
-                                : 'No se pudo cargar tu progreso.',
-                            onRetry: () =>
-                                ref.invalidate(rewardProgressProvider),
+          body: Stack(
+            children: [
+              const Positioned.fill(child: _AmbientBackground()),
+              SafeArea(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(24, 14, 24, 4),
+                      child: _RewardsHeader(),
+                    ),
+                    Expanded(
+                      child: RefreshIndicator(
+                        color: CeltasColors.gold,
+                        backgroundColor: CeltasColors.surface,
+                        onRefresh: () async {
+                          ref.invalidate(rewardProgressProvider);
+                          try {
+                            await ref.read(rewardProgressProvider.future);
+                          } catch (_) {
+                            // El estado de error ya se muestra en el
+                            // `.when` de abajo.
+                          }
+                        },
+                        child: progressAsync.when(
+                          loading: () => ListView(
+                            padding: const EdgeInsets.all(24),
+                            children: const [SlowBackendNotice()],
                           ),
-                        ],
-                      ),
-                      data: (progress) => ListView(
-                        padding: const EdgeInsets.fromLTRB(24, 10, 24, 24),
-                        children: [
-                          if (progress.promocionActiva case final promo?) ...[
-                            _PromotionBanner(promotion: promo),
-                            const SizedBox(height: 16),
-                          ],
-                          _ProgressCard(progress: progress),
-                          if (progress.premiosDisponibles.isNotEmpty) ...[
-                            const SizedBox(height: 20),
-                            Text(
-                              'Premios disponibles',
-                              style: Theme.of(context).textTheme.titleSmall
-                                  ?.copyWith(color: CeltasColors.cream),
-                            ),
-                            const SizedBox(height: 10),
-                            for (final slot in progress.premiosDisponibles) ...[
-                              _RewardSlotCard(slot: slot),
-                              const SizedBox(height: 10),
-                            ],
-                          ],
-                          const SizedBox(height: 20),
-                          Center(
-                            child: GestureDetector(
-                              key: const ValueKey('rewards-terms-link'),
-                              onTap: () => RewardTermsSheet.show(context),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.info_outline,
-                                    size: 15,
-                                    color: CeltasColors.textMuted,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'Términos y condiciones',
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(
-                                          fontSize: 12.5,
-                                          color: CeltasColors.textMuted,
-                                          decoration: TextDecoration.underline,
-                                        ),
-                                  ),
-                                ],
+                          error: (error, _) => ListView(
+                            padding: const EdgeInsets.all(24),
+                            children: [
+                              _RewardsError(
+                                message: error is ApiException
+                                    ? error.message
+                                    : 'No se pudo cargar tu progreso.',
+                                onRetry: () =>
+                                    ref.invalidate(rewardProgressProvider),
                               ),
-                            ),
+                            ],
                           ),
-                        ],
+                          data: (progress) => ListView(
+                            padding: const EdgeInsets.fromLTRB(
+                              24,
+                              10,
+                              24,
+                              24,
+                            ),
+                            children: [
+                              if (progress.promocionActiva
+                                  case final promo?) ...[
+                                _PromotionBanner(promotion: promo),
+                                const SizedBox(height: 16),
+                              ],
+                              _ProgressCard(progress: progress),
+                              if (progress
+                                  .premiosDisponibles
+                                  .isNotEmpty) ...[
+                                const SizedBox(height: 16),
+                                for (final slot
+                                    in progress.premiosDisponibles) ...[
+                                  _RewardSlotCard(slot: slot),
+                                  const SizedBox(height: 10),
+                                ],
+                              ],
+                              const SizedBox(height: 12),
+                              const _RedeemCta(),
+                              const SizedBox(height: 20),
+                              Center(
+                                child: GestureDetector(
+                                  key: const ValueKey('rewards-terms-link'),
+                                  onTap: () => RewardTermsSheet.show(context),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.info_outline,
+                                        size: 15,
+                                        color: CeltasColors.textMuted,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Términos y condiciones',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              fontSize: 12.5,
+                                              color: CeltasColors.textMuted,
+                                              decoration:
+                                                  TextDecoration.underline,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
         if (_pendingNormal != null)
@@ -219,31 +232,180 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
   }
 }
 
+/// Capa decorativa detrás de todo el contenido (fondo + arcos dorados en
+/// las esquinas + un par de resplandores radiales muy tenues) — `IgnorePointer`
+/// para que nunca intercepte el scroll/tap del contenido real que va encima.
+/// Ningún dato: es 100% estética, replica el "charcoal con iluminación
+/// dorada ambiental" del mockup de referencia
+/// (`design-reference/estrellas/screenshot.png`) sin depender de imágenes ni
+/// de un `ImageFilter.blur` (costoso) — los círculos mayormente fuera de
+/// pantalla, con solo un borde dorado fino y relleno transparente, dejan ver
+/// apenas el arco que les toca dentro del viewport.
+class _AmbientBackground extends StatelessWidget {
+  const _AmbientBackground();
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [CeltasColors.black, CeltasColors.card],
+          ),
+        ),
+        child: Stack(
+          children: [
+            // Arco dorado fino, esquina superior izquierda.
+            Positioned(
+              top: -170,
+              left: -170,
+              child: _cornerArc(),
+            ),
+            // Arco dorado fino, esquina inferior derecha.
+            Positioned(
+              bottom: -170,
+              right: -170,
+              child: _cornerArc(),
+            ),
+            // Resplandor ambiental muy tenue detrás de la tarjeta principal
+            // (zona superior), NO un fondo amarillo — alpha bajo a propósito.
+            Positioned(
+              top: 140,
+              right: -80,
+              child: _glowBlob(220),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _cornerArc() => Container(
+    width: 340,
+    height: 340,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      border: Border.all(
+        color: CeltasColors.gold.withValues(alpha: 0.22),
+        width: 1.2,
+      ),
+    ),
+  );
+
+  Widget _glowBlob(double size) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      gradient: RadialGradient(
+        colors: [
+          CeltasColors.gold.withValues(alpha: 0.07),
+          CeltasColors.gold.withValues(alpha: 0),
+        ],
+      ),
+    ),
+  );
+}
+
 class _RewardsHeader extends StatelessWidget {
   const _RewardsHeader();
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    return Column(
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'PROGRAMA DE LEALTAD',
-          style: textTheme.labelSmall?.copyWith(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.8,
-            color: CeltasColors.textLabel,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.workspace_premium_rounded,
+                    size: 14,
+                    color: CeltasColors.textLabel,
+                  ),
+                  const SizedBox(width: 6),
+                  // `Flexible` + una sola línea con ellipsis: en un
+                  // viewport angosto, con la columna decorativa de la
+                  // derecha compitiendo por espacio, este label NUNCA debe
+                  // forzar un `RenderFlex overflowed` — se trunca antes que
+                  // desbordar.
+                  Flexible(
+                    child: Text(
+                      'PROGRAMA DE LEALTAD',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.labelSmall?.copyWith(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
+                        color: CeltasColors.textLabel,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Mis Estrellas',
+                style: textTheme.headlineSmall?.copyWith(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w700,
+                  color: CeltasColors.cream,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Cada compra te acerca a más beneficios',
+                style: textTheme.bodySmall?.copyWith(
+                  fontSize: 13,
+                  color: CeltasColors.textMuted,
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 2),
-        Text(
-          'Mis Estrellas',
-          style: textTheme.headlineSmall?.copyWith(
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-            color: CeltasColors.cream,
+        // Decoración del header ("¡Gracias por ser parte!" del mockup) — solo
+        // estilo (itálica + tracking + dorado), sin traer una fuente
+        // caligráfica nueva vía Google Fonts solo para este detalle (evita
+        // una dependencia/descarga de red innecesaria para un elemento
+        // puramente decorativo, sin datos). Ancho acotado (96px) A
+        // PROPÓSITO: sin este límite, en un viewport angosto esta columna
+        // (de tamaño natural, sin `Expanded`) le quitaba demasiado espacio
+        // al lado izquierdo y el label "PROGRAMA DE LEALTAD" desbordaba
+        // (`RenderFlex overflowed`, hallado con un viewport real de
+        // teléfono en el widget test).
+        Padding(
+          padding: const EdgeInsets.only(top: 4, left: 10),
+          child: SizedBox(
+            width: 96,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '¡Gracias\npor ser parte!',
+                  textAlign: TextAlign.right,
+                  style: textTheme.bodySmall?.copyWith(
+                    fontSize: 13,
+                    fontStyle: FontStyle.italic,
+                    fontWeight: FontWeight.w600,
+                    color: CeltasColors.textLabel,
+                    height: 1.25,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                const Icon(
+                  Icons.favorite_border_rounded,
+                  size: 13,
+                  color: CeltasColors.textLabel,
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -262,13 +424,13 @@ class _PromotionBanner extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: CeltasColors.surfaceSelected,
-        border: Border.all(color: CeltasColors.orange),
+        border: Border.all(color: CeltasColors.gold.withValues(alpha: 0.5)),
         borderRadius: BorderRadius.circular(CeltasRadii.input),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.star_rounded, size: 20, color: CeltasColors.orange),
+          const Icon(Icons.star_rounded, size: 20, color: CeltasColors.gold),
           const SizedBox(width: 10),
           Expanded(
             child: RichText(
@@ -283,7 +445,7 @@ class _PromotionBanner extends StatelessWidget {
                     text: '¡Estrellas dobles! ',
                     style: TextStyle(
                       fontWeight: FontWeight.w800,
-                      color: CeltasColors.orange,
+                      color: CeltasColors.gold,
                     ),
                   ),
                   TextSpan(
@@ -428,11 +590,7 @@ class _ProgressCardState extends State<_ProgressCard>
     if (hitos.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: CeltasColors.card,
-          border: Border.all(color: CeltasColors.cardBorder),
-          borderRadius: BorderRadius.circular(CeltasRadii.card),
-        ),
+        decoration: _cardDecoration,
         child: Text(
           '${progress.estrellasDelMes} estrellas este mes',
           textAlign: TextAlign.center,
@@ -456,52 +614,200 @@ class _ProgressCardState extends State<_ProgressCard>
 
     return Container(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: CeltasColors.card,
-        border: Border.all(color: CeltasColors.cardBorder),
-        borderRadius: BorderRadius.circular(CeltasRadii.card),
-      ),
+      decoration: _cardDecoration,
       child: Column(
         children: [
-          Column(
-            children: [
-              // 4px (no 7px): las celdas de hito ya no cargan tag+tallo
-              // encima del ícono, así que son ~20px más bajas y no
-              // necesitan tanto aire entre filas.
-              for (var row = 0; row < rows; row++) ...[
-                if (row > 0) const SizedBox(height: 4),
-                _MilestoneRow(
-                  startStar: row * 5 + 1,
-                  endStar: min((row + 1) * 5, totalStars),
-                  filledUpTo: progress.estrellasDelMes,
-                  hitosByStar: hitosByStar,
-                  premioNumbers: premioNumbers,
-                  trophyScale: _trophyScale,
-                  glowOpacity: _glowOpacity,
-                  confetti: _confettiController,
-                ),
+          // Fondo propio del grid (negro → dorado ~10%, vertical, muy
+          // sutil) — distingue esta zona del resto de la tarjeta, mismo
+          // pedido de tercera iteración.
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  CeltasColors.black,
+                  CeltasColors.gold.withValues(alpha: 0.1),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(CeltasRadii.card),
+            ),
+            child: Column(
+              children: [
+                // 4px (no 7px): las celdas de hito ya no cargan tag+tallo
+                // encima del ícono, así que son ~20px más bajas y no
+                // necesitan tanto aire entre filas.
+                for (var row = 0; row < rows; row++) ...[
+                  if (row > 0) const SizedBox(height: 4),
+                  _MilestoneRow(
+                    startStar: row * 5 + 1,
+                    endStar: min((row + 1) * 5, totalStars),
+                    filledUpTo: progress.estrellasDelMes,
+                    hitosByStar: hitosByStar,
+                    premioNumbers: premioNumbers,
+                    trophyScale: _trophyScale,
+                    glowOpacity: _glowOpacity,
+                    confetti: _confettiController,
+                  ),
+                ],
               ],
-            ],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            '${progress.estrellasDelMes} de $totalStars estrellas',
-            style: textTheme.titleSmall?.copyWith(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: CeltasColors.cream,
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            nextPending == null
-                ? '¡Alcanzaste todas las metas de este mes!'
-                : 'Te faltan $remaining estrella${remaining == 1 ? '' : 's'} '
-                      'para desbloquear tu próximo premio',
-            textAlign: TextAlign.center,
-            style: textTheme.bodySmall?.copyWith(
-              fontSize: 13,
-              color: CeltasColors.textMuted,
+          const SizedBox(height: 18),
+          const Divider(height: 1),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _StarsProgressRing(
+                current: progress.estrellasDelMes,
+                total: totalStars,
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Eyebrow dorado ("ESTRELLA ACTUAL" del mockup) — copy
+                    // genérico, sin inventar un "nombre" de hito: el
+                    // contrato real (`RewardMilestoneProgress`) no expone
+                    // ningún campo de nombre/etiqueta por hito, así que el
+                    // dato real que le sigue abajo es el conteo real.
+                    Text(
+                      'TU PROGRESO',
+                      style: textTheme.labelSmall?.copyWith(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.6,
+                        color: CeltasColors.textLabel,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${progress.estrellasDelMes} de $totalStars estrellas',
+                      style: textTheme.titleSmall?.copyWith(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: CeltasColors.cream,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      nextPending == null
+                          ? '¡Alcanzaste todas las metas de este mes!'
+                          : 'Te faltan $remaining '
+                                'estrella${remaining == 1 ? '' : 's'} para '
+                                'desbloquear tu próximo premio',
+                      style: textTheme.bodySmall?.copyWith(
+                        fontSize: 13,
+                        color: CeltasColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Decoración compartida de la tarjeta del tablero: gradiente diagonal
+/// (dorado muy tenue arriba-izquierda → negro abajo-derecha, pedido
+/// explícito de tercera iteración) + borde dorado oscuro + resplandor
+/// ambiental muy leve, en vez del borde casi invisible (`cardBorder`, apenas
+/// más claro que el fondo) que tenía antes — mismo lenguaje "premium oscuro
+/// + acento dorado" del mockup de referencia
+/// (`design-reference/estrellas/screenshot.png`), sin tocar el resto del
+/// tema global. `textLabel` (dorado apagado, no `gold` puro) es el que más
+/// se acerca al `#8B7355` del mockup una vez mezclado con el fondo oscuro.
+final BoxDecoration _cardDecoration = BoxDecoration(
+  gradient: LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [CeltasColors.gold.withValues(alpha: 0.15), CeltasColors.black],
+  ),
+  border: Border.all(color: CeltasColors.textLabel.withValues(alpha: 0.6)),
+  borderRadius: BorderRadius.circular(CeltasRadii.banner),
+  boxShadow: [
+    BoxShadow(
+      color: CeltasColors.gold.withValues(alpha: 0.08),
+      blurRadius: 24,
+      spreadRadius: 1,
+    ),
+  ],
+);
+
+/// Anillo de progreso "N/Total" (equivalente dinámico del círculo "1/15" del
+/// mockup) — `total` es SIEMPRE `hitos.map((h) => h.estrellasRequeridas).
+/// reduce(max)` calculado por `_ProgressCardState.build`, nunca un valor
+/// fijo: el admin puede configurar cualquier cantidad de hitos con
+/// cualquier umbral. `current` grande y blanco, `/total` chico y gris
+/// (mismo contraste tipográfico del mockup) — envuelto en `FittedBox` para
+/// que nunca desborde el círculo sin importar cuántos dígitos tenga
+/// (`current`/`total` son dinámicos, un admin puede configurar hitos de
+/// 3 dígitos).
+class _StarsProgressRing extends StatelessWidget {
+  const _StarsProgressRing({required this.current, required this.total});
+
+  final int current;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    final fraction = total <= 0 ? 0.0 : (current / total).clamp(0.0, 1.0);
+    return SizedBox(
+      width: 68,
+      height: 68,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          const SizedBox(
+            width: 68,
+            height: 68,
+            child: CircularProgressIndicator(
+              value: 1,
+              strokeWidth: 5,
+              color: CeltasColors.border,
+            ),
+          ),
+          SizedBox(
+            width: 68,
+            height: 68,
+            child: CircularProgressIndicator(
+              value: fraction,
+              strokeWidth: 5,
+              color: CeltasColors.gold,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(10),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: '$current',
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: CeltasColors.cream,
+                      ),
+                    ),
+                    TextSpan(
+                      text: '/$total',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: CeltasColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],
@@ -603,8 +909,17 @@ class _MilestoneCell extends StatelessWidget {
     }
 
     if (hito.alcanzado) {
-      final color = hito.esEspecial ? CeltasColors.gold : CeltasColors.orange;
-      final label = hito.esEspecial ? '★ Especial' : 'Premio $premioNumber';
+      // La estrella/medallón es SIEMPRE dorada al alcanzarse (normal o
+      // especial) — el trofeo en sí nunca es naranja. Lo que diferencia un
+      // hito especial es un glow más intenso y el badge dorado (vs. el
+      // badge naranja sólido de "Premio N", pedido explícito de tercera
+      // iteración — ver `CeltasColors.orange`).
+      const starColor = CeltasColors.gold;
+      final badgeColor = hito.esEspecial
+          ? CeltasColors.gold
+          : CeltasColors.orange;
+      final glowAlpha = hito.esEspecial ? 0.6 : 0.42;
+      final label = hito.esEspecial ? 'Especial' : 'Premio $premioNumber';
       return SizedBox(
         width: 78,
         height: 78,
@@ -623,26 +938,58 @@ class _MilestoneCell extends StatelessWidget {
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      color.withValues(alpha: 0.42),
-                      color.withValues(alpha: 0),
+                      starColor.withValues(alpha: glowAlpha),
+                      starColor.withValues(alpha: 0),
                     ],
                   ),
                 ),
               ),
             ),
-            ..._confettiAccents(color, confetti),
+            ..._confettiAccents(starColor, confetti),
             AnimatedBuilder(
               animation: trophyScale,
               builder: (context, child) =>
                   Transform.scale(scale: trophyScale.value, child: child),
-              child: Icon(Icons.star_rounded, size: 54, color: color),
+              // Medallón dorado (en vez de un ícono de estrella suelto)
+              // para que el hito alcanzado se lea como un "trofeo" sólido
+              // de un vistazo, mismo espíritu que la estrella dorada con
+              // glow del mockup de referencia.
+              child: Container(
+                width: 54,
+                height: 54,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [starColor, starColor.withValues(alpha: 0.8)],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: starColor.withValues(alpha: glowAlpha),
+                      blurRadius: hito.esEspecial ? 20 : 16,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.star_rounded,
+                  size: 30,
+                  color: CeltasColors.black,
+                ),
+              ),
             ),
+            // Solo `top`: SIN `left`/`right` — el `Stack` (alignment:
+            // center) centra el badge horizontalmente usando su ancho
+            // NATURAL, sin apretarlo al ancho de esta celda (ver doc de
+            // `_MilestoneTag`).
             Positioned(
               top: 0,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: _MilestoneTag(label: label, background: color, glow: true),
+              child: _MilestoneTag(
+                label: label,
+                background: badgeColor,
+                glow: true,
+                border: hito.esEspecial ? null : CeltasColors.orange,
+                showStarIcon: hito.esEspecial,
               ),
             ),
           ],
@@ -676,21 +1023,35 @@ class _MilestoneCell extends StatelessWidget {
                 ),
               ),
             ),
-            const Icon(
-              Icons.star_outline_rounded,
-              size: 50,
-              color: CeltasColors.gold,
+            // Anillo dorado (contorno, sin relleno) para el hito especial
+            // pendiente — mismo lenguaje de "medallón" que el trofeo
+            // alcanzado, pero vacío por dentro para marcar que todavía no
+            // se desbloqueó.
+            Container(
+              width: 50,
+              height: 50,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: CeltasColors.surface,
+                border: Border.all(
+                  color: CeltasColors.gold.withValues(alpha: 0.7),
+                  width: 1.5,
+                ),
+              ),
+              child: const Icon(
+                Icons.star_outline_rounded,
+                size: 26,
+                color: CeltasColors.gold,
+              ),
             ),
             const Positioned(
               top: 0,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: _MilestoneTag(
-                  label: '★ Especial',
-                  background: CeltasColors.gold,
-                  glow: true,
-                ),
+              child: _MilestoneTag(
+                label: 'Especial',
+                background: CeltasColors.gold,
+                glow: true,
+                showStarIcon: true,
               ),
             ),
           ],
@@ -712,14 +1073,10 @@ class _MilestoneCell extends StatelessWidget {
           const _StarDot(filled: false, pop: false),
           Positioned(
             top: 0,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: _MilestoneTag(
-                label: 'Premio $premioNumber',
-                background: CeltasColors.borderStrong,
-                textColor: CeltasColors.textMuted,
-              ),
+            child: _MilestoneTag(
+              label: 'Premio $premioNumber',
+              background: CeltasColors.borderStrong,
+              textColor: CeltasColors.textMuted,
             ),
           ),
         ],
@@ -728,13 +1085,23 @@ class _MilestoneCell extends StatelessWidget {
   }
 }
 
-/// Etiqueta "Premio N" / "★ Especial" arriba de una celda de hito.
+/// Etiqueta "Premio N" / "Especial" arriba de una celda de hito. El
+/// `Positioned` que la contiene ya NO fija `left`/`right` (ver el comentario
+/// en cada `_MilestoneCell._content`) — solo `top`, así que el ancho de esta
+/// etiqueta queda sin restricción y el `Stack` padre la centra horizontal
+/// con su propio `alignment: Alignment.center` usando el ancho NATURAL del
+/// pill. Fijar `left: 0, right: 0` (como antes) apretaba el pill al ancho de
+/// la celda de la estrella (54-78px), demasiado angosto para "Premio 1" a
+/// `fontSize: 10` — el texto se partía en 2 líneas en vez de mantenerse en
+/// una sola.
 class _MilestoneTag extends StatelessWidget {
   const _MilestoneTag({
     required this.label,
     required this.background,
     this.textColor = CeltasColors.black,
     this.glow = false,
+    this.showStarIcon = false,
+    this.border,
   });
 
   final String label;
@@ -742,13 +1109,25 @@ class _MilestoneTag extends StatelessWidget {
   final Color textColor;
   final bool glow;
 
+  /// `true` para el hito especial: dibuja un `Icon(Icons.star_rounded)`
+  /// real en vez de depender del carácter "★" dentro de `label` — ese
+  /// glyph no está garantizado en el subset que trae `Manrope` vía Google
+  /// Fonts y podía renderizar como un cuadro vacío en vez de una estrella.
+  final bool showStarIcon;
+
+  /// Borde muy fino opcional — usado por el badge "Premio N" (fondo oscuro
+  /// translúcido) para darle un contorno sutil sin necesitar el glow
+  /// dorado, que queda reservado para el badge "Especial".
+  final Color? border;
+
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(7),
+        borderRadius: BorderRadius.circular(CeltasRadii.pill),
+        border: border == null ? null : Border.all(color: border!),
         boxShadow: glow
             ? [
                 BoxShadow(
@@ -759,14 +1138,26 @@ class _MilestoneTag extends StatelessWidget {
               ]
             : null,
       ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          fontSize: 10,
-          fontWeight: FontWeight.w800,
-          color: textColor,
-          letterSpacing: 0.2,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (showStarIcon) ...[
+            Icon(Icons.star_rounded, size: 11, color: textColor),
+            const SizedBox(width: 3),
+          ],
+          Text(
+            label,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.clip,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              color: textColor,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -859,12 +1250,31 @@ class _StarDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final icon = Icon(
-      filled ? Icons.star_rounded : Icons.star_outline_rounded,
-      size: 42,
-      color: filled ? CeltasColors.orange : CeltasColors.borderStrong,
+    // Fondo circular (48×48, mismo tamaño de celda que el mockup de
+    // referencia) para que una estrella desbloqueada (relleno DORADO, no
+    // naranja — mismo acento que el resto del tablero) se distinga de una
+    // bloqueada (solo contorno gris tenue) de un vistazo, en vez de un
+    // ícono suelto sin ningún fondo.
+    final dot = Container(
+      width: 48,
+      height: 48,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: filled ? CeltasColors.surfaceSelected : CeltasColors.surface,
+        border: Border.all(
+          color: filled
+              ? CeltasColors.gold.withValues(alpha: 0.6)
+              : CeltasColors.border,
+        ),
+      ),
+      child: Icon(
+        filled ? Icons.star_rounded : Icons.star_outline_rounded,
+        size: 24,
+        color: filled ? CeltasColors.gold : CeltasColors.textSubtle,
+      ),
     );
-    if (!pop) return icon;
+    if (!pop) return dot;
     // Animación de "pop" sutil de un solo disparo (no periódica) para la
     // última estrella rellenada — se ejecuta una vez al montarse el widget.
     return TweenAnimationBuilder<double>(
@@ -874,14 +1284,52 @@ class _StarDot extends StatelessWidget {
       curve: Curves.elasticOut,
       builder: (context, value, child) =>
           Transform.scale(scale: value, child: child),
-      child: icon,
+      child: dot,
     );
   }
 }
 
-/// Tarjeta de un premio ganado y todavía sin canjear. Con `slot.esEspecial`,
-/// borde más grueso + resplandor dorado, pill "★ ESPECIAL", y botón
-/// "Canjear" dorado en vez de naranja.
+/// Decoración compartida por [_RewardSlotCard] y [_RedeemCta] — mismo
+/// degradado (negro → dorado ~20%, diagonal) y borde dorado sólido para
+/// ambas, a propósito: son la MISMA familia de fila ("premio para canjear"
+/// vs. "invitación a ganar más"), nunca deben leerse como dos estilos de
+/// tarjeta distintos.
+final BoxDecoration _slotCardDecoration = BoxDecoration(
+  gradient: LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [CeltasColors.black, CeltasColors.gold.withValues(alpha: 0.2)],
+  ),
+  border: Border.all(color: CeltasColors.gold),
+  borderRadius: BorderRadius.circular(CeltasRadii.card),
+);
+
+/// Ícono circular izquierdo compartido por [_RewardSlotCard] y
+/// [_RedeemCta] — mismo ícono de regalo en ambas (antes una usaba una
+/// estrella y la otra un regalo, lectura inconsistente entre dos filas que
+/// deberían verse como la misma familia).
+Widget _slotCardIcon() => Container(
+  width: 48,
+  height: 48,
+  alignment: Alignment.center,
+  decoration: const BoxDecoration(
+    color: CeltasColors.surfaceSelected,
+    shape: BoxShape.circle,
+  ),
+  child: const Icon(
+    Icons.card_giftcard_rounded,
+    size: 28,
+    color: CeltasColors.gold,
+  ),
+);
+
+/// Fila horizontal, "Más estrellas, más premios" (mockup) — un premio ganado
+/// y todavía sin canjear, en el mismo lenguaje visual elegante/discreto que
+/// [_RedeemCta] en vez de la tarjeta grande de borde ancho + botón
+/// "Canjear" naranja de la iteración anterior (esa versión no correspondía
+/// al diseño de referencia). Toda la fila es el área táctil — `onTap`
+/// preserva EXACTAMENTE la misma navegación de canje real
+/// (`/rewards/redeem/:id[?especial=true]`), solo cambió el estilo.
 class _RewardSlotCard extends StatelessWidget {
   const _RewardSlotCard({required this.slot});
 
@@ -891,117 +1339,149 @@ class _RewardSlotCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final special = slot.esEspecial;
-    return Container(
-      key: ValueKey('reward-slot-${slot.id}'),
-      padding: EdgeInsets.fromLTRB(14, special ? 20 : 14, 14, 14),
-      decoration: BoxDecoration(
-        color: CeltasColors.surfaceSelected,
-        border: Border.all(color: CeltasColors.gold, width: special ? 1.5 : 1),
-        borderRadius: BorderRadius.circular(CeltasRadii.input),
-        boxShadow: special
-            ? [
-                BoxShadow(
-                  color: CeltasColors.gold.withValues(alpha: 0.3),
-                  blurRadius: 22,
-                ),
-              ]
-            : null,
+    return GestureDetector(
+      key: ValueKey('reward-redeem-${slot.id}'),
+      onTap: () => context.push(
+        '/rewards/redeem/${slot.id}${special ? '?especial=true' : ''}',
       ),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          if (special)
-            Positioned(
-              top: -14,
-              right: -4,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: CeltasColors.gold,
-                  borderRadius: BorderRadius.circular(CeltasRadii.pill),
-                ),
-                child: Text(
-                  '★ ESPECIAL',
-                  style: textTheme.labelSmall?.copyWith(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    color: CeltasColors.black,
-                    letterSpacing: 0.4,
+      child: Container(
+        key: ValueKey('reward-slot-${slot.id}'),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: _slotCardDecoration,
+        child: Row(
+          children: [
+            _slotCardIcon(),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          special
+                              ? 'Premio especial disponible'
+                              : 'Premio disponible',
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.bodyLarge?.copyWith(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: CeltasColors.cream,
+                          ),
+                        ),
+                      ),
+                      if (special) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: CeltasColors.gold,
+                            borderRadius: BorderRadius.circular(
+                              CeltasRadii.pill,
+                            ),
+                          ),
+                          child: Text(
+                            '★ ESPECIAL',
+                            style: textTheme.labelSmall?.copyWith(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              color: CeltasColors.black,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                ),
+                  const SizedBox(height: 2),
+                  Text(
+                    formatDaysRemaining(slot.expiresAt),
+                    style: textTheme.bodySmall?.copyWith(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: CeltasColors.redLight,
+                    ),
+                  ),
+                ],
               ),
             ),
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: CeltasColors.surface,
-                  borderRadius: BorderRadius.circular(CeltasRadii.control),
-                ),
-                child: const Icon(
-                  Icons.star_rounded,
-                  size: 22,
-                  color: CeltasColors.gold,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      special
-                          ? 'Premio especial disponible'
-                          : 'Premio disponible',
-                      style: textTheme.bodyLarge?.copyWith(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: CeltasColors.cream,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      formatDaysRemaining(slot.expiresAt),
-                      style: textTheme.bodySmall?.copyWith(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: CeltasColors.redLight,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              GestureDetector(
-                key: ValueKey('reward-redeem-${slot.id}'),
-                onTap: () => context.push(
-                  '/rewards/redeem/${slot.id}${special ? '?especial=true' : ''}',
-                ),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 11,
-                  ),
-                  decoration: BoxDecoration(
-                    color: special ? CeltasColors.gold : CeltasColors.orange,
-                    borderRadius: BorderRadius.circular(CeltasRadii.input),
-                  ),
-                  child: Text(
-                    'Canjear',
-                    style: textTheme.labelMedium?.copyWith(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: CeltasColors.black,
+            const SizedBox(width: 8),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 22,
+              color: CeltasColors.gold,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Fila "Más estrellas, más premios" del mockup — CTA genérico y siempre
+/// presente (no depende de `premiosDisponibles`) que invita a seguir
+/// comprando para ganar más estrellas. Reemplaza el encabezado "Premios
+/// disponibles" + tarjetas grandes de la iteración anterior — mismo
+/// lenguaje visual que [_RewardSlotCard] para que ambos convivan sin
+/// desentonar cuando SÍ hay premios ganados arriba.
+///
+/// `onTap` va a `/home` (mismo destino real que "Seguir comprando" del
+/// overlay de celebración, ver `_RewardUnlockOverlayState.build`) — NO
+/// existe ninguna pantalla de "catálogo de premios" navegable en
+/// `app_router.dart` hoy (el canje solo se llega desde un
+/// `RewardSlot` real ya ganado, vía `/rewards/redeem/:redemptionId`), así
+/// que esta fila no puede llevar a un catálogo que no existe.
+class _RedeemCta extends StatelessWidget {
+  const _RedeemCta();
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return GestureDetector(
+      key: const ValueKey('rewards-redeem-cta'),
+      onTap: () => context.go('/home'),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: _slotCardDecoration,
+        child: Row(
+          children: [
+            _slotCardIcon(),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Más estrellas, más premios',
+                    style: textTheme.bodyLarge?.copyWith(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: CeltasColors.cream,
                     ),
                   ),
-                ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Canjea tus estrellas por increíbles beneficios.',
+                    style: textTheme.bodySmall?.copyWith(
+                      fontSize: 12,
+                      color: CeltasColors.textMuted,
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ],
+            ),
+            const SizedBox(width: 8),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 22,
+              color: CeltasColors.gold,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1034,7 +1514,7 @@ class _RewardsError extends StatelessWidget {
           const SizedBox(height: 8),
           TextButton(
             onPressed: onRetry,
-            style: TextButton.styleFrom(foregroundColor: CeltasColors.orange),
+            style: TextButton.styleFrom(foregroundColor: CeltasColors.gold),
             child: const Text('REINTENTAR'),
           ),
         ],
@@ -1087,7 +1567,12 @@ class _RewardUnlockOverlayState extends State<_RewardUnlockOverlay> {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final special = widget.isSpecial;
-    final accent = special ? CeltasColors.gold : CeltasColors.orange;
+    // Dorado en ambas variantes (antes el overlay normal usaba naranja) —
+    // el naranja quedó fuera de la paleta de todo el módulo de estrellas en
+    // esta segunda iteración; lo que sigue diferenciando "normal" de
+    // "especial" es el pill "★ PREMIO ESPECIAL" + el borde/glow más fuerte
+    // de la tarjeta, no el color del acento.
+    const accent = CeltasColors.gold;
     final description = special
         ? (widget.specialThreshold != null
               ? 'Completaste las ${widget.specialThreshold} estrellas del mes. '
@@ -1111,13 +1596,7 @@ class _RewardUnlockOverlayState extends State<_RewardUnlockOverlay> {
                 maxBlastForce: 22,
                 minBlastForce: 10,
                 gravity: 0.25,
-                colors: special
-                    ? const [CeltasColors.gold, CeltasColors.cream]
-                    : const [
-                        CeltasColors.orange,
-                        CeltasColors.gold,
-                        CeltasColors.cream,
-                      ],
+                colors: const [CeltasColors.gold, CeltasColors.cream],
               ),
             ),
             Align(
@@ -1204,7 +1683,7 @@ class _RewardUnlockOverlayState extends State<_RewardUnlockOverlay> {
                           ),
                           children: [
                             const TextSpan(text: '¡Lo '),
-                            TextSpan(
+                            const TextSpan(
                               text: 'lograste',
                               style: TextStyle(color: accent),
                             ),

@@ -418,6 +418,7 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
           testKey: 'sauce',
           title: 'SALSAS Y CREMAS',
           noneLabel: 'Sin salsas',
+          hintText: 'Elige tus cremas',
           options: [
             for (final sauce in item.sauces)
               _SelectableOption(id: sauce.id, name: sauce.name),
@@ -440,6 +441,7 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
           testKey: 'beverage',
           title: 'BEBIDAS',
           noneLabel: 'Sin bebida',
+          hintText: 'Elige tus bebidas',
           options: [
             for (final beverage in item.beverages)
               _SelectableOption(
@@ -466,6 +468,7 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
           testKey: 'extra',
           title: 'PORCIONES EXTRAS',
           noneLabel: 'Sin porciones extras',
+          hintText: 'Elige tus porciones extras',
           options: [
             for (final extraPortion in item.extraPortions)
               _SelectableOption(
@@ -860,6 +863,7 @@ class _OptionGroupDropdown extends StatelessWidget {
     required this.testKey,
     required this.title,
     required this.noneLabel,
+    required this.hintText,
     required this.options,
     required this.selectedIds,
     required this.explicitlyNone,
@@ -878,6 +882,11 @@ class _OptionGroupDropdown extends StatelessWidget {
   final String testKey;
   final String title;
   final String noneLabel;
+
+  /// Placeholder mostrado en el campo cuando [_summaryText] está vacío —
+  /// ocurre tanto en grupos opcionales sin selección como, por diseño, en
+  /// grupos obligatorios (`_summaryText` ahí siempre es `''`, ver su doc).
+  final String hintText;
   final List<_SelectableOption> options;
   final Set<String> selectedIds;
   final bool explicitlyNone;
@@ -1036,6 +1045,9 @@ class _OptionGroupDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasSelection = explicitlyNone || selectedIds.isNotEmpty;
+    final summaryText = _summaryText;
+    final hasContent = summaryText.isNotEmpty;
+    final displayText = hasContent ? summaryText : hintText;
     // El borde rojo de `isHighlighted` (violación recién resaltada por
     // `_handleValidationFailure`) manda sobre el naranja de "hay selección"
     // — son mutuamente excluyentes en la práctica (un campo resaltado
@@ -1090,14 +1102,16 @@ class _OptionGroupDropdown extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    _summaryText,
+                    displayText,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: hasSelection
+                      fontWeight: hasContent
+                          ? FontWeight.w700
+                          : FontWeight.w400,
+                      color: hasContent
                           ? CeltasColors.orange
-                          : CeltasColors.textMuted,
+                          : CeltasColors.textSubtle,
                     ),
                   ),
                 ),

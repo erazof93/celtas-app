@@ -47,9 +47,13 @@ enum CeltasNavItem {
 /// - Contenedor: alto 78px, fondo `#111010`, borde superior `#241F19`,
 ///   `padding-bottom: 8px`.
 /// - Ítems: columna centrada con `gap: 3px` entre ícono y label.
-/// - Íconos: 21×21px. Activo → stroke `#E8590C` width 2.2; inactivo →
-///   stroke `#6B6357` width 2.
-/// - Labels: 10px. Activo → `#E8590C` bold; inactivo → `#6B6357` regular.
+/// - Íconos: 21×21px. Activo → stroke width 2.2; inactivo → stroke `#6B6357`
+///   width 2.
+/// - Labels: 10px. Activo → bold; inactivo → `#6B6357` regular.
+/// - Color del acento activo: naranja `#E8590C` para todos los ítems SALVO
+///   "Estrellas", que usa el dorado de `RewardsScreen` (ver `_NavItem._accent`
+///   y `design-reference/estrellas/screenshot.png`) — incluye un indicador
+///   dorado bajo el ítem activo, solo para ese tab.
 class CeltasBottomNav extends StatelessWidget {
   const CeltasBottomNav({
     super.key,
@@ -107,9 +111,19 @@ class _NavItem extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
+  /// Acento del ítem activo — dorado SOLO para "Estrellas" (mismo acento
+  /// premium de `RewardsScreen`, ver `design-reference/estrellas/
+  /// screenshot.png`), naranja para el resto (Inicio/Pedidos/Cupones/
+  /// Perfil siguen con la paleta original del mockup general, ninguno de
+  /// esos módulos se rediseñó). No es un cambio de tema global — cada ítem
+  /// resuelve su propio acento.
+  Color get _accent =>
+      item == CeltasNavItem.rewards ? CeltasColors.gold : CeltasColors.orange;
+
   @override
   Widget build(BuildContext context) {
-    final color = selected ? CeltasColors.orange : CeltasColors.textSubtle;
+    final accent = _accent;
+    final color = selected ? accent : CeltasColors.textSubtle;
     return InkWell(
       onTap: onTap,
       child: Column(
@@ -128,6 +142,14 @@ class _NavItem extends StatelessWidget {
               color: color,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
             ),
+          ),
+          const SizedBox(height: 3),
+          // Indicador bajo el ítem activo — un `SizedBox` invisible cuando
+          // no está seleccionado para no mover el layout de los demás.
+          AnimatedOpacity(
+            opacity: selected ? 1 : 0,
+            duration: const Duration(milliseconds: 150),
+            child: Container(width: 18, height: 2, color: accent),
           ),
         ],
       ),
