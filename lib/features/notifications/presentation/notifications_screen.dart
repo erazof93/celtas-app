@@ -3,9 +3,12 @@ import 'package:celtas_mobile/features/notifications/application/notification_pr
 import 'package:celtas_mobile/features/notifications/application/notification_target.dart';
 import 'package:celtas_mobile/features/notifications/data/models/notification_history_item.dart';
 import 'package:celtas_mobile/shared/utils/spanish_date.dart';
+import 'package:celtas_mobile/shared/widgets/celtas_snackbar.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Historial local de notificaciones push recibidas.
 ///
@@ -116,9 +119,29 @@ class _NotificationCard extends StatelessWidget {
         // abajo, que ya excluye este caso), pero queda acá por la
         // exhaustividad del switch.
         break;
+      case LinkNotificationTarget(:final link):
+        _openLink(context, link);
       case NoneNotificationTarget():
         break;
     }
+  }
+
+  /// NO usa `canLaunchUrl` como gate — mismo criterio ya aprendido con el
+  /// `whatsappUrl` del checkout y el banner `external_url` del Home (ver
+  /// `HomeScreen._openExternalUrl`/`NotificationService._launchUrl`):
+  /// `launchUrl` directo es la señal confiable de éxito/fallo real.
+  Future<void> _openLink(BuildContext context, String url) async {
+    final uri = Uri.tryParse(url);
+    var opened = false;
+    if (uri != null) {
+      try {
+        opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } on PlatformException {
+        opened = false;
+      }
+    }
+    if (opened || !context.mounted) return;
+    showCeltasSnackBar(context, 'No se pudo abrir el enlace.');
   }
 
   @override

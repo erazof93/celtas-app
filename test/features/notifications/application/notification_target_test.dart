@@ -32,6 +32,27 @@ void main() {
       },
     );
 
+    test('{ link } → LinkNotificationTarget', () {
+      final target = NotificationTarget.fromPayload({
+        'link': 'https://celtas.com/promos/dia-del-padre',
+      });
+
+      expect(target, isA<LinkNotificationTarget>());
+      expect(
+        (target as LinkNotificationTarget).link,
+        'https://celtas.com/promos/dia-del-padre',
+      );
+    });
+
+    test('{ link: "" } (vacío) → NoneNotificationTarget', () {
+      // El backend solo manda la llave si `payload.link` es truthy
+      // (`notifications.service.ts`), pero el chequeo `isNotEmpty` acá es la
+      // segunda línea de defensa si algún día llegara vacía igual.
+      final target = NotificationTarget.fromPayload({'link': ''});
+
+      expect(target, isA<NoneNotificationTarget>());
+    });
+
     test('payload sin llaves reconocidas → NoneNotificationTarget', () {
       final target = NotificationTarget.fromPayload({'algoInesperado': 'x'});
 
@@ -56,6 +77,19 @@ void main() {
 
       expect(target, isA<OrderNotificationTarget>());
       expect((target as OrderNotificationTarget).orderId, 'order-456');
+    });
+
+    test('orderId presente junto con link → gana orderId', () {
+      // Mismo criterio que el caso couponCode de arriba: no debería pasar en
+      // producción, pero el orden de precedencia queda definido igual —
+      // `link` es la última llave que se chequea en `fromPayload`.
+      final target = NotificationTarget.fromPayload({
+        'orderId': 'order-789',
+        'link': 'https://celtas.com',
+      });
+
+      expect(target, isA<OrderNotificationTarget>());
+      expect((target as OrderNotificationTarget).orderId, 'order-789');
     });
   });
 }

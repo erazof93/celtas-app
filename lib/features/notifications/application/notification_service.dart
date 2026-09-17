@@ -13,6 +13,7 @@ import 'package:celtas_mobile/features/settings/application/settings_providers.d
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Único canal de notificaciones en Android. Se crea una vez en `init()`.
 const _androidChannel = AndroidNotificationChannel(
@@ -36,9 +37,9 @@ const _androidChannel = AndroidNotificationChannel(
 /// dejar que `ProviderScope` lo cree internamente.
 ///
 /// Payload de notificación confirmado contra el backend real
-/// (`orders.service.ts` / `coupons.service.ts` / `settings.service.ts`, no
-/// hay un campo `type` explícito — se infiere por la llave presente en
-/// `data`):
+/// (`orders.service.ts` / `coupons.service.ts` / `settings.service.ts` /
+/// `notifications.service.ts`, no hay un campo `type` explícito — se infiere
+/// por la llave presente en `data`):
 ///   - Cambio de estado de pedido: `{ orderId, status }`
 ///   - Cupón nuevo (manual o automático): `{ couponCode }`
 ///   - Cambio de horario de atención (cierre manual activado/desactivado
@@ -46,6 +47,9 @@ const _androidChannel = AndroidNotificationChannel(
 ///     contenido, solo un aviso de "algo cambió"; el título/cuerpo de la
 ///     notificación NUNCA es el estado real, siempre hay que reconsultar
 ///     `GET /settings/business-hours`.
+///   - Notificación de marketing con link (`BroadcastNotificationDto.link`,
+///     admin): `{ link: 'https://...' }` — al tocarla se abre con
+///     `url_launcher` en vez de navegar dentro de la app (ver `_launchUrl`).
 class NotificationService {
   NotificationService._();
 
@@ -139,6 +143,7 @@ class NotificationService {
       OrderNotificationTarget() => 'Actualización de tu pedido',
       CouponNotificationTarget() => 'Tienes un cupón nuevo',
       BusinessHoursNotificationTarget() => 'Aviso del local',
+      LinkNotificationTarget() => 'Notificación importante',
       NoneNotificationTarget() => 'Celtas',
     };
     _container
@@ -224,6 +229,9 @@ class NotificationService {
         // existe ahí. El cartel se actualiza sin más código, incluso con la
         // app en foreground.
         _container.invalidate(businessHoursProvider);
+      case LinkNotificationTarget():
+        // Nada que invalidar — no hay provider asociado a un link externo.
+        break;
       case NoneNotificationTarget():
         break;
     }
@@ -240,6 +248,8 @@ class NotificationService {
         // esté, el cartel del Home (si está montado) se actualiza solo vía
         // `_invalidateFor`.
         break;
+      case LinkNotificationTarget(:final link):
+        _launchUrl(link);
       case NoneNotificationTarget():
         break;
     }
@@ -266,5 +276,24 @@ class NotificationService {
         subscription.close();
       }
     });
+  }
+
+  /// Abre `LinkNotificationTarget.link` fuera de la app (`externalApplication`
+  /// — mismo modo que el link de WhatsApp del checkout). NO usa
+  /// `canLaunchUrl` como gate: mismo criterio ya aprendido con el
+  /// `whatsappUrl` del checkout (`checkout_screen.dart._openWhatsapp`) y el
+  /// banner `external_url` del Home (`home_screen.dart`) — verificado en
+  /// dispositivo real que devuelve `false` para `https://` aunque haya una
+  /// app que lo maneje (Android resuelve el intent con
+  /// `resolveActivity(MATCH_DEFAULT_ONLY)`, que da `null` en cuanto hay más
+  /// de una app candidata sin un default fijado). Best-effort: un link
+  /// inválido o sin app que lo maneje no debe crashear ni bloquear nada, la
+  /// notificación ya quedó mostrada y guardada en el historial.
+  Future<void> _launchUrl(String urlString) async {
+    try {
+      await launchUrl(Uri.parse(urlString), mode: LaunchMode.externalApplication);
+    } catch (_) {
+      // Falla silenciosa: el link es inválido o la app no puede abrirlo.
+    }
   }
 }

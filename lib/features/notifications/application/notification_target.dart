@@ -21,6 +21,10 @@ sealed class NotificationTarget {
     if (data.containsKey('businessHoursChanged')) {
       return const BusinessHoursNotificationTarget();
     }
+    final link = data['link'] as String?;
+    if (link != null && link.isNotEmpty) {
+      return LinkNotificationTarget(link);
+    }
     return const NoneNotificationTarget();
   }
 }
@@ -52,6 +56,25 @@ class CouponNotificationTarget extends NotificationTarget {
 /// (`businessHoursProvider`) para saber si el local está abierto ahora.
 class BusinessHoursNotificationTarget extends NotificationTarget {
   const BusinessHoursNotificationTarget();
+}
+
+/// Link directo (deep link o URL externa): `{ link: "https://..." }`.
+/// Se dispara cuando el backend envía una notificación de marketing con un
+/// link (`BroadcastNotificationDto.link` — solo `@IsString`/`@MaxLength`,
+/// sin restricción de esquema: el admin puede mandar tanto una URL externa
+/// como un deep link propio, contrato verificado contra
+/// `broadcast-notification.dto.ts`).
+class LinkNotificationTarget extends NotificationTarget {
+  const LinkNotificationTarget(this.link);
+
+  final String link;
+
+  @override
+  bool operator ==(Object other) =>
+      other is LinkNotificationTarget && other.link == link;
+
+  @override
+  int get hashCode => link.hashCode;
 }
 
 /// Payload sin llaves reconocidas — no se invalida ni navega a nada.
