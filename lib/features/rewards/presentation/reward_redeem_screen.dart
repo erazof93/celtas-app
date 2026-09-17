@@ -31,6 +31,14 @@ class RewardRedeemScreen extends ConsumerWidget {
   /// query param `especial` de la ruta — nunca inferido acá.
   final bool isSpecial;
 
+  /// Tras canjear, ya NO se hace `pop` de vuelta a "Mis Estrellas" — pedido
+  /// explícito: el cliente ya terminó con el flujo de premios, lo natural es
+  /// llevarlo a Home a seguir comprando (con el premio ya en el carrito) en
+  /// vez de dejarlo parado en la pantalla de canje. `context.go('/home')`
+  /// (no `Navigator.pushNamedAndRemoveUntil`: este proyecto navega con
+  /// `go_router`, nunca rutas nombradas de `Navigator`) reemplaza todo el
+  /// stack, mismo patrón que "Seguir comprando" del overlay de celebración
+  /// en `rewards_screen.dart`.
   Future<void> _redeem(
     BuildContext context,
     WidgetRef ref,
@@ -41,16 +49,15 @@ class RewardRedeemScreen extends ConsumerWidget {
         .addRewardItem(item, rewardRedemptionId: redemptionId);
     showCeltasSnackBar(
       context,
-      'Premio agregado: ${item.name}',
+      '¡Premio agregado al carrito!',
       // Mismo margen que `product_detail_screen.dart` para no tapar la
       // barra flotante del carrito.
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 88),
     );
-    // El SnackBar vive en el ScaffoldMessenger raíz, sigue visible después
-    // del pop — mismo patrón que `_addToCart` en `product_detail_screen.dart`.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (context.mounted) context.pop();
-    });
+    // Le da tiempo al cliente de leer el SnackBar antes de saltar a Home —
+    // mismo criterio que otras confirmaciones de una sola vía en la app.
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (context.mounted) context.go('/home');
   }
 
   @override

@@ -10,6 +10,12 @@ _RewardSlot _$RewardSlotFromJson(Map<String, dynamic> json) => _RewardSlot(
   id: json['id'] as String,
   expiresAt: DateTime.parse(json['expiresAt'] as String),
   esEspecial: json['esEspecial'] as bool,
+  estado:
+      $enumDecodeNullable(_$RewardRedemptionEstadoEnumMap, json['estado']) ??
+      RewardRedemptionEstado.pending,
+  usedAt: json['usedAt'] == null
+      ? null
+      : DateTime.parse(json['usedAt'] as String),
 );
 
 Map<String, dynamic> _$RewardSlotToJson(_RewardSlot instance) =>
@@ -17,7 +23,14 @@ Map<String, dynamic> _$RewardSlotToJson(_RewardSlot instance) =>
       'id': instance.id,
       'expiresAt': instance.expiresAt.toIso8601String(),
       'esEspecial': instance.esEspecial,
+      'estado': _$RewardRedemptionEstadoEnumMap[instance.estado]!,
+      'usedAt': instance.usedAt?.toIso8601String(),
     };
+
+const _$RewardRedemptionEstadoEnumMap = {
+  RewardRedemptionEstado.pending: 'pending',
+  RewardRedemptionEstado.redeemed: 'redeemed',
+};
 
 _RewardPromotion _$RewardPromotionFromJson(Map<String, dynamic> json) =>
     _RewardPromotion(

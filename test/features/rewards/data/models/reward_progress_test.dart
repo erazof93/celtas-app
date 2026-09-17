@@ -1,4 +1,5 @@
 import 'package:celtas_mobile/features/rewards/data/models/reward_progress.dart';
+import 'package:celtas_mobile/features/rewards/data/models/reward_redemption_estado.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Contrato verificado contra `RewardsService.getProgress`
@@ -21,6 +22,8 @@ void main() {
             'id': 'r-1',
             'expiresAt': '2026-09-10T00:00:00.000Z',
             'esEspecial': false,
+            'estado': 'pending',
+            'usedAt': null,
           },
         ],
         'promocionActiva': {
@@ -43,6 +46,11 @@ void main() {
       expect(progress.premiosDisponibles, hasLength(1));
       expect(progress.premiosDisponibles.single.id, 'r-1');
       expect(progress.premiosDisponibles.single.esEspecial, isFalse);
+      expect(
+        progress.premiosDisponibles.single.estado,
+        RewardRedemptionEstado.pending,
+      );
+      expect(progress.premiosDisponibles.single.usedAt, isNull);
       expect(
         progress.premiosDisponibles.single.expiresAt,
         DateTime.utc(2026, 9, 10),
@@ -109,6 +117,68 @@ void main() {
         true,
       ]);
     });
+
+    test(
+      'octava iteración: un premio con estado "redeemed" y usedAt real '
+      'sigue devolviéndose en premiosDisponibles (ya no desaparece al '
+      'canjearse) — pendiente y reclamado pueden convivir en la lista',
+      () {
+        final json = {
+          'estrellasDelMes': 12,
+          'hitos': <Map<String, dynamic>>[],
+          'premiosDisponibles': [
+            {
+              'id': 'r-pending',
+              'expiresAt': '2026-09-20T00:00:00.000Z',
+              'esEspecial': false,
+              'estado': 'pending',
+              'usedAt': null,
+            },
+            {
+              'id': 'r-redeemed',
+              'expiresAt': '2026-09-20T00:00:00.000Z',
+              'esEspecial': true,
+              'estado': 'redeemed',
+              'usedAt': '2026-09-05T14:30:00.000Z',
+            },
+          ],
+        };
+
+        final progress = RewardProgress.fromJson(json);
+
+        final pending = progress.premiosDisponibles[0];
+        final redeemed = progress.premiosDisponibles[1];
+        expect(pending.estado, RewardRedemptionEstado.pending);
+        expect(pending.usedAt, isNull);
+        expect(redeemed.estado, RewardRedemptionEstado.redeemed);
+        expect(redeemed.usedAt, DateTime.utc(2026, 9, 5, 14, 30));
+      },
+    );
+
+    test(
+      'estado ausente en el JSON cae a "pending" por default (compatibilidad '
+      'hacia atrás con fixtures/contratos previos a la octava iteración)',
+      () {
+        final json = {
+          'estrellasDelMes': 3,
+          'hitos': <Map<String, dynamic>>[],
+          'premiosDisponibles': [
+            {
+              'id': 'r-1',
+              'expiresAt': '2026-09-10T00:00:00.000Z',
+              'esEspecial': false,
+            },
+          ],
+        };
+
+        final progress = RewardProgress.fromJson(json);
+
+        expect(
+          progress.premiosDisponibles.single.estado,
+          RewardRedemptionEstado.pending,
+        );
+      },
+    );
   });
 
   group('RewardMilestoneProgress.fromJson', () {

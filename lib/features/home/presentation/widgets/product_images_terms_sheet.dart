@@ -2,16 +2,16 @@ import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
 import 'package:flutter/material.dart';
 
-/// Bottom sheet de "¿Cómo funciona el programa de Estrellas?" (mockup
-/// `estrellas-04-terminos.png`). Contenido estático, sin datos del backend —
-/// mismo esqueleto de contenedor que `CouponPickerSheet` (drag-handle 36×4,
-/// `showModalBottomSheet` con `CeltasColors.card` + radio `CeltasRadii.card`
-/// arriba).
-///
-/// Texto en tuteo (mismo criterio de todo el proyecto): el mockup original
-/// usaba voseo rioplatense ("ganás", "seguís", "podés") — corregido acá.
-class RewardTermsSheet extends StatelessWidget {
-  const RewardTermsSheet({super.key});
+/// Bottom sheet "Sobre nuestras imágenes" — aviso de que las fotos de los
+/// productos del Home son referenciales (generadas con asistencia de IA, no
+/// fotos reales de cada preparación individual). Mismo esqueleto exacto que
+/// `RewardTermsSheet` (`lib/features/rewards/presentation/widgets/
+/// reward_terms_sheet.dart`): drag-handle 36×4, `showModalBottomSheet` con
+/// `CeltasColors.card` + radio `CeltasRadii.card` arriba, lista de puntos en
+/// `Flexible` + `SingleChildScrollView` para no desbordar en pantallas
+/// bajas, botón "Entendido" fijo abajo.
+class ProductImagesTermsSheet extends StatelessWidget {
+  const ProductImagesTermsSheet({super.key});
 
   static Future<void> show(BuildContext context) {
     return showModalBottomSheet<void>(
@@ -23,24 +23,20 @@ class RewardTermsSheet extends StatelessWidget {
           top: Radius.circular(CeltasRadii.card),
         ),
       ),
-      builder: (_) => const RewardTermsSheet(),
+      builder: (_) => const ProductImagesTermsSheet(),
     );
   }
 
   static const _points = [
-    'Por cada S/ 10 en compras (sin contar el envío) ganas 1 estrella.',
-    'Cada vez que alcances una de las metas del tablero del mes, ganas '
-        'un premio para canjear por un producto disponible.',
-    'Una de las metas del tablero (marcada por Celtas) entrega, además, '
-        'un premio especial distinto del resto.',
-    'Cada premio es válido durante TODO el mes en que lo ganas. Tienes '
-        'hasta el último día del mes para reclamarlo.',
-    'El 1º de cada mes, todo se reinicia. Los premios que no reclamaste '
-        'desaparecen sin derecho a canjearse. Los premios YA RECLAMADOS '
-        'quedan guardados en tu historial (invisibles en la app, pero en '
-        'la BD).',
-    'Al canjear un premio, sigues participando normalmente — puedes '
-        'ganar más de uno en el mismo mes.',
+    'Las fotos de nuestros productos son referencias artísticas que '
+        'muestran una representación del plato, no una fotografía de cada '
+        'preparación individual.',
+    'El producto que recibes puede variar en decoración, presentación o '
+        'el corte exacto de los ingredientes respecto a la imagen '
+        'mostrada.',
+    'El contenido, cantidad e ingredientes principales corresponden '
+        'exactamente a la descripción — solo la presentación visual puede '
+        'diferir ligeramente.',
   ];
 
   @override
@@ -65,7 +61,7 @@ class RewardTermsSheet extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              '¿Cómo funciona el programa de Estrellas?',
+              'Sobre nuestras imágenes',
               style: textTheme.headlineSmall?.copyWith(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
@@ -73,19 +69,17 @@ class RewardTermsSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            // `Flexible` + `SingleChildScrollView`: los puntos ya NO caben
-            // siempre en pantallas bajas (novena iteración: los puntos 4 y 5
-            // se alargaron y producían overflow real, no solo en el test —
-            // `RenderFlex overflowed by 38 pixels`). El drag-handle, el
-            // título y "Entendido" se quedan fijos; solo la lista de
-            // puntos scrollea si hace falta.
+            // Mismo criterio que `RewardTermsSheet`: `Flexible` +
+            // `SingleChildScrollView` para que la lista de puntos scrollee
+            // en vez de desbordar en pantallas bajas — el drag-handle, el
+            // título y "Entendido" se quedan fijos.
             Flexible(
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     for (final point in _points) ...[
-                      _TermPoint(text: point),
+                      _ProductImagePoint(text: point),
                       const SizedBox(height: 12),
                     ],
                   ],
@@ -105,8 +99,8 @@ class RewardTermsSheet extends StatelessWidget {
   }
 }
 
-class _TermPoint extends StatelessWidget {
-  const _TermPoint({required this.text});
+class _ProductImagePoint extends StatelessWidget {
+  const _ProductImagePoint({required this.text});
 
   final String text;
 
@@ -115,7 +109,11 @@ class _TermPoint extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Icon(Icons.check_rounded, size: 18, color: CeltasColors.orange),
+        const Icon(
+          Icons.check_circle_rounded,
+          size: 18,
+          color: CeltasColors.gold,
+        ),
         const SizedBox(width: 10),
         Expanded(
           child: Text(

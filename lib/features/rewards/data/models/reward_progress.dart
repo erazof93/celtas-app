@@ -1,10 +1,14 @@
+import 'package:celtas_mobile/features/rewards/data/models/reward_redemption_estado.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'reward_progress.freezed.dart';
 part 'reward_progress.g.dart';
 
-/// Premio ganado y todavía sin canjear, tal como lo devuelve
-/// `GET /rewards/progress` dentro de `premiosDisponibles`.
+/// Premio ganado, tal como lo devuelve `GET /rewards/progress` dentro de
+/// `premiosDisponibles` — a pesar del nombre del campo (histórico, no se
+/// renombró para no romper el contrato), la lista incluye tanto premios
+/// `pending` como `redeemed` desde la octava iteración: un premio YA
+/// reclamado sigue devolviéndose (hasta que vence) en vez de desaparecer.
 ///
 /// Contrato verificado contra `RewardsService.getProgress`
 /// (`backend-celtas/src/modules/rewards/rewards.service.ts`): el backend NO
@@ -20,6 +24,14 @@ abstract class RewardSlot with _$RewardSlot {
     required String id,
     required DateTime expiresAt,
     required bool esEspecial,
+    // `@Default(pending)` (no `required`) a propósito: deja compilar sitios
+    // que construyen un `RewardSlot` sin pensar en el estado (mayormente
+    // tests ya existentes) asumiendo el caso más común — el contrato real
+    // del backend SIEMPRE manda este campo.
+    @Default(RewardRedemptionEstado.pending) RewardRedemptionEstado estado,
+    // `null` mientras `estado == pending` — fecha real de canje
+    // (`RewardRedemption.usedAt`) cuando `estado == redeemed`.
+    DateTime? usedAt,
   }) = _RewardSlot;
 
   factory RewardSlot.fromJson(Map<String, dynamic> json) =>
@@ -70,7 +82,10 @@ abstract class RewardMilestoneProgress with _$RewardMilestoneProgress {
 ///     { "estrellasRequeridas": 8, "alcanzado": true, "esEspecial": false },
 ///     { "estrellasRequeridas": 15, "alcanzado": false, "esEspecial": true }
 ///   ],
-///   "premiosDisponibles": [{ "id": "uuid", "expiresAt": "...", "esEspecial": false }],
+///   "premiosDisponibles": [
+///     { "id": "uuid", "expiresAt": "...", "esEspecial": false, "estado": "pending", "usedAt": null },
+///     { "id": "uuid", "expiresAt": "...", "esEspecial": false, "estado": "redeemed", "usedAt": "..." }
+///   ],
 ///   "promocionActiva": { "label": "...", "multiplier": 2, "endDate": "..." }
 /// }
 /// ```

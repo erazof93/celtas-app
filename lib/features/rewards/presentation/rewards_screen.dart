@@ -5,6 +5,7 @@ import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/rewards/application/reward_providers.dart';
 import 'package:celtas_mobile/features/rewards/data/models/reward_progress.dart';
+import 'package:celtas_mobile/features/rewards/data/models/reward_redemption_estado.dart';
 import 'package:celtas_mobile/features/rewards/data/seen_rewards_storage.dart';
 import 'package:celtas_mobile/features/rewards/presentation/widgets/reward_terms_sheet.dart';
 import 'package:celtas_mobile/shared/utils/spanish_date.dart';
@@ -169,8 +170,6 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
                                   const SizedBox(height: 10),
                                 ],
                               ],
-                              const SizedBox(height: 12),
-                              const _RedeemCta(),
                               const SizedBox(height: 20),
                               Center(
                                 child: GestureDetector(
@@ -617,43 +616,26 @@ class _ProgressCardState extends State<_ProgressCard>
       decoration: _cardDecoration,
       child: Column(
         children: [
-          // Fondo propio del grid (negro → dorado ~10%, vertical, muy
-          // sutil) — distingue esta zona del resto de la tarjeta, mismo
-          // pedido de tercera iteración.
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  CeltasColors.black,
-                  CeltasColors.gold.withValues(alpha: 0.1),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(CeltasRadii.card),
+          // El grid ya NO tiene su propio `Container` con degradado —
+          // quinta iteración: un solo contenedor (`_cardDecoration`) para
+          // todo el tablero (grid + separador + progreso), en vez de una
+          // caja anidada que antes duplicaba el fondo dorado tenue.
+          for (var row = 0; row < rows; row++) ...[
+            // 4px (no 7px): las celdas de hito ya no cargan tag+tallo
+            // encima del ícono, así que son ~20px más bajas y no
+            // necesitan tanto aire entre filas.
+            if (row > 0) const SizedBox(height: 4),
+            _MilestoneRow(
+              startStar: row * 5 + 1,
+              endStar: min((row + 1) * 5, totalStars),
+              filledUpTo: progress.estrellasDelMes,
+              hitosByStar: hitosByStar,
+              premioNumbers: premioNumbers,
+              trophyScale: _trophyScale,
+              glowOpacity: _glowOpacity,
+              confetti: _confettiController,
             ),
-            child: Column(
-              children: [
-                // 4px (no 7px): las celdas de hito ya no cargan tag+tallo
-                // encima del ícono, así que son ~20px más bajas y no
-                // necesitan tanto aire entre filas.
-                for (var row = 0; row < rows; row++) ...[
-                  if (row > 0) const SizedBox(height: 4),
-                  _MilestoneRow(
-                    startStar: row * 5 + 1,
-                    endStar: min((row + 1) * 5, totalStars),
-                    filledUpTo: progress.estrellasDelMes,
-                    hitosByStar: hitosByStar,
-                    premioNumbers: premioNumbers,
-                    trophyScale: _trophyScale,
-                    glowOpacity: _glowOpacity,
-                    confetti: _confettiController,
-                  ),
-                ],
-              ],
-            ),
-          ),
+          ],
           const SizedBox(height: 18),
           const Divider(height: 1),
           const SizedBox(height: 16),
@@ -715,20 +697,26 @@ class _ProgressCardState extends State<_ProgressCard>
 }
 
 /// Decoración compartida de la tarjeta del tablero: gradiente diagonal
-/// (dorado muy tenue arriba-izquierda → negro abajo-derecha, pedido
-/// explícito de tercera iteración) + borde dorado oscuro + resplandor
-/// ambiental muy leve, en vez del borde casi invisible (`cardBorder`, apenas
-/// más claro que el fondo) que tenía antes — mismo lenguaje "premium oscuro
-/// + acento dorado" del mockup de referencia
-/// (`design-reference/estrellas/screenshot.png`), sin tocar el resto del
-/// tema global. `textLabel` (dorado apagado, no `gold` puro) es el que más
-/// se acerca al `#8B7355` del mockup una vez mezclado con el fondo oscuro.
+/// (dorado casi imperceptible arriba-izquierda @5% → negro abajo-derecha)
+/// + borde dorado oscuro + resplandor ambiental muy leve, en vez del borde
+/// casi invisible (`cardBorder`, apenas más claro que el fondo) que tenía
+/// antes — mismo lenguaje "premium oscuro + acento dorado" del mockup de
+/// referencia (`design-reference/estrellas/screenshot.png`), sin tocar el
+/// resto del tema global. `textLabel` (dorado apagado, no `gold` puro) es
+/// el que más se acerca al `#8B7355` del mockup una vez mezclado con el
+/// fondo oscuro.
+///
+/// Sexta iteración (comparado en dispositivo real contra `design-reference/
+/// estrellas/screenshot.png`): incluso a 0.02 de alpha, el degradado se veía
+/// muy dorado en pantalla — con varios medallones de hito alcanzados (cada
+/// uno con su propio glow radial de ~60px) sumados al degradado de fondo, el
+/// tinte se percibía mucho más fuerte que en un preview aislado. Se
+/// reemplaza el degradado por un relleno sólido `CeltasColors.black` — el
+/// fondo del mockup de referencia es prácticamente negro puro, el dorado
+/// vive SOLO en el borde y en los acentos (estrellas, medallones), nunca en
+/// el relleno de la tarjeta.
 final BoxDecoration _cardDecoration = BoxDecoration(
-  gradient: LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [CeltasColors.gold.withValues(alpha: 0.15), CeltasColors.black],
-  ),
+  color: CeltasColors.black,
   border: Border.all(color: CeltasColors.textLabel.withValues(alpha: 0.6)),
   borderRadius: BorderRadius.circular(CeltasRadii.banner),
   boxShadow: [
@@ -817,9 +805,11 @@ class _StarsProgressRing extends StatelessWidget {
 }
 
 /// Una fila de hasta 5 estrellas (`startStar`..`endStar` inclusive), todas
-/// alineadas por abajo (mismo efecto que `align-items:flex-end` en el
-/// mockup) porque las celdas de hito son más altas: el ícono se agranda para
-/// darle espacio a la etiqueta superpuesta.
+/// centradas verticalmente entre sí — pedido explícito tras verse en
+/// dispositivo real: con alineación por abajo (`flex-end`), las celdas de
+/// hito alcanzado/especial (más altas, 68-78px, para darle espacio a la
+/// etiqueta superpuesta) quedaban visualmente más arriba que las estrellas
+/// sueltas (48-54px) de la misma fila en vez de parejas.
 class _MilestoneRow extends StatelessWidget {
   const _MilestoneRow({
     required this.startStar,
@@ -841,10 +831,21 @@ class _MilestoneRow extends StatelessWidget {
   final Animation<double> glowOpacity;
   final Animation<double> confetti;
 
+  /// Columnas fijas por fila — SIEMPRE 5, aunque la última fila tenga menos
+  /// estrellas (ej. 18 hitos → última fila con solo 16-18, 3 estrellas). Sin
+  /// esto, un `Row` con menos de 5 `Expanded` reparte el ancho completo
+  /// entre esos pocos hijos (cada uno 1/N en vez de 1/5), así que la última
+  /// fila queda desalineada de las columnas de arriba y su última celda
+  /// termina empujada casi contra el borde derecho de la tarjeta — bug real
+  /// encontrado con un tablero de 18 hitos en dispositivo real.
+  static const _columnsPerRow = 5;
+
   @override
   Widget build(BuildContext context) {
+    final starCount = endStar - startStar + 1;
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
+      // `crossAxisAlignment` por defecto de `Row` ya es `center` — antes
+      // esto se pisaba explícitamente con `.end` (ver doc de esta clase).
       children: [
         for (var star = startStar; star <= endStar; star++)
           Expanded(
@@ -863,6 +864,11 @@ class _MilestoneRow extends StatelessWidget {
               ],
             ),
           ),
+        // Relleno invisible para que una fila incompleta (la última, si el
+        // total de hitos no es múltiplo de 5) conserve el mismo ancho de
+        // columna que las filas completas de arriba.
+        for (var i = starCount; i < _columnsPerRow; i++)
+          const Expanded(child: SizedBox.shrink()),
       ],
     );
   }
@@ -909,15 +915,11 @@ class _MilestoneCell extends StatelessWidget {
     }
 
     if (hito.alcanzado) {
-      // La estrella/medallón es SIEMPRE dorada al alcanzarse (normal o
-      // especial) — el trofeo en sí nunca es naranja. Lo que diferencia un
-      // hito especial es un glow más intenso y el badge dorado (vs. el
-      // badge naranja sólido de "Premio N", pedido explícito de tercera
-      // iteración — ver `CeltasColors.orange`).
-      const starColor = CeltasColors.gold;
-      final badgeColor = hito.esEspecial
-          ? CeltasColors.gold
-          : CeltasColors.orange;
+      // Cuarta iteración: el medallón vuelve a diferenciar especial
+      // (dorado) de normal (naranja) — mismo color que su badge — en vez
+      // de ser siempre dorado.
+      final starColor = hito.esEspecial ? CeltasColors.gold : CeltasColors.orange;
+      final badgeColor = starColor;
       final glowAlpha = hito.esEspecial ? 0.6 : 0.42;
       final label = hito.esEspecial ? 'Especial' : 'Premio $premioNumber';
       return SizedBox(
@@ -950,31 +952,39 @@ class _MilestoneCell extends StatelessWidget {
               animation: trophyScale,
               builder: (context, child) =>
                   Transform.scale(scale: trophyScale.value, child: child),
-              // Medallón dorado (en vez de un ícono de estrella suelto)
-              // para que el hito alcanzado se lea como un "trofeo" sólido
-              // de un vistazo, mismo espíritu que la estrella dorada con
-              // glow del mockup de referencia.
+              // Medallón translúcido (cuarta iteración): el círculo ya NO
+              // es un relleno sólido del color del ícono — es el MISMO
+              // color pero al 40% de opacidad, con un degradado interno
+              // muy suave negro → color y un borde fino de 1px, para que
+              // el dorado/naranja quede como acento y no como un disco
+              // sólido dominante. El ícono en sí SÍ es del color pleno
+              // (con glow), ya no negro sobre el círculo.
               child: Container(
                 width: 54,
                 height: 54,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [starColor, starColor.withValues(alpha: 0.8)],
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      CeltasColors.black,
+                      starColor.withValues(alpha: 0.4),
+                    ],
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: starColor.withValues(alpha: glowAlpha),
-                      blurRadius: hito.esEspecial ? 20 : 16,
-                      spreadRadius: 1,
-                    ),
-                  ],
+                  border: Border.all(color: starColor),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.star_rounded,
                   size: 30,
-                  color: CeltasColors.black,
+                  color: starColor,
+                  shadows: [
+                    Shadow(
+                      color: starColor.withValues(alpha: glowAlpha),
+                      blurRadius: hito.esEspecial ? 20 : 16,
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1289,200 +1299,212 @@ class _StarDot extends StatelessWidget {
   }
 }
 
-/// Decoración compartida por [_RewardSlotCard] y [_RedeemCta] — mismo
-/// degradado (negro → dorado ~20%, diagonal) y borde dorado sólido para
-/// ambas, a propósito: son la MISMA familia de fila ("premio para canjear"
-/// vs. "invitación a ganar más"), nunca deben leerse como dos estilos de
-/// tarjeta distintos.
-final BoxDecoration _slotCardDecoration = BoxDecoration(
-  gradient: LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [CeltasColors.black, CeltasColors.gold.withValues(alpha: 0.2)],
+/// Decoración de [_RewardSlotCard] (fila "premio disponible").
+///
+/// Sexta iteración — mismo motivo que `_cardDecoration`: en dispositivo real
+/// el degradado negro→dorado se leía como un tinte amarillento incluso a
+/// alpha bajo, así que se reemplaza por relleno sólido `CeltasColors.black`
+/// + borde de color, igual que el mockup de referencia
+/// (`design-reference/estrellas/screenshot.png`).
+///
+/// Séptima iteración: el borde ya NO es siempre dorado — el dorado queda
+/// reservado para el premio ESPECIAL (mismo criterio de color que el resto
+/// del tablero: `CeltasColors.gold` = especial, `CeltasColors.orange` =
+/// normal). Un premio normal con borde dorado se leía como si fuera
+/// especial sin serlo.
+BoxDecoration _slotCardDecoration({required bool especial}) => BoxDecoration(
+  color: CeltasColors.black,
+  border: Border.all(
+    color: especial ? CeltasColors.gold : CeltasColors.orange,
   ),
-  border: Border.all(color: CeltasColors.gold),
   borderRadius: BorderRadius.circular(CeltasRadii.card),
 );
 
-/// Ícono circular izquierdo compartido por [_RewardSlotCard] y
-/// [_RedeemCta] — mismo ícono de regalo en ambas (antes una usaba una
-/// estrella y la otra un regalo, lectura inconsistente entre dos filas que
-/// deberían verse como la misma familia).
-Widget _slotCardIcon() => Container(
-  width: 48,
-  height: 48,
-  alignment: Alignment.center,
-  decoration: const BoxDecoration(
-    color: CeltasColors.surfaceSelected,
-    shape: BoxShape.circle,
-  ),
-  child: const Icon(
-    Icons.card_giftcard_rounded,
-    size: 28,
-    color: CeltasColors.gold,
-  ),
-);
+/// Ícono circular izquierdo de [_RewardSlotCard] — mismo color que el borde
+/// de la fila (`_slotCardDecoration`): naranja para un premio normal,
+/// dorado solo para el especial.
+Widget _slotCardIcon({required bool especial}) {
+  final color = especial ? CeltasColors.gold : CeltasColors.orange;
+  return Container(
+    width: 48,
+    height: 48,
+    alignment: Alignment.center,
+    decoration: const BoxDecoration(
+      color: CeltasColors.surfaceSelected,
+      shape: BoxShape.circle,
+    ),
+    child: Icon(Icons.card_giftcard_rounded, size: 28, color: color),
+  );
+}
 
-/// Fila horizontal, "Más estrellas, más premios" (mockup) — un premio ganado
-/// y todavía sin canjear, en el mismo lenguaje visual elegante/discreto que
-/// [_RedeemCta] en vez de la tarjeta grande de borde ancho + botón
-/// "Canjear" naranja de la iteración anterior (esa versión no correspondía
-/// al diseño de referencia). Toda la fila es el área táctil — `onTap`
-/// preserva EXACTAMENTE la misma navegación de canje real
-/// (`/rewards/redeem/:id[?especial=true]`), solo cambió el estilo.
+/// Matriz de saturación 0 (blanco y negro por luminancia — pesos estándar
+/// Rec. 709) para [_RewardSlotCard] cuando `slot.estado == redeemed` —
+/// "desaturar" un premio ya reclamado en vez de solo atenuar su opacidad,
+/// para que se lea inequívocamente como "ya no accionable" incluso a
+/// primer vistazo (naranja/dorado son justo los colores que distinguen un
+/// premio accionable en el resto de la pantalla).
+const List<double> _greyscaleMatrix = [
+  0.2126, 0.7152, 0.0722, 0, 0,
+  0.2126, 0.7152, 0.0722, 0, 0,
+  0.2126, 0.7152, 0.0722, 0, 0,
+  0, 0, 0, 1, 0,
+];
+
+/// Fila horizontal, "Más estrellas, más premios" (mockup) — un premio
+/// ganado, en el mismo lenguaje visual elegante/discreto que el resto del
+/// tablero. Toda la fila es el área táctil.
+///
+/// Octava iteración — el premio YA NO desaparece al canjearse
+/// (`GET /rewards/progress` lo sigue devolviendo con `estado: redeemed`
+/// hasta que vence): `onTap` bifurca según `slot.estado` — si está
+/// `pending`, navega al canje real (`/rewards/redeem/:id[?especial=true]`,
+/// sin cambios); si ya está `redeemed`, muestra un diálogo informativo en
+/// vez de reabrir el canje (ya no hay nada que canjear).
 class _RewardSlotCard extends StatelessWidget {
   const _RewardSlotCard({required this.slot});
 
   final RewardSlot slot;
 
+  Future<void> _showClaimedDialog(BuildContext context) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const ValueKey('reward-claimed-dialog'),
+        backgroundColor: CeltasColors.card,
+        title: const Text('Premio reclamado'),
+        content: Text(
+          'Ya reclamaste este premio el ${formatLongDate(slot.usedAt!)}.',
+        ),
+        actions: [
+          TextButton(onPressed: () => context.pop(), child: const Text('OK')),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final special = slot.esEspecial;
-    return GestureDetector(
-      key: ValueKey('reward-redeem-${slot.id}'),
-      onTap: () => context.push(
-        '/rewards/redeem/${slot.id}${special ? '?especial=true' : ''}',
-      ),
-      child: Container(
-        key: ValueKey('reward-slot-${slot.id}'),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: _slotCardDecoration,
-        child: Row(
-          children: [
-            _slotCardIcon(),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
+    final claimed = slot.estado == RewardRedemptionEstado.redeemed;
+
+    final card = Container(
+      key: ValueKey('reward-slot-${slot.id}'),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: _slotCardDecoration(especial: special),
+      child: Row(
+        children: [
+          _slotCardIcon(especial: special),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        special
+                            ? 'Premio especial disponible'
+                            : 'Premio disponible',
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.bodyLarge?.copyWith(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: CeltasColors.cream,
+                        ),
+                      ),
+                    ),
+                    if (special) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: CeltasColors.gold,
+                          borderRadius: BorderRadius.circular(
+                            CeltasRadii.pill,
+                          ),
+                        ),
                         child: Text(
-                          special
-                              ? 'Premio especial disponible'
-                              : 'Premio disponible',
-                          overflow: TextOverflow.ellipsis,
-                          style: textTheme.bodyLarge?.copyWith(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: CeltasColors.cream,
+                          '★ ESPECIAL',
+                          style: textTheme.labelSmall?.copyWith(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            color: CeltasColors.black,
+                            letterSpacing: 0.3,
                           ),
                         ),
                       ),
-                      if (special) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: CeltasColors.gold,
-                            borderRadius: BorderRadius.circular(
-                              CeltasRadii.pill,
-                            ),
-                          ),
-                          child: Text(
-                            '★ ESPECIAL',
-                            style: textTheme.labelSmall?.copyWith(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w800,
-                              color: CeltasColors.black,
-                              letterSpacing: 0.3,
-                            ),
+                    ],
+                    if (claimed) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: CeltasColors.surfaceSelected,
+                          border: Border.all(color: CeltasColors.textSubtle),
+                          borderRadius: BorderRadius.circular(
+                            CeltasRadii.pill,
                           ),
                         ),
-                      ],
+                        child: Text(
+                          '✓ Reclamado',
+                          style: textTheme.labelSmall?.copyWith(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            color: CeltasColors.textMuted,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ),
                     ],
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  claimed
+                      ? 'Reclamado el ${formatLongDate(slot.usedAt!)}'
+                      : formatDaysRemaining(slot.expiresAt),
+                  style: textTheme.bodySmall?.copyWith(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: claimed
+                        ? CeltasColors.textMuted
+                        : CeltasColors.redLight,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    formatDaysRemaining(slot.expiresAt),
-                    style: textTheme.bodySmall?.copyWith(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: CeltasColors.redLight,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            const Icon(
-              Icons.chevron_right_rounded,
-              size: 22,
-              color: CeltasColors.gold,
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          const Icon(
+            Icons.chevron_right_rounded,
+            size: 22,
+            color: CeltasColors.gold,
+          ),
+        ],
       ),
     );
-  }
-}
 
-/// Fila "Más estrellas, más premios" del mockup — CTA genérico y siempre
-/// presente (no depende de `premiosDisponibles`) que invita a seguir
-/// comprando para ganar más estrellas. Reemplaza el encabezado "Premios
-/// disponibles" + tarjetas grandes de la iteración anterior — mismo
-/// lenguaje visual que [_RewardSlotCard] para que ambos convivan sin
-/// desentonar cuando SÍ hay premios ganados arriba.
-///
-/// `onTap` va a `/home` (mismo destino real que "Seguir comprando" del
-/// overlay de celebración, ver `_RewardUnlockOverlayState.build`) — NO
-/// existe ninguna pantalla de "catálogo de premios" navegable en
-/// `app_router.dart` hoy (el canje solo se llega desde un
-/// `RewardSlot` real ya ganado, vía `/rewards/redeem/:redemptionId`), así
-/// que esta fila no puede llevar a un catálogo que no existe.
-class _RedeemCta extends StatelessWidget {
-  const _RedeemCta();
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     return GestureDetector(
-      key: const ValueKey('rewards-redeem-cta'),
-      onTap: () => context.go('/home'),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: _slotCardDecoration,
-        child: Row(
-          children: [
-            _slotCardIcon(),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Más estrellas, más premios',
-                    style: textTheme.bodyLarge?.copyWith(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: CeltasColors.cream,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Canjea tus estrellas por increíbles beneficios.',
-                    style: textTheme.bodySmall?.copyWith(
-                      fontSize: 12,
-                      color: CeltasColors.textMuted,
-                    ),
-                  ),
-                ],
-              ),
+      key: ValueKey('reward-redeem-${slot.id}'),
+      onTap: claimed
+          ? () => _showClaimedDialog(context)
+          : () => context.push(
+              '/rewards/redeem/${slot.id}${special ? '?especial=true' : ''}',
             ),
-            const SizedBox(width: 8),
-            const Icon(
-              Icons.chevron_right_rounded,
-              size: 22,
-              color: CeltasColors.gold,
-            ),
-          ],
-        ),
-      ),
+      child: claimed
+          ? ColorFiltered(
+              colorFilter: const ColorFilter.matrix(_greyscaleMatrix),
+              child: card,
+            )
+          : card,
     );
   }
 }
@@ -1721,7 +1743,7 @@ class _RewardUnlockOverlayState extends State<_RewardUnlockOverlay> {
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              'Tienes 15 días para reclamarla',
+                              'Tienes hasta fin de mes para reclamarlo',
                               style: textTheme.labelSmall?.copyWith(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,

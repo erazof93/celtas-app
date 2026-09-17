@@ -15,7 +15,13 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$RewardSlot {
 
- String get id; DateTime get expiresAt; bool get esEspecial;
+ String get id; DateTime get expiresAt; bool get esEspecial;// `@Default(pending)` (no `required`) a propósito: deja compilar sitios
+// que construyen un `RewardSlot` sin pensar en el estado (mayormente
+// tests ya existentes) asumiendo el caso más común — el contrato real
+// del backend SIEMPRE manda este campo.
+ RewardRedemptionEstado get estado;// `null` mientras `estado == pending` — fecha real de canje
+// (`RewardRedemption.usedAt`) cuando `estado == redeemed`.
+ DateTime? get usedAt;
 /// Create a copy of RewardSlot
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +34,16 @@ $RewardSlotCopyWith<RewardSlot> get copyWith => _$RewardSlotCopyWithImpl<RewardS
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is RewardSlot&&(identical(other.id, id) || other.id == id)&&(identical(other.expiresAt, expiresAt) || other.expiresAt == expiresAt)&&(identical(other.esEspecial, esEspecial) || other.esEspecial == esEspecial));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is RewardSlot&&(identical(other.id, id) || other.id == id)&&(identical(other.expiresAt, expiresAt) || other.expiresAt == expiresAt)&&(identical(other.esEspecial, esEspecial) || other.esEspecial == esEspecial)&&(identical(other.estado, estado) || other.estado == estado)&&(identical(other.usedAt, usedAt) || other.usedAt == usedAt));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,expiresAt,esEspecial);
+int get hashCode => Object.hash(runtimeType,id,expiresAt,esEspecial,estado,usedAt);
 
 @override
 String toString() {
-  return 'RewardSlot(id: $id, expiresAt: $expiresAt, esEspecial: $esEspecial)';
+  return 'RewardSlot(id: $id, expiresAt: $expiresAt, esEspecial: $esEspecial, estado: $estado, usedAt: $usedAt)';
 }
 
 
@@ -48,7 +54,7 @@ abstract mixin class $RewardSlotCopyWith<$Res>  {
   factory $RewardSlotCopyWith(RewardSlot value, $Res Function(RewardSlot) _then) = _$RewardSlotCopyWithImpl;
 @useResult
 $Res call({
- String id, DateTime expiresAt, bool esEspecial
+ String id, DateTime expiresAt, bool esEspecial, RewardRedemptionEstado estado, DateTime? usedAt
 });
 
 
@@ -65,12 +71,14 @@ class _$RewardSlotCopyWithImpl<$Res>
 
 /// Create a copy of RewardSlot
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? expiresAt = null,Object? esEspecial = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? expiresAt = null,Object? esEspecial = null,Object? estado = null,Object? usedAt = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,expiresAt: null == expiresAt ? _self.expiresAt : expiresAt // ignore: cast_nullable_to_non_nullable
 as DateTime,esEspecial: null == esEspecial ? _self.esEspecial : esEspecial // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,estado: null == estado ? _self.estado : estado // ignore: cast_nullable_to_non_nullable
+as RewardRedemptionEstado,usedAt: freezed == usedAt ? _self.usedAt : usedAt // ignore: cast_nullable_to_non_nullable
+as DateTime?,
   ));
 }
 
@@ -155,10 +163,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  DateTime expiresAt,  bool esEspecial)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  DateTime expiresAt,  bool esEspecial,  RewardRedemptionEstado estado,  DateTime? usedAt)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _RewardSlot() when $default != null:
-return $default(_that.id,_that.expiresAt,_that.esEspecial);case _:
+return $default(_that.id,_that.expiresAt,_that.esEspecial,_that.estado,_that.usedAt);case _:
   return orElse();
 
 }
@@ -176,10 +184,10 @@ return $default(_that.id,_that.expiresAt,_that.esEspecial);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  DateTime expiresAt,  bool esEspecial)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  DateTime expiresAt,  bool esEspecial,  RewardRedemptionEstado estado,  DateTime? usedAt)  $default,) {final _that = this;
 switch (_that) {
 case _RewardSlot():
-return $default(_that.id,_that.expiresAt,_that.esEspecial);case _:
+return $default(_that.id,_that.expiresAt,_that.esEspecial,_that.estado,_that.usedAt);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -196,10 +204,10 @@ return $default(_that.id,_that.expiresAt,_that.esEspecial);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  DateTime expiresAt,  bool esEspecial)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  DateTime expiresAt,  bool esEspecial,  RewardRedemptionEstado estado,  DateTime? usedAt)?  $default,) {final _that = this;
 switch (_that) {
 case _RewardSlot() when $default != null:
-return $default(_that.id,_that.expiresAt,_that.esEspecial);case _:
+return $default(_that.id,_that.expiresAt,_that.esEspecial,_that.estado,_that.usedAt);case _:
   return null;
 
 }
@@ -211,12 +219,20 @@ return $default(_that.id,_that.expiresAt,_that.esEspecial);case _:
 @JsonSerializable()
 
 class _RewardSlot implements RewardSlot {
-  const _RewardSlot({required this.id, required this.expiresAt, required this.esEspecial});
+  const _RewardSlot({required this.id, required this.expiresAt, required this.esEspecial, this.estado = RewardRedemptionEstado.pending, this.usedAt});
   factory _RewardSlot.fromJson(Map<String, dynamic> json) => _$RewardSlotFromJson(json);
 
 @override final  String id;
 @override final  DateTime expiresAt;
 @override final  bool esEspecial;
+// `@Default(pending)` (no `required`) a propósito: deja compilar sitios
+// que construyen un `RewardSlot` sin pensar en el estado (mayormente
+// tests ya existentes) asumiendo el caso más común — el contrato real
+// del backend SIEMPRE manda este campo.
+@override@JsonKey() final  RewardRedemptionEstado estado;
+// `null` mientras `estado == pending` — fecha real de canje
+// (`RewardRedemption.usedAt`) cuando `estado == redeemed`.
+@override final  DateTime? usedAt;
 
 /// Create a copy of RewardSlot
 /// with the given fields replaced by the non-null parameter values.
@@ -231,16 +247,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _RewardSlot&&(identical(other.id, id) || other.id == id)&&(identical(other.expiresAt, expiresAt) || other.expiresAt == expiresAt)&&(identical(other.esEspecial, esEspecial) || other.esEspecial == esEspecial));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _RewardSlot&&(identical(other.id, id) || other.id == id)&&(identical(other.expiresAt, expiresAt) || other.expiresAt == expiresAt)&&(identical(other.esEspecial, esEspecial) || other.esEspecial == esEspecial)&&(identical(other.estado, estado) || other.estado == estado)&&(identical(other.usedAt, usedAt) || other.usedAt == usedAt));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,expiresAt,esEspecial);
+int get hashCode => Object.hash(runtimeType,id,expiresAt,esEspecial,estado,usedAt);
 
 @override
 String toString() {
-  return 'RewardSlot(id: $id, expiresAt: $expiresAt, esEspecial: $esEspecial)';
+  return 'RewardSlot(id: $id, expiresAt: $expiresAt, esEspecial: $esEspecial, estado: $estado, usedAt: $usedAt)';
 }
 
 
@@ -251,7 +267,7 @@ abstract mixin class _$RewardSlotCopyWith<$Res> implements $RewardSlotCopyWith<$
   factory _$RewardSlotCopyWith(_RewardSlot value, $Res Function(_RewardSlot) _then) = __$RewardSlotCopyWithImpl;
 @override @useResult
 $Res call({
- String id, DateTime expiresAt, bool esEspecial
+ String id, DateTime expiresAt, bool esEspecial, RewardRedemptionEstado estado, DateTime? usedAt
 });
 
 
@@ -268,12 +284,14 @@ class __$RewardSlotCopyWithImpl<$Res>
 
 /// Create a copy of RewardSlot
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? expiresAt = null,Object? esEspecial = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? expiresAt = null,Object? esEspecial = null,Object? estado = null,Object? usedAt = freezed,}) {
   return _then(_RewardSlot(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,expiresAt: null == expiresAt ? _self.expiresAt : expiresAt // ignore: cast_nullable_to_non_nullable
 as DateTime,esEspecial: null == esEspecial ? _self.esEspecial : esEspecial // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,estado: null == estado ? _self.estado : estado // ignore: cast_nullable_to_non_nullable
+as RewardRedemptionEstado,usedAt: freezed == usedAt ? _self.usedAt : usedAt // ignore: cast_nullable_to_non_nullable
+as DateTime?,
   ));
 }
 

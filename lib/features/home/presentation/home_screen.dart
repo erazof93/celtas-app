@@ -9,6 +9,7 @@ import 'package:celtas_mobile/features/home/application/home_providers.dart';
 import 'package:celtas_mobile/features/home/data/models/banner.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_category.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
+import 'package:celtas_mobile/features/home/presentation/widgets/product_images_terms_sheet.dart';
 import 'package:celtas_mobile/features/notifications/application/notification_providers.dart';
 import 'package:celtas_mobile/features/settings/application/settings_providers.dart';
 import 'package:celtas_mobile/features/settings/data/models/business_hours.dart';
@@ -279,6 +280,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           data: (categories) => categories.isEmpty
                               ? const _EmptyMenu()
                               : _MenuList(categories: categories),
+                        ),
+                        const SizedBox(height: 20),
+                        Center(
+                          child: GestureDetector(
+                            key: const ValueKey('home-terms-link'),
+                            onTap: () =>
+                                ProductImagesTermsSheet.show(context),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.info_outlined,
+                                  size: 18,
+                                  color: CeltasColors.textMuted,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Términos y condiciones',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        fontSize: 12,
+                                        color: CeltasColors.textMuted,
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ],
                     ),

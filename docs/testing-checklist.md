@@ -3319,6 +3319,101 @@ integración real (no descartado esta vez) contra el mecanismo exacto que falló
 
 ---
 
+## Auditoría: Estrellas — sexta iteración visual (fondo sólido + eliminación de `_RedeemCta`)
+
+Alcance: cambios sin commitear sobre `HEAD` (`879004e`) en `lib/features/rewards/presentation/
+rewards_screen.dart` + `test/features/rewards/presentation/rewards_screen_test.dart`. (1) Se
+elimina por completo `_RedeemCta` ("Más estrellas, más premios") — orden final: header, tarjeta
+única del tablero, premios disponibles (si existen), "Términos y condiciones", bottom nav. (2) El
+grid de estrellas ya no tiene `Container` propio — vive dentro del mismo `_cardDecoration` que
+"TU PROGRESO". (3) `_cardDecoration`/`_slotCardDecoration` pasan de `LinearGradient` dorado a
+relleno sólido `CeltasColors.black` + borde dorado.
+
+`flutter analyze` (salida cruda propia, suite completa): `1 issue found` — `info -
+unnecessary_await`/`unawaited_futures` en `lib/features/menu/presentation/
+product_detail_screen.dart:284`, **no relacionado** con esta sesión (ese archivo no está en el
+diff sin commitear) y es solo `info`, no error/warning. `flutter test test/features/rewards/`
+(salida cruda propia): `00:04 +45: All tests passed!`, incluye el test nuevo de esta iteración
+(`'fondo sólido (sexta iteración): tarjeta del tablero y fila de premio disponible son
+CeltasColors.black sin degradado...'`) y el de la quinta (`'no hay fila "Más estrellas, más
+premios"...'`), ambos verdes.
+
+✅ Pasó:
+- `grep -rn "Color(0x" lib/features/rewards/` → 0 resultados, se mantiene la regla de no
+  `Color(0xFF...)` sueltos.
+- `_RedeemCta` está genuinamente eliminado del árbol de widgets: `grep -rn "_RedeemCta"
+  lib/features/rewards/presentation/rewards_screen.dart` solo devuelve 2 comentarios de
+  documentación (ver hallazgo abajo), ninguna instanciación real. Barrido de todo `lib/`
+  confirma que no queda ninguna otra referencia en el resto del proyecto.
+- El test `'no hay fila "Más estrellas, más premios"...'`
+  (`rewards_screen_test.dart:1094-1117`) verifica tanto la ausencia del texto **como** de la key
+  `rewards-redeem-cta`, y que sin premios disponibles la pantalla pasa directo del tablero a
+  "Términos y condiciones" — cobertura de regresión real, no solo "el texto ya no aparece".
+- El grid de estrellas y la sección "TU PROGRESO" comparten un solo `_cardDecoration`
+  (confirmado leyendo `_ProgressCard.build`, un único `Container` con el grid + `Divider` +
+  fila de progreso adentro), cubierto por el test dedicado de esta iteración.
+- `reward_terms_sheet.dart` — el hallazgo de la auditoría anterior (el texto asumía que el
+  premio especial siempre es la meta más alta) sigue corregido, no hay regresión.
+
+❌ Falló (no bloqueante, pero real, a corregir):
+- **`dart format --set-exit-if-changed lib/features/rewards/ test/features/rewards/` no pasa**
+  (salida cruda propia: `Formatted 19 files (3 changed)`). Los 2 archivos tocados esta sesión
+  (`rewards_screen.dart`, `rewards_screen_test.dart`) quedaron sin pasar por `dart format` —
+  diffs reales de formato (llamadas multilínea que el formatter colapsa a una sola línea, p.ej.
+  `Positioned(top: -170, left: -170, child: _cornerArc())`). Auditorías anteriores de este mismo
+  módulo reportaban esto limpio (`Formatted 18 files (0 changed)`), así que es una regresión de
+  higiene de esta ronda, no un problema preexistente. Un tercer archivo,
+  `test/features/rewards/application/reward_progress_provider_stale_user_test.dart`, también
+  tiene drift de formato pero es preexistente (fechado 2026-09-14, no está en el diff sin
+  commitear de esta sesión).
+- **Los colores de `_cardDecoration`/`_slotCardDecoration` no son el valor exacto del CSS
+  exportado, aunque la diferencia visual sea sutil** — el comentario del código dice "el fondo
+  del mockup de referencia es prácticamente negro puro" y usa `CeltasColors.black` (`#0D0D0D`),
+  pero el contenedor real del tablero en el mockup (`design-reference/estrellas01progreso.dc.
+  html:27` y `:90`, `.card{background:var(--card);...}`) usa `--card:#141110`, que es
+  `CeltasColors.card` en el tema Dart, no `CeltasColors.black`. La fila "premio disponible" del
+  mockup (línea 214) usa `background:var(--surfaceSelected)` (`#1B140D` = `CeltasColors.
+  surfaceSelected`), no negro tampoco. La diferencia entre `#0D0D0D` y `#141110` es mínima (~7
+  puntos de RGB) pero entre `#0D0D0D` y `#1B140D` ya es más notoria (~14 puntos). No contradice
+  la conclusión visual del dispositivo real (ambos leen "casi negro"), pero sí se aparta de la
+  regla del proyecto de usar el valor exacto del CSS exportado en vez de una aproximación a ojo.
+- **La fila de premio ESPECIAL perdió su tratamiento visual distintivo respecto a la normal**: en
+  el mockup (`estrellas01progreso.dc.html:228`) el premio especial tiene un fondo con gradiente
+  tinte dorado (`linear-gradient(135deg,rgba(255,184,0,.16),var(--surfaceSelected) 55%)`), borde
+  de 1.5px (vs 1px normal) y un glow propio (`box-shadow:0 0 26px rgba(255,184,0,.35)`) además del
+  badge "★ ESPECIAL". El código actual aplica la MISMA constante `_slotCardDecoration` a ambas
+  filas (normal y especial) sin condicionar por `slot.esEspecial` — la única diferencia visual
+  entre ambas filas quedó reducida al badge y al texto, perdiendo el glow/fondo distintivo que
+  tenía el mockup para la especial. No hay test que cubra esta diferencia de decoración (los
+  tests existentes solo verifican el badge/texto, no el `boxShadow`/gradiente de la fila).
+
+⚠️ Riesgos / casos borde no cubiertos, no bloqueantes:
+- Comentarios de documentación colgantes: `rewards_screen.dart:1297` y `:1317` siguen
+  referenciando `[_RedeemCta]` en un doc comment (`/// Ícono circular izquierdo compartido por
+  [_RewardSlotCard] y [_RedeemCta]...`, `/// ...en el mismo lenguaje visual elegante/discreto que
+  [_RedeemCta]...`) — esa clase ya no existe en el archivo. `flutter analyze` no lo detecta (el
+  lint `comment_references` no está habilitado en `analysis_options.yaml`), así que no bloquea,
+  pero es documentación engañosa sobre un widget eliminado en esta misma iteración.
+- No verifiqué de forma independiente el flujo en dispositivo/emulador real ni las capturas
+  mencionadas en el encargo (comparación contra `design-reference/estrellas/screenshot.png`) —
+  tomo como reportado por la sesión principal, no confirmado por mí. Sigue pendiente el ítem ya
+  documentado arriba (línea ~2853) de verificación E2E completa del módulo en dispositivo real.
+- `ROADMAP.md` (módulo 11, ✅ COMPLETO) no tiene ningún bullet que documente esta sexta iteración
+  visual específicamente — queda a criterio de la sesión principal si amerita una entrada nueva o
+  si se considera un detalle menor dentro del módulo ya cerrado.
+
+Veredicto: **LISTO con hallazgos menores no bloqueantes.** Ningún hallazgo es funcional (la
+eliminación de `_RedeemCta` y la fusión del contenedor están correctamente implementadas y
+cubiertas por tests reales), así que no se requiere ningún cambio en los checkboxes de
+`ROADMAP.md` (el módulo ya estaba marcado completo). Se recomienda antes del próximo commit: (1)
+correr `dart format` sobre los 2 archivos tocados, (2) decidir si `_cardDecoration`/
+`_slotCardDecoration` deberían usar `CeltasColors.card`/`CeltasColors.surfaceSelected` en vez de
+`CeltasColors.black` para igualar el token exacto del mockup, (3) decidir si la fila de premio
+especial debe recuperar un tratamiento visual propio, y (4) limpiar las 2 referencias a
+`[_RedeemCta]` en los doc comments.
+
+---
+
 ## Reporte de auditoría (formato esperado del @tester)
 
 ```
