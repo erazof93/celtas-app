@@ -54,6 +54,11 @@ void main() {
         name: 'Salsas Burger',
         price: 12,
         sauces: [mayo, mostaza],
+        // Sin `groupRequired` (opcional, default `false`), max = todo el
+        // catálogo de prueba (2) para permitir elegir ambas a la vez —
+        // mismo criterio que los fixtures opcionales de bebidas/porciones
+        // extras (i-4/i-6), que también fijan su propio máximo explícito.
+        sauceGroupMaxSelectable: 2,
       ),
       // Bebidas opcionales, máximo 1 (para poder violar el máximo con 2
       // opciones reales, sin necesitar una tercera).
@@ -89,6 +94,18 @@ void main() {
         extraPortions: [papasExtra, quesoExtra],
         extraPortionsGroupRequired: true,
         extraPortionsGroupMaxSelectable: 1,
+      ),
+      // Salsas obligatorias, máximo 1 — mismo criterio que bebidas/porciones
+      // extras obligatorias (`sauceGroupRequired`/`Max`, ver
+      // `menu.service.ts`/`OrdersService.validateGroupSelection` en el
+      // backend real).
+      PublicMenuItem(
+        id: 'i-8',
+        name: 'Combo Salsa Obligatoria',
+        price: 26,
+        sauces: [mayo, mostaza],
+        sauceGroupRequired: true,
+        sauceGroupMaxSelectable: 1,
       ),
     ],
   );
@@ -445,9 +462,10 @@ void main() {
         expect(find.text('Elige tus cremas'), findsOneWidget);
         expect(find.text('Listo'), findsNothing);
         expect(find.text('✓ Seleccionado'), findsNothing);
-        // Las salsas nunca son obligatorias (el contrato del backend no
-        // expone `groupRequired`/`Max` para esta categoría) — el campo
-        // nunca muestra la etiqueta "Obligatorio".
+        // i-3 no tiene `sauceGroupRequired` configurado (default `false`,
+        // ver fixture) — el campo no muestra la etiqueta "Obligatorio". Un
+        // producto con salsas obligatorias SÍ la muestra, ver el grupo
+        // "salsas obligatorias" más abajo (fixture i-8).
         expect(find.text('Obligatorio'), findsNothing);
       },
     );
@@ -487,8 +505,8 @@ void main() {
         await selectDialogOptions(tester, 'sauce', ['s-1']);
 
         // Resumen del campo, ya cerrado el diálogo: "✓ Seleccionado", ni
-        // el nombre real ni "Listo" (las salsas nunca son obligatorias, así
-        // que tampoco hay badge acá) — el detalle de qué se eligió solo se
+        // el nombre real ni "Listo" (i-3 es un grupo opcional, así que
+        // tampoco hay badge acá) — el detalle de qué se eligió solo se
         // ve abriendo el diálogo (ver `_OptionGroupDropdown._summaryText`).
         expect(find.text('✓ Seleccionado'), findsOneWidget);
         expect(find.text('Listo'), findsNothing);
@@ -528,8 +546,8 @@ void main() {
 
     testWidgets(
       'sin elegir ninguna opción, tocar "Agregar" agrega la fila igual '
-      '— las salsas son un grupo opcional (`groupRequired: false`) y ya '
-      'no bloquean nada sin importar la selección',
+      '— i-3 es un grupo opcional (`sauceGroupRequired: false`) y no '
+      'bloquea nada sin importar la selección',
       (tester) async {
         final (container, _) = await pumpDetail(tester, productId: 'i-3');
 
@@ -695,6 +713,102 @@ void main() {
         final item = container.read(cartProvider).items.single;
         expect(item.explicitlyNoSauces, isTrue);
         expect(item.selectedSauces, isEmpty);
+      },
+    );
+
+    testWidgets(
+      'salsas obligatorias: el campo muestra el badge "Obligatorio" dentro '
+      'del dropdown mientras no hay nada elegido',
+      (tester) async {
+        await pumpDetail(tester, productId: 'i-8');
+
+        expect(find.text('Obligatorio'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'salsas obligatorias: el badge del campo pasa de "Obligatorio" (nada '
+      'elegido) a "Listo" (verde) apenas se elige una salsa',
+      (tester) async {
+        await pumpDetail(tester, productId: 'i-8');
+
+        expect(find.text('Obligatorio'), findsOneWidget);
+        expect(find.text('Listo'), findsNothing);
+
+        await selectDialogOptions(tester, 'sauce', ['s-1']);
+
+        expect(find.text('Obligatorio'), findsNothing);
+        expect(find.text('Listo'), findsOneWidget);
+        expect(find.text('✓ Seleccionado'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'salsas obligatorias: el diálogo no ofrece el checkbox "Sin salsas" '
+      'y el botón arranca deshabilitado',
+      (tester) async {
+        await pumpDetail(tester, productId: 'i-8');
+
+        await openDropdown(tester, 'sauce');
+        expect(
+          find.byKey(const ValueKey('detail-sauce-option-none')),
+          findsNothing,
+        );
+        await cancelDialog(tester, 'sauce');
+
+        final button = tester.widget<CeltasButton>(
+          find.byKey(const ValueKey('detail-add')),
+        );
+        expect(button.enabled, isFalse);
+      },
+    );
+
+    testWidgets(
+      'salsas obligatorias: elegir una salsa habilita el botón y agrega la '
+      'fila con la salsa elegida',
+      (tester) async {
+        final (container, _) = await pumpDetail(tester, productId: 'i-8');
+
+        await selectDialogOptions(tester, 'sauce', ['s-1']);
+
+        final button = tester.widget<CeltasButton>(
+          find.byKey(const ValueKey('detail-add')),
+        );
+        expect(button.enabled, isTrue);
+
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
+
+        final item = container.read(cartProvider).items.single;
+        expect(item.selectedSauces, [mayo]);
+        expect(item.explicitlyNoSauces, isFalse);
+      },
+    );
+
+    testWidgets(
+      'salsas obligatorias: seleccionar más salsas que el máximo permitido '
+      'bloquea el botón y muestra el aviso "Máximo X" en el SnackBar al '
+      'tocar "Agregar"',
+      (tester) async {
+        await pumpDetail(tester, productId: 'i-8'); // max = 1
+
+        await selectDialogOptions(tester, 'sauce', ['s-1', 's-2']);
+
+        final button = tester.widget<CeltasButton>(
+          find.byKey(const ValueKey('detail-add')),
+        );
+        expect(button.enabled, isFalse);
+
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
+        expect(
+          find.descendant(
+            of: find.byType(SnackBar),
+            matching: find.textContaining('Máximo 1 salsa'),
+          ),
+          findsOneWidget,
+        );
+        await tester.pump(const Duration(milliseconds: 900));
       },
     );
 

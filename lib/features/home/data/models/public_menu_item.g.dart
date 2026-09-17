@@ -18,6 +18,9 @@ _PublicMenuItem _$PublicMenuItemFromJson(Map<String, dynamic> json) =>
               ?.map((e) => SauceOption.fromJson(e as Map<String, dynamic>))
               .toList() ??
           const <SauceOption>[],
+      sauceGroupRequired: json['sauceGroupRequired'] as bool? ?? false,
+      sauceGroupMaxSelectable:
+          (json['sauceGroupMaxSelectable'] as num?)?.toInt() ?? 0,
       beverages:
           (json['beverages'] as List<dynamic>?)
               ?.map((e) => BeverageOption.fromJson(e as Map<String, dynamic>))
@@ -48,6 +51,8 @@ Map<String, dynamic> _$PublicMenuItemToJson(
   'price': instance.price,
   'image': instance.image,
   'sauces': instance.sauces,
+  'sauceGroupRequired': instance.sauceGroupRequired,
+  'sauceGroupMaxSelectable': instance.sauceGroupMaxSelectable,
   'beverages': instance.beverages,
   'beverageGroupRequired': instance.beverageGroupRequired,
   'beverageGroupMaxSelectable': instance.beverageGroupMaxSelectable,

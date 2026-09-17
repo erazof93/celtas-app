@@ -52,10 +52,11 @@ class AddressSnapshotInput {
 ///     `beverageIds`/`extraPortionIds` son el MISMO tri-state que `sauceIds`
 ///     (`resolveSelectedPriced` en el backend), a partir de
 ///     `CartItem.selectedBeverages`/`explicitlyNoBeverages` y
-///     `selectedExtraPortions`/`explicitlyNoExtraPortions` — a diferencia de
-///     las salsas, el backend valida además `beverageGroupRequired`/`Max` y
-///     `extraPortionsGroupRequired`/`Max` (`OrdersService.
-///     validateGroupSelection`) y SÍ suman precio al `subtotal` del ítem.
+///     `selectedExtraPortions`/`explicitlyNoExtraPortions`. El backend valida
+///     `sauceGroupRequired`/`Max`, `beverageGroupRequired`/`Max` y
+///     `extraPortionsGroupRequired`/`Max` por igual (`OrdersService.
+///     validateGroupSelection`) — a diferencia de las salsas, bebidas y
+///     porciones extras SÍ suman precio al `subtotal` del ítem.
 ///     `comment` (texto libre, opcional, `MaxLength(140)` en el backend) se
 ///     manda SOLO si queda contenido real después de `trim()` — mismo
 ///     criterio que `sauceIds`/`addressSnapshot`/`couponCode`: nunca se

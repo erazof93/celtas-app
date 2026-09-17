@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$PublicMenuItem {
 
- String get id; String get name; String? get description; double get price; String? get image; List<SauceOption> get sauces; List<BeverageOption> get beverages; bool get beverageGroupRequired; int get beverageGroupMaxSelectable; List<ExtraPortionOption> get extraPortions; bool get extraPortionsGroupRequired; int get extraPortionsGroupMaxSelectable;
+ String get id; String get name; String? get description; double get price; String? get image; List<SauceOption> get sauces; bool get sauceGroupRequired; int get sauceGroupMaxSelectable; List<BeverageOption> get beverages; bool get beverageGroupRequired; int get beverageGroupMaxSelectable; List<ExtraPortionOption> get extraPortions; bool get extraPortionsGroupRequired; int get extraPortionsGroupMaxSelectable;
 /// Create a copy of PublicMenuItem
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +28,16 @@ $PublicMenuItemCopyWith<PublicMenuItem> get copyWith => _$PublicMenuItemCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is PublicMenuItem&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.description, description) || other.description == description)&&(identical(other.price, price) || other.price == price)&&(identical(other.image, image) || other.image == image)&&const DeepCollectionEquality().equals(other.sauces, sauces)&&const DeepCollectionEquality().equals(other.beverages, beverages)&&(identical(other.beverageGroupRequired, beverageGroupRequired) || other.beverageGroupRequired == beverageGroupRequired)&&(identical(other.beverageGroupMaxSelectable, beverageGroupMaxSelectable) || other.beverageGroupMaxSelectable == beverageGroupMaxSelectable)&&const DeepCollectionEquality().equals(other.extraPortions, extraPortions)&&(identical(other.extraPortionsGroupRequired, extraPortionsGroupRequired) || other.extraPortionsGroupRequired == extraPortionsGroupRequired)&&(identical(other.extraPortionsGroupMaxSelectable, extraPortionsGroupMaxSelectable) || other.extraPortionsGroupMaxSelectable == extraPortionsGroupMaxSelectable));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is PublicMenuItem&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.description, description) || other.description == description)&&(identical(other.price, price) || other.price == price)&&(identical(other.image, image) || other.image == image)&&const DeepCollectionEquality().equals(other.sauces, sauces)&&(identical(other.sauceGroupRequired, sauceGroupRequired) || other.sauceGroupRequired == sauceGroupRequired)&&(identical(other.sauceGroupMaxSelectable, sauceGroupMaxSelectable) || other.sauceGroupMaxSelectable == sauceGroupMaxSelectable)&&const DeepCollectionEquality().equals(other.beverages, beverages)&&(identical(other.beverageGroupRequired, beverageGroupRequired) || other.beverageGroupRequired == beverageGroupRequired)&&(identical(other.beverageGroupMaxSelectable, beverageGroupMaxSelectable) || other.beverageGroupMaxSelectable == beverageGroupMaxSelectable)&&const DeepCollectionEquality().equals(other.extraPortions, extraPortions)&&(identical(other.extraPortionsGroupRequired, extraPortionsGroupRequired) || other.extraPortionsGroupRequired == extraPortionsGroupRequired)&&(identical(other.extraPortionsGroupMaxSelectable, extraPortionsGroupMaxSelectable) || other.extraPortionsGroupMaxSelectable == extraPortionsGroupMaxSelectable));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,name,description,price,image,const DeepCollectionEquality().hash(sauces),const DeepCollectionEquality().hash(beverages),beverageGroupRequired,beverageGroupMaxSelectable,const DeepCollectionEquality().hash(extraPortions),extraPortionsGroupRequired,extraPortionsGroupMaxSelectable);
+int get hashCode => Object.hash(runtimeType,id,name,description,price,image,const DeepCollectionEquality().hash(sauces),sauceGroupRequired,sauceGroupMaxSelectable,const DeepCollectionEquality().hash(beverages),beverageGroupRequired,beverageGroupMaxSelectable,const DeepCollectionEquality().hash(extraPortions),extraPortionsGroupRequired,extraPortionsGroupMaxSelectable);
 
 @override
 String toString() {
-  return 'PublicMenuItem(id: $id, name: $name, description: $description, price: $price, image: $image, sauces: $sauces, beverages: $beverages, beverageGroupRequired: $beverageGroupRequired, beverageGroupMaxSelectable: $beverageGroupMaxSelectable, extraPortions: $extraPortions, extraPortionsGroupRequired: $extraPortionsGroupRequired, extraPortionsGroupMaxSelectable: $extraPortionsGroupMaxSelectable)';
+  return 'PublicMenuItem(id: $id, name: $name, description: $description, price: $price, image: $image, sauces: $sauces, sauceGroupRequired: $sauceGroupRequired, sauceGroupMaxSelectable: $sauceGroupMaxSelectable, beverages: $beverages, beverageGroupRequired: $beverageGroupRequired, beverageGroupMaxSelectable: $beverageGroupMaxSelectable, extraPortions: $extraPortions, extraPortionsGroupRequired: $extraPortionsGroupRequired, extraPortionsGroupMaxSelectable: $extraPortionsGroupMaxSelectable)';
 }
 
 
@@ -48,7 +48,7 @@ abstract mixin class $PublicMenuItemCopyWith<$Res>  {
   factory $PublicMenuItemCopyWith(PublicMenuItem value, $Res Function(PublicMenuItem) _then) = _$PublicMenuItemCopyWithImpl;
 @useResult
 $Res call({
- String id, String name, String? description, double price, String? image, List<SauceOption> sauces, List<BeverageOption> beverages, bool beverageGroupRequired, int beverageGroupMaxSelectable, List<ExtraPortionOption> extraPortions, bool extraPortionsGroupRequired, int extraPortionsGroupMaxSelectable
+ String id, String name, String? description, double price, String? image, List<SauceOption> sauces, bool sauceGroupRequired, int sauceGroupMaxSelectable, List<BeverageOption> beverages, bool beverageGroupRequired, int beverageGroupMaxSelectable, List<ExtraPortionOption> extraPortions, bool extraPortionsGroupRequired, int extraPortionsGroupMaxSelectable
 });
 
 
@@ -65,7 +65,7 @@ class _$PublicMenuItemCopyWithImpl<$Res>
 
 /// Create a copy of PublicMenuItem
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? price = null,Object? image = freezed,Object? sauces = null,Object? beverages = null,Object? beverageGroupRequired = null,Object? beverageGroupMaxSelectable = null,Object? extraPortions = null,Object? extraPortionsGroupRequired = null,Object? extraPortionsGroupMaxSelectable = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? price = null,Object? image = freezed,Object? sauces = null,Object? sauceGroupRequired = null,Object? sauceGroupMaxSelectable = null,Object? beverages = null,Object? beverageGroupRequired = null,Object? beverageGroupMaxSelectable = null,Object? extraPortions = null,Object? extraPortionsGroupRequired = null,Object? extraPortionsGroupMaxSelectable = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -73,7 +73,9 @@ as String,description: freezed == description ? _self.description : description 
 as String?,price: null == price ? _self.price : price // ignore: cast_nullable_to_non_nullable
 as double,image: freezed == image ? _self.image : image // ignore: cast_nullable_to_non_nullable
 as String?,sauces: null == sauces ? _self.sauces : sauces // ignore: cast_nullable_to_non_nullable
-as List<SauceOption>,beverages: null == beverages ? _self.beverages : beverages // ignore: cast_nullable_to_non_nullable
+as List<SauceOption>,sauceGroupRequired: null == sauceGroupRequired ? _self.sauceGroupRequired : sauceGroupRequired // ignore: cast_nullable_to_non_nullable
+as bool,sauceGroupMaxSelectable: null == sauceGroupMaxSelectable ? _self.sauceGroupMaxSelectable : sauceGroupMaxSelectable // ignore: cast_nullable_to_non_nullable
+as int,beverages: null == beverages ? _self.beverages : beverages // ignore: cast_nullable_to_non_nullable
 as List<BeverageOption>,beverageGroupRequired: null == beverageGroupRequired ? _self.beverageGroupRequired : beverageGroupRequired // ignore: cast_nullable_to_non_nullable
 as bool,beverageGroupMaxSelectable: null == beverageGroupMaxSelectable ? _self.beverageGroupMaxSelectable : beverageGroupMaxSelectable // ignore: cast_nullable_to_non_nullable
 as int,extraPortions: null == extraPortions ? _self.extraPortions : extraPortions // ignore: cast_nullable_to_non_nullable
@@ -164,10 +166,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  double price,  String? image,  List<SauceOption> sauces,  List<BeverageOption> beverages,  bool beverageGroupRequired,  int beverageGroupMaxSelectable,  List<ExtraPortionOption> extraPortions,  bool extraPortionsGroupRequired,  int extraPortionsGroupMaxSelectable)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  double price,  String? image,  List<SauceOption> sauces,  bool sauceGroupRequired,  int sauceGroupMaxSelectable,  List<BeverageOption> beverages,  bool beverageGroupRequired,  int beverageGroupMaxSelectable,  List<ExtraPortionOption> extraPortions,  bool extraPortionsGroupRequired,  int extraPortionsGroupMaxSelectable)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _PublicMenuItem() when $default != null:
-return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_that.sauces,_that.beverages,_that.beverageGroupRequired,_that.beverageGroupMaxSelectable,_that.extraPortions,_that.extraPortionsGroupRequired,_that.extraPortionsGroupMaxSelectable);case _:
+return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_that.sauces,_that.sauceGroupRequired,_that.sauceGroupMaxSelectable,_that.beverages,_that.beverageGroupRequired,_that.beverageGroupMaxSelectable,_that.extraPortions,_that.extraPortionsGroupRequired,_that.extraPortionsGroupMaxSelectable);case _:
   return orElse();
 
 }
@@ -185,10 +187,10 @@ return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_t
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  double price,  String? image,  List<SauceOption> sauces,  List<BeverageOption> beverages,  bool beverageGroupRequired,  int beverageGroupMaxSelectable,  List<ExtraPortionOption> extraPortions,  bool extraPortionsGroupRequired,  int extraPortionsGroupMaxSelectable)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  double price,  String? image,  List<SauceOption> sauces,  bool sauceGroupRequired,  int sauceGroupMaxSelectable,  List<BeverageOption> beverages,  bool beverageGroupRequired,  int beverageGroupMaxSelectable,  List<ExtraPortionOption> extraPortions,  bool extraPortionsGroupRequired,  int extraPortionsGroupMaxSelectable)  $default,) {final _that = this;
 switch (_that) {
 case _PublicMenuItem():
-return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_that.sauces,_that.beverages,_that.beverageGroupRequired,_that.beverageGroupMaxSelectable,_that.extraPortions,_that.extraPortionsGroupRequired,_that.extraPortionsGroupMaxSelectable);case _:
+return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_that.sauces,_that.sauceGroupRequired,_that.sauceGroupMaxSelectable,_that.beverages,_that.beverageGroupRequired,_that.beverageGroupMaxSelectable,_that.extraPortions,_that.extraPortionsGroupRequired,_that.extraPortionsGroupMaxSelectable);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -205,10 +207,10 @@ return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_t
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  String? description,  double price,  String? image,  List<SauceOption> sauces,  List<BeverageOption> beverages,  bool beverageGroupRequired,  int beverageGroupMaxSelectable,  List<ExtraPortionOption> extraPortions,  bool extraPortionsGroupRequired,  int extraPortionsGroupMaxSelectable)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  String? description,  double price,  String? image,  List<SauceOption> sauces,  bool sauceGroupRequired,  int sauceGroupMaxSelectable,  List<BeverageOption> beverages,  bool beverageGroupRequired,  int beverageGroupMaxSelectable,  List<ExtraPortionOption> extraPortions,  bool extraPortionsGroupRequired,  int extraPortionsGroupMaxSelectable)?  $default,) {final _that = this;
 switch (_that) {
 case _PublicMenuItem() when $default != null:
-return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_that.sauces,_that.beverages,_that.beverageGroupRequired,_that.beverageGroupMaxSelectable,_that.extraPortions,_that.extraPortionsGroupRequired,_that.extraPortionsGroupMaxSelectable);case _:
+return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_that.sauces,_that.sauceGroupRequired,_that.sauceGroupMaxSelectable,_that.beverages,_that.beverageGroupRequired,_that.beverageGroupMaxSelectable,_that.extraPortions,_that.extraPortionsGroupRequired,_that.extraPortionsGroupMaxSelectable);case _:
   return null;
 
 }
@@ -220,7 +222,7 @@ return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_t
 @JsonSerializable()
 
 class _PublicMenuItem implements PublicMenuItem {
-  const _PublicMenuItem({required this.id, required this.name, this.description, required this.price, this.image, final  List<SauceOption> sauces = const <SauceOption>[], final  List<BeverageOption> beverages = const <BeverageOption>[], this.beverageGroupRequired = false, this.beverageGroupMaxSelectable = 0, final  List<ExtraPortionOption> extraPortions = const <ExtraPortionOption>[], this.extraPortionsGroupRequired = false, this.extraPortionsGroupMaxSelectable = 0}): _sauces = sauces,_beverages = beverages,_extraPortions = extraPortions;
+  const _PublicMenuItem({required this.id, required this.name, this.description, required this.price, this.image, final  List<SauceOption> sauces = const <SauceOption>[], this.sauceGroupRequired = false, this.sauceGroupMaxSelectable = 0, final  List<BeverageOption> beverages = const <BeverageOption>[], this.beverageGroupRequired = false, this.beverageGroupMaxSelectable = 0, final  List<ExtraPortionOption> extraPortions = const <ExtraPortionOption>[], this.extraPortionsGroupRequired = false, this.extraPortionsGroupMaxSelectable = 0}): _sauces = sauces,_beverages = beverages,_extraPortions = extraPortions;
   factory _PublicMenuItem.fromJson(Map<String, dynamic> json) => _$PublicMenuItemFromJson(json);
 
 @override final  String id;
@@ -235,6 +237,8 @@ class _PublicMenuItem implements PublicMenuItem {
   return EqualUnmodifiableListView(_sauces);
 }
 
+@override@JsonKey() final  bool sauceGroupRequired;
+@override@JsonKey() final  int sauceGroupMaxSelectable;
  final  List<BeverageOption> _beverages;
 @override@JsonKey() List<BeverageOption> get beverages {
   if (_beverages is EqualUnmodifiableListView) return _beverages;
@@ -267,16 +271,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PublicMenuItem&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.description, description) || other.description == description)&&(identical(other.price, price) || other.price == price)&&(identical(other.image, image) || other.image == image)&&const DeepCollectionEquality().equals(other._sauces, _sauces)&&const DeepCollectionEquality().equals(other._beverages, _beverages)&&(identical(other.beverageGroupRequired, beverageGroupRequired) || other.beverageGroupRequired == beverageGroupRequired)&&(identical(other.beverageGroupMaxSelectable, beverageGroupMaxSelectable) || other.beverageGroupMaxSelectable == beverageGroupMaxSelectable)&&const DeepCollectionEquality().equals(other._extraPortions, _extraPortions)&&(identical(other.extraPortionsGroupRequired, extraPortionsGroupRequired) || other.extraPortionsGroupRequired == extraPortionsGroupRequired)&&(identical(other.extraPortionsGroupMaxSelectable, extraPortionsGroupMaxSelectable) || other.extraPortionsGroupMaxSelectable == extraPortionsGroupMaxSelectable));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PublicMenuItem&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.description, description) || other.description == description)&&(identical(other.price, price) || other.price == price)&&(identical(other.image, image) || other.image == image)&&const DeepCollectionEquality().equals(other._sauces, _sauces)&&(identical(other.sauceGroupRequired, sauceGroupRequired) || other.sauceGroupRequired == sauceGroupRequired)&&(identical(other.sauceGroupMaxSelectable, sauceGroupMaxSelectable) || other.sauceGroupMaxSelectable == sauceGroupMaxSelectable)&&const DeepCollectionEquality().equals(other._beverages, _beverages)&&(identical(other.beverageGroupRequired, beverageGroupRequired) || other.beverageGroupRequired == beverageGroupRequired)&&(identical(other.beverageGroupMaxSelectable, beverageGroupMaxSelectable) || other.beverageGroupMaxSelectable == beverageGroupMaxSelectable)&&const DeepCollectionEquality().equals(other._extraPortions, _extraPortions)&&(identical(other.extraPortionsGroupRequired, extraPortionsGroupRequired) || other.extraPortionsGroupRequired == extraPortionsGroupRequired)&&(identical(other.extraPortionsGroupMaxSelectable, extraPortionsGroupMaxSelectable) || other.extraPortionsGroupMaxSelectable == extraPortionsGroupMaxSelectable));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,name,description,price,image,const DeepCollectionEquality().hash(_sauces),const DeepCollectionEquality().hash(_beverages),beverageGroupRequired,beverageGroupMaxSelectable,const DeepCollectionEquality().hash(_extraPortions),extraPortionsGroupRequired,extraPortionsGroupMaxSelectable);
+int get hashCode => Object.hash(runtimeType,id,name,description,price,image,const DeepCollectionEquality().hash(_sauces),sauceGroupRequired,sauceGroupMaxSelectable,const DeepCollectionEquality().hash(_beverages),beverageGroupRequired,beverageGroupMaxSelectable,const DeepCollectionEquality().hash(_extraPortions),extraPortionsGroupRequired,extraPortionsGroupMaxSelectable);
 
 @override
 String toString() {
-  return 'PublicMenuItem(id: $id, name: $name, description: $description, price: $price, image: $image, sauces: $sauces, beverages: $beverages, beverageGroupRequired: $beverageGroupRequired, beverageGroupMaxSelectable: $beverageGroupMaxSelectable, extraPortions: $extraPortions, extraPortionsGroupRequired: $extraPortionsGroupRequired, extraPortionsGroupMaxSelectable: $extraPortionsGroupMaxSelectable)';
+  return 'PublicMenuItem(id: $id, name: $name, description: $description, price: $price, image: $image, sauces: $sauces, sauceGroupRequired: $sauceGroupRequired, sauceGroupMaxSelectable: $sauceGroupMaxSelectable, beverages: $beverages, beverageGroupRequired: $beverageGroupRequired, beverageGroupMaxSelectable: $beverageGroupMaxSelectable, extraPortions: $extraPortions, extraPortionsGroupRequired: $extraPortionsGroupRequired, extraPortionsGroupMaxSelectable: $extraPortionsGroupMaxSelectable)';
 }
 
 
@@ -287,7 +291,7 @@ abstract mixin class _$PublicMenuItemCopyWith<$Res> implements $PublicMenuItemCo
   factory _$PublicMenuItemCopyWith(_PublicMenuItem value, $Res Function(_PublicMenuItem) _then) = __$PublicMenuItemCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String name, String? description, double price, String? image, List<SauceOption> sauces, List<BeverageOption> beverages, bool beverageGroupRequired, int beverageGroupMaxSelectable, List<ExtraPortionOption> extraPortions, bool extraPortionsGroupRequired, int extraPortionsGroupMaxSelectable
+ String id, String name, String? description, double price, String? image, List<SauceOption> sauces, bool sauceGroupRequired, int sauceGroupMaxSelectable, List<BeverageOption> beverages, bool beverageGroupRequired, int beverageGroupMaxSelectable, List<ExtraPortionOption> extraPortions, bool extraPortionsGroupRequired, int extraPortionsGroupMaxSelectable
 });
 
 
@@ -304,7 +308,7 @@ class __$PublicMenuItemCopyWithImpl<$Res>
 
 /// Create a copy of PublicMenuItem
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? price = null,Object? image = freezed,Object? sauces = null,Object? beverages = null,Object? beverageGroupRequired = null,Object? beverageGroupMaxSelectable = null,Object? extraPortions = null,Object? extraPortionsGroupRequired = null,Object? extraPortionsGroupMaxSelectable = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? price = null,Object? image = freezed,Object? sauces = null,Object? sauceGroupRequired = null,Object? sauceGroupMaxSelectable = null,Object? beverages = null,Object? beverageGroupRequired = null,Object? beverageGroupMaxSelectable = null,Object? extraPortions = null,Object? extraPortionsGroupRequired = null,Object? extraPortionsGroupMaxSelectable = null,}) {
   return _then(_PublicMenuItem(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -312,7 +316,9 @@ as String,description: freezed == description ? _self.description : description 
 as String?,price: null == price ? _self.price : price // ignore: cast_nullable_to_non_nullable
 as double,image: freezed == image ? _self.image : image // ignore: cast_nullable_to_non_nullable
 as String?,sauces: null == sauces ? _self._sauces : sauces // ignore: cast_nullable_to_non_nullable
-as List<SauceOption>,beverages: null == beverages ? _self._beverages : beverages // ignore: cast_nullable_to_non_nullable
+as List<SauceOption>,sauceGroupRequired: null == sauceGroupRequired ? _self.sauceGroupRequired : sauceGroupRequired // ignore: cast_nullable_to_non_nullable
+as bool,sauceGroupMaxSelectable: null == sauceGroupMaxSelectable ? _self.sauceGroupMaxSelectable : sauceGroupMaxSelectable // ignore: cast_nullable_to_non_nullable
+as int,beverages: null == beverages ? _self._beverages : beverages // ignore: cast_nullable_to_non_nullable
 as List<BeverageOption>,beverageGroupRequired: null == beverageGroupRequired ? _self.beverageGroupRequired : beverageGroupRequired // ignore: cast_nullable_to_non_nullable
 as bool,beverageGroupMaxSelectable: null == beverageGroupMaxSelectable ? _self.beverageGroupMaxSelectable : beverageGroupMaxSelectable // ignore: cast_nullable_to_non_nullable
 as int,extraPortions: null == extraPortions ? _self._extraPortions : extraPortions // ignore: cast_nullable_to_non_nullable

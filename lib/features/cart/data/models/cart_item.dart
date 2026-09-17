@@ -33,11 +33,14 @@ abstract class CartItem with _$CartItem {
     @Default(<SauceOption>[]) List<SauceOption> selectedSauces,
     // Tri-state real junto con `selectedSauces`: SOLO puede ser `true`
     // cuando el producto ofrece salsas (`PublicMenuItem.sauces.isNotEmpty`)
-    // Y el cliente tocó explícitamente el chip "Sin salsas" del selector —
-    // distingue "no aplica" (producto sin catálogo, este campo se queda en
-    // `false` siempre) de "el cliente eligió deliberadamente ninguna". Ver
-    // `order_repository.dart`: con `selectedSauces` vacío, este campo decide
-    // si `sauceIds` se manda como `[]` explícito o se omite del todo.
+    // Y no es obligatorio (`PublicMenuItem.sauceGroupRequired` en `false` —
+    // con el grupo obligatorio ese chip ni se muestra en el selector, ver
+    // `product_detail_screen.dart`) Y el cliente tocó explícitamente el chip
+    // "Sin salsas" del selector — distingue "no aplica" (producto sin
+    // catálogo, este campo se queda en `false` siempre) de "el cliente
+    // eligió deliberadamente ninguna". Ver `order_repository.dart`: con
+    // `selectedSauces` vacío, este campo decide si `sauceIds` se manda como
+    // `[]` explícito o se omite del todo.
     @Default(false) bool explicitlyNoSauces,
     // Mismo shape que `selectedSauces`/`explicitlyNoSauces`, pero para
     // bebidas y porciones extras — a diferencia de las salsas, SÍ suman

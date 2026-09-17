@@ -23,7 +23,8 @@ part 'public_menu_item.g.dart';
 /// `beverages`/`extraPortions`: mismo criterio que `sauces` (activas,
 /// ordenadas, vacío = sin selector), pero SÍ suman precio — a diferencia de
 /// las salsas, cada opción elegida suma su `price` una vez por unidad del
-/// ítem (ver `OrdersService.buildItems` en el backend). `beverageGroupRequired`/
+/// ítem (ver `OrdersService.buildItems` en el backend). `sauceGroupRequired`/
+/// `sauceGroupMaxSelectable`, `beverageGroupRequired`/
 /// `beverageGroupMaxSelectable` y `extraPortionsGroupRequired`/
 /// `extraPortionsGroupMaxSelectable` viajan SIEMPRE (aunque el array
 /// correspondiente esté vacío) — el backend los valida en
@@ -39,6 +40,8 @@ abstract class PublicMenuItem with _$PublicMenuItem {
     required double price,
     String? image,
     @Default(<SauceOption>[]) List<SauceOption> sauces,
+    @Default(false) bool sauceGroupRequired,
+    @Default(0) int sauceGroupMaxSelectable,
     @Default(<BeverageOption>[]) List<BeverageOption> beverages,
     @Default(false) bool beverageGroupRequired,
     @Default(0) int beverageGroupMaxSelectable,

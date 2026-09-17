@@ -44,26 +44,25 @@ import 'package:go_router/go_router.dart';
 ///     un checkbox "Sin X" mutuamente excluyente con las opciones reales).
 ///     Las 3 secciones se ordenan con los grupos OBLIGATORIOS primero
 ///     (`_ProductDetailBodyState._sectionOrder`) — dato por producto, así
-///     que el orden se recalcula por producto, no es fijo. Bebidas/porciones
-///     extras tienen dos diferencias reales de negocio frente a salsas, no
-///     solo de estilo — (1) cada opción elegida SÍ suma precio al total (el
-///     ítem del diálogo muestra el precio, ej. "Coca-Cola 500ml — S/3.00") y
-///     (2) el grupo puede ser obligatorio
-///     (`beverageGroupRequired`/`extraPortionsGroupRequired`), en cuyo caso
-///     el checkbox "Sin X" ni se ofrece (elegir "ninguna" no es válido ahí)
-///     y hace falta elegir al menos una opción real, y/o tener un máximo de
-///     opciones (`beverageGroupMaxSelectable`/
-///     `extraPortionsGroupMaxSelectable`) — configurado por el admin,
+///     que el orden se recalcula por producto, no es fijo. Las 3 categorías
+///     comparten el mismo `groupRequired`/`groupMaxSelectable` por producto
+///     (`sauceGroupRequired`/`Max`, `beverageGroupRequired`/`Max`,
+///     `extraPortionsGroupRequired`/`Max` — configurado por el admin,
 ///     contrato verificado contra `OrdersService.validateGroupSelection` en
-///     el backend. Un grupo OPCIONAL (`groupRequired: false`, el único caso
-///     posible para salsas) nunca bloquea "Agregar" sin importar la
-///     selección — el cliente puede dejarlo sin tocar. La validación se
-///     espeja acá SOLO para UX inmediata (badge "Obligatorio"/"Listo" en el
-///     campo, SnackBar al tocar "Agregar" con algo obligatorio pendiente) —
-///     el backend vuelve a validar lo mismo al crear el pedido y es la única
-///     fuente de verdad real, mismo principio que el resto del proyecto ("el
-///     total y los subtotales se calculan SIEMPRE en el backend, nunca se
-///     confía en el frontend").
+///     el backend), con el grupo obligatorio el checkbox "Sin X" ni se
+///     ofrece (elegir "ninguna" no es válido ahí) y hace falta elegir al
+///     menos una opción real. Bebidas/porciones extras tienen una diferencia
+///     real de negocio frente a salsas, no solo de estilo — cada opción
+///     elegida SÍ suma precio al total (el ítem del diálogo muestra el
+///     precio, ej. "Coca-Cola 500ml — S/3.00"), a diferencia de las salsas.
+///     Un grupo OPCIONAL (`groupRequired: false`) nunca bloquea "Agregar"
+///     sin importar la selección — el cliente puede dejarlo sin tocar. La
+///     validación se espeja acá SOLO para UX inmediata (badge
+///     "Obligatorio"/"Listo" en el campo, SnackBar al tocar "Agregar" con
+///     algo obligatorio pendiente) — el backend vuelve a validar lo mismo al
+///     crear el pedido y es la única fuente de verdad real, mismo principio
+///     que el resto del proyecto ("el total y los subtotales se calculan
+///     SIEMPRE en el backend, nunca se confía en el frontend").
 ///   - Selector de cantidad (stepper `#17130F` borde `#2A231C` radio 12).
 ///   - Barra inferior fija con botón angled "AGREGAR AL CARRITO · S/ X.XX"
 ///     donde el precio ya viene multiplicado por la cantidad seleccionada.
@@ -190,15 +189,24 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
   }
 
   /// Mensaje de la violación actual del grupo de salsas, o `null` si la
-  /// selección es válida. El contrato del backend no expone
-  /// `groupRequired`/`groupMaxSelectable` para salsas (solo para
-  /// bebidas/porciones extras, ver `menu.service.ts`) — el grupo es
-  /// conceptualmente igual a un grupo `groupRequired: false`, así que, con
-  /// la misma regla que [_beverageChoiceViolation]/
-  /// [_extraPortionChoiceViolation], nunca bloquea "Agregar" sin importar la
-  /// selección (antes exigía elegir algo real o "Sin salsas" incluso siendo
-  /// opcional — regla de negocio revertida a pedido del dueño del negocio).
-  String? get _sauceChoiceViolation => null;
+  /// selección es válida — mismo criterio que [_beverageChoiceViolation]/
+  /// [_extraPortionChoiceViolation] (`sauceGroupRequired`/`Max` viajan
+  /// siempre desde `GET /menu`, ver doc de `PublicMenuItem`). Con el grupo
+  /// NO obligatorio y sin nada elegido, no es una violación — solo bloquea
+  /// (1) faltar una elección en un grupo obligatorio, o (2) pasarse del
+  /// máximo permitido, sea el grupo obligatorio u opcional.
+  String? get _sauceChoiceViolation {
+    final item = widget.item;
+    if (item.sauces.isEmpty) return null;
+    if (item.sauceGroupRequired && _selectedSauceIds.isEmpty) {
+      return 'Elige al menos 1 salsa (obligatorio)';
+    }
+    if (_selectedSauceIds.length > item.sauceGroupMaxSelectable) {
+      return 'Máximo ${item.sauceGroupMaxSelectable} salsa(s) — quita '
+          'alguna para continuar';
+    }
+    return null;
+  }
 
   /// Mensaje de la violación actual del grupo de bebidas, o `null` si la
   /// selección es válida — mismo orden de chequeo que
@@ -381,22 +389,23 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
   /// (`groupRequired: true`) primero, opcionales después, orden pedido por
   /// el dueño del negocio: lo que bloquea "Agregar" debe verse antes que lo
   /// que no. `groupRequired` es un dato por producto
-  /// (`item.beverageGroupRequired`/`extraPortionsGroupRequired`), así que
-  /// este orden se recalcula en cada build, no es fijo. Las salsas nunca son
-  /// obligatorias (el contrato del backend no expone ese flag para esa
-  /// categoría, ver `_sauceChoiceViolation`), así que siempre caen en el
-  /// grupo opcional. Partición manual en vez de `List.sort` (que en Dart no
-  /// garantiza estabilidad): así dos grupos opcionales, o dos obligatorios,
-  /// conservan su orden relativo original (salsas → bebidas → porciones
-  /// extras). Fuente única de verdad del orden en pantalla — la usan tanto
-  /// `_buildOptionSections` (para las secciones) como `_violatedGroupKeys`
-  /// (para decidir cuál grupo resaltar primero al tocar "Agregar" con algo
-  /// pendiente), así que nunca pueden desincronizarse entre sí.
+  /// (`item.sauceGroupRequired`/`beverageGroupRequired`/
+  /// `extraPortionsGroupRequired`), así que este orden se recalcula en cada
+  /// build, no es fijo. Partición manual en vez de `List.sort` (que en Dart
+  /// no garantiza estabilidad): así dos grupos opcionales, o dos
+  /// obligatorios, conservan su orden relativo original (salsas → bebidas →
+  /// porciones extras). Fuente única de verdad del orden en pantalla — la
+  /// usan tanto `_buildOptionSections` (para las secciones) como
+  /// `_violatedGroupKeys` (para decidir cuál grupo resaltar primero al tocar
+  /// "Agregar" con algo pendiente), así que nunca pueden desincronizarse
+  /// entre sí.
   List<String> get _sectionOrder {
     final item = widget.item;
     final required = <String>[];
     final optional = <String>[];
-    if (item.sauces.isNotEmpty) optional.add('sauce');
+    if (item.sauces.isNotEmpty) {
+      (item.sauceGroupRequired ? required : optional).add('sauce');
+    }
     if (item.beverages.isNotEmpty) {
       (item.beverageGroupRequired ? required : optional).add('beverage');
     }
@@ -425,8 +434,8 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
           ],
           selectedIds: _selectedSauceIds,
           explicitlyNone: _explicitlyNoSauces,
-          groupRequired: false,
-          groupMaxSelectable: item.sauces.length,
+          groupRequired: item.sauceGroupRequired,
+          groupMaxSelectable: item.sauceGroupMaxSelectable,
           isHighlighted: _highlightedViolation == 'sauce',
           onApply: (selected, none) => setState(() {
             _selectedSauceIds
