@@ -41,7 +41,12 @@ import 'package:go_router/go_router.dart';
 ///     `CeltasColors.surface`, `CeltasRadii.input`) que muestra si la
 ///     elección ya quedó resuelta ("Listo") o no (vacío) y, al tocarlo, abre
 ///     un diálogo con checkboxes para editarla (multi-selección real, más
-///     un checkbox "Sin X" mutuamente excluyente con las opciones reales).
+///     un checkbox "Sin X" mutuamente excluyente con las opciones reales,
+///     ofrecido solo si `sauceAllowWithout`/`beverageAllowWithout`/
+///     `extraPortionsAllowWithout` lo permite — dato por producto/categoría,
+///     default `true`, configurado por el admin e independiente de
+///     `groupRequired`; ver doc de `PublicMenuItem` y de
+///     `_OptionGroupDropdown.allowWithout`).
 ///     Las 3 secciones se ordenan con los grupos OBLIGATORIOS primero
 ///     (`_ProductDetailBodyState._sectionOrder`) — dato por producto, así
 ///     que el orden se recalcula por producto, no es fijo. Las 3 categorías
@@ -50,18 +55,21 @@ import 'package:go_router/go_router.dart';
 ///     `extraPortionsGroupRequired`/`Max` — configurado por el admin,
 ///     contrato verificado contra `OrdersService.validateGroupSelection` en
 ///     el backend), con el grupo obligatorio el checkbox "Sin X" ni se
-///     ofrece (elegir "ninguna" no es válido ahí) y hace falta elegir al
+///     ofrece (elegir "ninguna" no es válido ahí, sin importar
+///     `AllowWithout` — el backend lo rechaza igual) y hace falta elegir al
 ///     menos una opción real. Bebidas/porciones extras tienen una diferencia
 ///     real de negocio frente a salsas, no solo de estilo — cada opción
 ///     elegida SÍ suma precio al total (el ítem del diálogo muestra el
 ///     precio, ej. "Coca-Cola 500ml — S/3.00"), a diferencia de las salsas.
 ///     Un grupo OPCIONAL (`groupRequired: false`) nunca bloquea "Agregar"
 ///     sin importar la selección — el cliente puede dejarlo sin tocar. La
-///     validación se espeja acá SOLO para UX inmediata (badge
-///     "Obligatorio"/"Listo" en el campo, SnackBar al tocar "Agregar" con
-///     algo obligatorio pendiente) — el backend vuelve a validar lo mismo al
-///     crear el pedido y es la única fuente de verdad real, mismo principio
-///     que el resto del proyecto ("el total y los subtotales se calculan
+///     validación se espeja acá SOLO para UX inmediata (badge "Obligatorio"
+///     en un grupo obligatorio sin elegir, "Listo" apenas hay una opción
+///     real elegida en CUALQUIER grupo — obligatorio u opcional —, SnackBar
+///     al tocar "Agregar" con algo obligatorio pendiente) — el backend
+///     vuelve a validar lo mismo al crear el pedido y es la única fuente de
+///     verdad real, mismo principio que el resto del proyecto ("el total y
+///     los subtotales se calculan
 ///     SIEMPRE en el backend, nunca se confía en el frontend").
 ///   - Selector de cantidad (stepper `#17130F` borde `#2A231C` radio 12).
 ///   - Barra inferior fija con botón angled "AGREGAR AL CARRITO · S/ X.XX"
@@ -436,6 +444,7 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
           explicitlyNone: _explicitlyNoSauces,
           groupRequired: item.sauceGroupRequired,
           groupMaxSelectable: item.sauceGroupMaxSelectable,
+          allowWithout: item.sauceAllowWithout,
           isHighlighted: _highlightedViolation == 'sauce',
           onApply: (selected, none) => setState(() {
             _selectedSauceIds
@@ -463,6 +472,7 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
           explicitlyNone: _explicitlyNoBeverages,
           groupRequired: item.beverageGroupRequired,
           groupMaxSelectable: item.beverageGroupMaxSelectable,
+          allowWithout: item.beverageAllowWithout,
           isHighlighted: _highlightedViolation == 'beverage',
           onApply: (selected, none) => setState(() {
             _selectedBeverageIds
@@ -490,6 +500,7 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
           explicitlyNone: _explicitlyNoExtraPortions,
           groupRequired: item.extraPortionsGroupRequired,
           groupMaxSelectable: item.extraPortionsGroupMaxSelectable,
+          allowWithout: item.extraPortionsAllowWithout,
           isHighlighted: _highlightedViolation == 'extra',
           onApply: (selected, none) => setState(() {
             _selectedExtraPortionIds
@@ -853,13 +864,16 @@ class _SelectableOption {
 /// iteración anterior (ver doc de `_ProductDetailBody`).
 ///
 /// Multi-selección real entre `options`, más un checkbox "Sin X"
-/// (`noneLabel`) mutuamente excluyente con ellas. Con `groupRequired: true`
-/// hace falta elegir al menos una opción real para poder agregar/guardar
-/// ("Sin X" ni se ofrece ahí, ver `_openDialog` — elegir "ninguna" no es
-/// válido en un grupo obligatorio). Con `groupRequired: false` no hay
-/// ninguna elección forzada — el cliente puede dejarlo tal cual y seguir de
-/// largo, "Sin X" es solo una forma más de dejar constancia explícita de
-/// "no quiero nada de esto", no una obligación.
+/// (`noneLabel`) mutuamente excluyente con ellas, ofrecido solo si
+/// `allowWithout` (dato por producto/categoría, ver su doc) lo permite. Con
+/// `groupRequired: true` hace falta elegir al menos una opción real para
+/// poder agregar/guardar ("Sin X" ni se ofrece ahí sin importar
+/// `allowWithout`, ver `_openDialog` — elegir "ninguna" no es válido en un
+/// grupo obligatorio, el backend lo rechaza igual). Con `groupRequired:
+/// false` no hay ninguna elección forzada — el cliente puede dejarlo tal
+/// cual y seguir de largo, "Sin X" (cuando `allowWithout` lo permite) es
+/// solo una forma más de dejar constancia explícita de "no quiero nada de
+/// esto", no una obligación.
 ///
 /// El diálogo mantiene su propio estado temporal (`tempSelected`/
 /// `tempExplicitlyNone`) hasta que se toca "ACEPTAR" — tocar "CANCELAR" o
@@ -878,6 +892,7 @@ class _OptionGroupDropdown extends StatelessWidget {
     required this.explicitlyNone,
     required this.groupRequired,
     required this.groupMaxSelectable,
+    required this.allowWithout,
     required this.isHighlighted,
     required this.onApply,
   });
@@ -902,6 +917,17 @@ class _OptionGroupDropdown extends StatelessWidget {
   final bool groupRequired;
   final int groupMaxSelectable;
 
+  /// Si el checkbox "Sin X" (`noneLabel`) debe ofrecerse — dato por producto
+  /// y por categoría (`item.sauceAllowWithout`/`beverageAllowWithout`/
+  /// `extraPortionsAllowWithout`, default `true`, ver doc de `PublicMenuItem`
+  /// para el contrato real). Solo tiene efecto con el grupo OPCIONAL: con
+  /// `groupRequired: true` el checkbox se sigue ocultando sin importar este
+  /// valor (ver `_openDialog`) — el admin puede activarlo en un grupo
+  /// obligatorio, pero "Sin X" ahí nunca sería una selección válida
+  /// (`OrdersService.validateGroupSelection` en el backend exige al menos
+  /// una opción real igual), así que ofrecerlo sería un callejón sin salida.
+  final bool allowWithout;
+
   /// `true` mientras este es el grupo que acaba de bloquear un intento de
   /// "Agregar"/"Guardar cambios" — el campo se resalta con borde rojo por
   /// un momento (ver `_ProductDetailBodyState._handleValidationFailure`).
@@ -919,11 +945,20 @@ class _OptionGroupDropdown extends StatelessWidget {
   /// Cuando el grupo es obligatorio, ya no repite la palabra "Obligatorio"
   /// acá — el campo la muestra como badge dentro de sí mismo, a la derecha
   /// (ver `build`/`_badge`), así que repetirla en el subtítulo sería ruido.
+  /// Con `allowWithout: false` no menciona `noneLabel` — el checkbox "Sin X"
+  /// no se ofrece acá (ver `_openDialog`), así que prometerlo en el
+  /// subtítulo sería incorrecto.
   String get _subtitle {
     if (groupRequired) {
       return 'Elige entre 1 y $groupMaxSelectable';
     }
-    if (groupMaxSelectable >= options.length) {
+    final fitsWholeCatalog = groupMaxSelectable >= options.length;
+    if (!allowWithout) {
+      return fitsWholeCatalog
+          ? 'Elige las que quieras'
+          : 'Elige hasta $groupMaxSelectable';
+    }
+    if (fitsWholeCatalog) {
       return 'Elige las que quieras, o "$noneLabel"';
     }
     return 'Elige hasta $groupMaxSelectable, o "$noneLabel"';
@@ -944,18 +979,23 @@ class _OptionGroupDropdown extends StatelessWidget {
     return '✓ Seleccionado';
   }
 
-  /// Badge dentro del campo, a la derecha (ver `build`) — `null` cuando el
-  /// grupo es opcional (nada que marcar ahí; el subtítulo ya cubre ese
-  /// caso). Con el grupo obligatorio, pasa de "Obligatorio" (naranja) a
-  /// "Listo" (`CeltasColors.success`, ver justificación en
-  /// `app_theme.dart`) apenas hay alguna opción real elegida — el grupo
-  /// obligatorio nunca ofrece el checkbox "Sin X" (ver `_openDialog`), así
-  /// que `selectedIds.isNotEmpty` es la única señal real de "completo" acá.
+  /// Badge dentro del campo, a la derecha (ver `build`). "Listo"
+  /// (`CeltasColors.success`, ver justificación en `app_theme.dart`) se
+  /// muestra apenas hay alguna opción REAL elegida, sea el grupo obligatorio
+  /// u opcional — un grupo opcional con selección también merece esa señal
+  /// positiva, no solo el resumen "✓ Seleccionado" del campo (`_summaryText`).
+  /// "Obligatorio" (naranja) solo aplica al grupo obligatorio sin nada
+  /// elegido todavía; un grupo opcional sin selección no muestra ningún
+  /// badge (`null`) — el subtítulo ya cubre ese caso. `explicitlyNone` no
+  /// cuenta para "Listo" acá a propósito: "Sin X" ya queda explícito en el
+  /// resumen del campo (`noneLabel`), un badge adicional sería ruido.
   ({String label, Color color})? get _badge {
-    if (!groupRequired) return null;
-    return selectedIds.isNotEmpty
-        ? (label: 'Listo', color: CeltasColors.success)
-        : (label: 'Obligatorio', color: CeltasColors.orange);
+    if (selectedIds.isNotEmpty) {
+      return (label: 'Listo', color: CeltasColors.success);
+    }
+    return groupRequired
+        ? (label: 'Obligatorio', color: CeltasColors.orange)
+        : null;
   }
 
   Future<void> _openDialog(BuildContext context) async {
@@ -1002,7 +1042,7 @@ class _OptionGroupDropdown extends StatelessWidget {
                       });
                     },
                   ),
-                if (!groupRequired)
+                if (!groupRequired && allowWithout)
                   CheckboxListTile(
                     key: ValueKey('detail-$testKey-option-none'),
                     value: tempExplicitlyNone,

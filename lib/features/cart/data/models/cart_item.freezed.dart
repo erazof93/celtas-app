@@ -16,20 +16,26 @@ mixin _$CartItem {
 
  String get menuItemId; String get name; double get unitPrice; int get quantity; String? get image; List<SauceOption> get selectedSauces;// Tri-state real junto con `selectedSauces`: SOLO puede ser `true`
 // cuando el producto ofrece salsas (`PublicMenuItem.sauces.isNotEmpty`)
-// Y el cliente tocó explícitamente el chip "Sin salsas" del selector —
-// distingue "no aplica" (producto sin catálogo, este campo se queda en
-// `false` siempre) de "el cliente eligió deliberadamente ninguna". Ver
-// `order_repository.dart`: con `selectedSauces` vacío, este campo decide
-// si `sauceIds` se manda como `[]` explícito o se omite del todo.
+// Y no es obligatorio (`PublicMenuItem.sauceGroupRequired` en `false`)
+// Y `PublicMenuItem.sauceAllowWithout` es `true` (default, dato por
+// producto configurado por el admin — con el grupo obligatorio, o con
+// `sauceAllowWithout: false`, ese chip ni se muestra en el selector,
+// ver `product_detail_screen.dart`) Y el cliente tocó explícitamente el
+// chip "Sin salsas" del selector — distingue "no aplica" (producto sin
+// catálogo, este campo se queda en `false` siempre) de "el cliente
+// eligió deliberadamente ninguna". Ver `order_repository.dart`: con
+// `selectedSauces` vacío, este campo decide si `sauceIds` se manda como
+// `[]` explícito o se omite del todo.
  bool get explicitlyNoSauces;// Mismo shape que `selectedSauces`/`explicitlyNoSauces`, pero para
 // bebidas y porciones extras — a diferencia de las salsas, SÍ suman
 // precio (ver `lineTotal`). `explicitlyNoBeverages`/
 // `explicitlyNoExtraPortions` solo pueden ser `true` cuando el
 // producto ofrece esa categoría Y no es obligatoria
 // (`PublicMenuItem.beverageGroupRequired`/`extraPortionsGroupRequired`
-// en `false`) Y el cliente tocó el chip "Sin X" a propósito — con el
-// grupo obligatorio ese chip ni se muestra en el selector (ver
-// `product_detail_screen.dart`).
+// en `false`) Y `beverageAllowWithout`/`extraPortionsAllowWithout` es
+// `true` (default) Y el cliente tocó el chip "Sin X" a propósito — con
+// el grupo obligatorio, o con el flag `AllowWithout` en `false`, ese
+// chip ni se muestra en el selector (ver `product_detail_screen.dart`).
  List<BeverageOption> get selectedBeverages; bool get explicitlyNoBeverages; List<ExtraPortionOption> get selectedExtraPortions; bool get explicitlyNoExtraPortions;// Nota libre opcional del cliente para este ítem (ej. "sin cebolla"),
 // espejo de `OrderItem.comment` en el backend. `null`/vacío = sin
 // comentario — se normaliza a `null` al agregar/editar la fila (ver
@@ -260,11 +266,16 @@ class _CartItem extends CartItem {
 
 // Tri-state real junto con `selectedSauces`: SOLO puede ser `true`
 // cuando el producto ofrece salsas (`PublicMenuItem.sauces.isNotEmpty`)
-// Y el cliente tocó explícitamente el chip "Sin salsas" del selector —
-// distingue "no aplica" (producto sin catálogo, este campo se queda en
-// `false` siempre) de "el cliente eligió deliberadamente ninguna". Ver
-// `order_repository.dart`: con `selectedSauces` vacío, este campo decide
-// si `sauceIds` se manda como `[]` explícito o se omite del todo.
+// Y no es obligatorio (`PublicMenuItem.sauceGroupRequired` en `false`)
+// Y `PublicMenuItem.sauceAllowWithout` es `true` (default, dato por
+// producto configurado por el admin — con el grupo obligatorio, o con
+// `sauceAllowWithout: false`, ese chip ni se muestra en el selector,
+// ver `product_detail_screen.dart`) Y el cliente tocó explícitamente el
+// chip "Sin salsas" del selector — distingue "no aplica" (producto sin
+// catálogo, este campo se queda en `false` siempre) de "el cliente
+// eligió deliberadamente ninguna". Ver `order_repository.dart`: con
+// `selectedSauces` vacío, este campo decide si `sauceIds` se manda como
+// `[]` explícito o se omite del todo.
 @override@JsonKey() final  bool explicitlyNoSauces;
 // Mismo shape que `selectedSauces`/`explicitlyNoSauces`, pero para
 // bebidas y porciones extras — a diferencia de las salsas, SÍ suman
@@ -272,9 +283,10 @@ class _CartItem extends CartItem {
 // `explicitlyNoExtraPortions` solo pueden ser `true` cuando el
 // producto ofrece esa categoría Y no es obligatoria
 // (`PublicMenuItem.beverageGroupRequired`/`extraPortionsGroupRequired`
-// en `false`) Y el cliente tocó el chip "Sin X" a propósito — con el
-// grupo obligatorio ese chip ni se muestra en el selector (ver
-// `product_detail_screen.dart`).
+// en `false`) Y `beverageAllowWithout`/`extraPortionsAllowWithout` es
+// `true` (default) Y el cliente tocó el chip "Sin X" a propósito — con
+// el grupo obligatorio, o con el flag `AllowWithout` en `false`, ese
+// chip ni se muestra en el selector (ver `product_detail_screen.dart`).
  final  List<BeverageOption> _selectedBeverages;
 // Mismo shape que `selectedSauces`/`explicitlyNoSauces`, pero para
 // bebidas y porciones extras — a diferencia de las salsas, SÍ suman
@@ -282,9 +294,10 @@ class _CartItem extends CartItem {
 // `explicitlyNoExtraPortions` solo pueden ser `true` cuando el
 // producto ofrece esa categoría Y no es obligatoria
 // (`PublicMenuItem.beverageGroupRequired`/`extraPortionsGroupRequired`
-// en `false`) Y el cliente tocó el chip "Sin X" a propósito — con el
-// grupo obligatorio ese chip ni se muestra en el selector (ver
-// `product_detail_screen.dart`).
+// en `false`) Y `beverageAllowWithout`/`extraPortionsAllowWithout` es
+// `true` (default) Y el cliente tocó el chip "Sin X" a propósito — con
+// el grupo obligatorio, o con el flag `AllowWithout` en `false`, ese
+// chip ni se muestra en el selector (ver `product_detail_screen.dart`).
 @override@JsonKey() List<BeverageOption> get selectedBeverages {
   if (_selectedBeverages is EqualUnmodifiableListView) return _selectedBeverages;
   // ignore: implicit_dynamic_type

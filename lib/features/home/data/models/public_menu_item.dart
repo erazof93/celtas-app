@@ -31,6 +31,23 @@ part 'public_menu_item.g.dart';
 /// `OrdersService.validateGroupSelection` al crear el pedido, así que la app
 /// debe espejar la misma validación localmente (UX) pero nunca confiar solo
 /// en ella (el backend rechaza con 400 igual si se le manda algo inválido).
+///
+/// `sauceAllowWithout`/`beverageAllowWithout`/`extraPortionsAllowWithout`
+/// (default `true`, viajan SIEMPRE igual que los `GroupRequired`/`Max` de
+/// arriba — ver `MenuService.findPublicMenu` en el backend, columnas NOT
+/// NULL DEFAULT true): si la app debe ofrecer el checkbox "Sin X" para esa
+/// categoría. Nombre real del tercer campo es `extraPortionsAllowWithout`
+/// (plural "Portions", igual que `extraPortionsGroupRequired`/`Max`), NO
+/// `extraPortionAllowWithout` — confirmado contra
+/// `backend-celtas/src/modules/menu/entities/menu-item.entity.ts` y
+/// `celtas-admin/src/features/menu/types.ts`. El admin puede activar este
+/// flag en un grupo obligatorio sin que tenga ningún efecto real: el checkbox
+/// solo se ofrece con el grupo OPCIONAL (`!groupRequired`) — con
+/// `groupRequired: true`, "Sin X" nunca es una selección válida
+/// (`OrdersService.validateGroupSelection` en el backend rechaza
+/// `selected.length === 0` igual, sin importar `AllowWithout`), así que
+/// ofrecerlo ahí sería un callejón sin salida para el cliente (ver
+/// `_OptionGroupDropdown._openDialog` en `product_detail_screen.dart`).
 @freezed
 abstract class PublicMenuItem with _$PublicMenuItem {
   const factory PublicMenuItem({
@@ -42,12 +59,15 @@ abstract class PublicMenuItem with _$PublicMenuItem {
     @Default(<SauceOption>[]) List<SauceOption> sauces,
     @Default(false) bool sauceGroupRequired,
     @Default(0) int sauceGroupMaxSelectable,
+    @Default(true) bool sauceAllowWithout,
     @Default(<BeverageOption>[]) List<BeverageOption> beverages,
     @Default(false) bool beverageGroupRequired,
     @Default(0) int beverageGroupMaxSelectable,
+    @Default(true) bool beverageAllowWithout,
     @Default(<ExtraPortionOption>[]) List<ExtraPortionOption> extraPortions,
     @Default(false) bool extraPortionsGroupRequired,
     @Default(0) int extraPortionsGroupMaxSelectable,
+    @Default(true) bool extraPortionsAllowWithout,
   }) = _PublicMenuItem;
 
   factory PublicMenuItem.fromJson(Map<String, dynamic> json) =>

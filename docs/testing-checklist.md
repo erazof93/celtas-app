@@ -1309,6 +1309,83 @@ elegir?" que ya existen para salsas (`home_screen.dart:997`, `_AddButton.onTap`;
 criterio que la app ya usa para salsas, sin necesidad de un patrón nuevo. Tras ese fix puntual,
 re-auditar solo esos 2 archivos (no hace falta repetir el resto de esta auditoría).
 
+### Checkbox "Sin X" configurable por categoría (`allowWithout`) + badge "Listo" también en grupos opcionales — auditoría @tester
+
+Alcance: campos nuevos `sauceAllowWithout`/`beverageAllowWithout`/`extraPortionsAllowWithout` en
+`PublicMenuItem` (booleans, default `true`, viajan siempre desde `GET /menu`) que controlan si el
+checkbox "Sin X" se ofrece dentro del diálogo de `_OptionGroupDropdown`; y fix del badge "Listo"
+para que también aparezca en grupos OPCIONALES con selección (antes solo en obligatorios). No toca
+`cart_provider.dart` ni `order_repository.dart` — confirmado por lectura completa del diff.
+
+`flutter analyze` (salida cruda propia): `1 issue found` — el mismo info-lint preexistente
+`unawaited_futures` en `product_detail_screen.dart:300` (`HapticFeedback.mediumImpact()`),
+confirmado con `git blame` que viene del commit `b69263a5` (2026-09-15), dos días antes de este
+cambio — no relacionado. `flutter test test/features/menu/presentation/product_detail_screen_test.dart`:
+`69: All tests passed!`. `flutter test` (suite completa): `656: All tests passed!` (salida cruda
+propia). `dart run build_runner build`: `Built with build_runner/aot in 20s; wrote 0 outputs.` — sin
+drift en `public_menu_item.freezed.dart`/`.g.dart`/`cart_item.freezed.dart`.
+
+✅ Pasó:
+- **Contrato de API confirmado contra el código fuente real del backend**, no contra el resumen del
+  encargo: los 3 campos (`sauceAllowWithout`/`beverageAllowWithout`/`extraPortionsAllowWithout`)
+  coinciden carácter por carácter con las columnas de
+  `backend-celtas/src/modules/menu/entities/menu-item.entity.ts:180-214`
+  (`@Column({ name: 'sauce_allow_without', type: 'boolean', default: true })`, y equivalentes para
+  `beverage_allow_without`/`extra_portions_allow_without`) y con
+  `MenuService.findPublicMenu` (`menu.service.ts`), que los incluye siempre en el objeto devuelto —
+  nombre en plural "Portions" confirmado también contra `celtas-admin/src/features/menu/types.ts`.
+- **El razonamiento de la sesión principal sobre por qué el checkbox se sigue ocultando en un grupo
+  obligatorio sin importar `allowWithout` es correcto** — confirmado línea por línea contra
+  `OrdersService.validateGroupSelection` (`orders.service.ts:794-815`): el método ni siquiera recibe
+  `allowWithout` como parámetro; su única condición de rechazo por obligatoriedad es
+  `groupRequired && (selected === null || selected.length === 0)`, sin ninguna excepción basada en
+  el flag. Ofrecer el checkbox en un grupo obligatorio sería, en efecto, un callejón sin salida (el
+  backend rechazaría esa selección con 400 igual). El condicional
+  `if (!groupRequired && allowWithout)` en `_openDialog` (línea 1045) es correcto tal como está —
+  NO debe cambiarse a `if (allowWithout)` a secas.
+- **Sin rastro de comportamiento viejo en `product_detail_screen.dart` ni en su test**: los 4 tests
+  existentes que asumían "Listo" nunca aparece en grupos opcionales fueron actualizados (comentario
+  y aserción `findsNothing` → `findsOneWidget`), sin dejar ninguna aserción contradictoria. Los
+  nuevos fixtures (`i-9`/`i-10`/`i-11`) y su grupo de tests cubren las 4 combinaciones relevantes de
+  `groupRequired`×`allowWithout`.
+- `_summaryText` no necesita el mismo ajuste que `_subtitle`/`_badge`/el checkbox: `explicitlyNone`
+  solo puede volverse `true` a través del checkbox "Sin X" del diálogo, que ya está condicionado por
+  `allowWithout` en el único punto donde se puede activar (`_openDialog`) — no hay una segunda vía en
+  la UI para setearlo. Correcto no tocarlo.
+- Fidelidad de diseño: N/A — el badge "Listo"/"Obligatorio" ya usa `CeltasColors.success`/`orange`
+  ya validados en la auditoría de la migración a dropdown (ver arriba), esta feature no agrega
+  colores nuevos.
+
+❌ Falló:
+- Ninguno en `product_detail_screen.dart`/su test.
+
+⚠️ Riesgos / casos borde no cubiertos:
+- **Doc-comment desactualizado en `lib/features/cart/data/models/cart_item.dart`** (líneas 34-43 y
+  45-53, los comentarios de `explicitlyNoSauces`/`explicitlyNoBeverages`/`explicitlyNoExtraPortions`):
+  siguen describiendo la condición como "SOLO puede ser `true` cuando el producto ofrece [la
+  categoría] Y no es obligatorio... Y el cliente tocó explícitamente el chip" — sin mencionar la
+  tercera condición nueva (`allowWithout`, que ahora también controla si el checkbox existe). No es
+  un bug funcional (el código en sí es correcto, y el `.freezed.dart` regenerado solo reflejó el
+  comentario ya desactualizado del archivo fuente, como bien identificó la sesión principal), pero
+  el comentario del archivo FUENTE (`cart_item.dart`, no el generado) sigue sin actualizarse con la
+  condición nueva — vale la pena agregar la mención a `allowWithout` ahí para que no quede como una
+  segunda fuente de drift la próxima vez que se regenere.
+- **Edge case no cubierto por test**: un `CartItem` ya en el carrito con `explicitlyNoSauces: true`
+  (guardado cuando `sauceAllowWithout` era `true`) cuya categoría pasa a `allowWithout: false` en
+  vivo (el admin cambia el flag mientras el cliente tiene el ítem en el carrito, antes de tocar
+  "editar") mostraría igual `noneLabel` en el resumen del campo al reabrir el diálogo de edición,
+  pero el checkbox para desmarcarlo explícitamente ya no estaría visible — el cliente solo podría
+  salir de ese estado eligiendo una opción real (que sí limpia `tempExplicitlyNone` por exclusión
+  mutua, sin depender de que el checkbox esté visible), nunca revirtiendo a "sin selección". Riesgo
+  bajo (requiere que el admin cambie la config exactamente en esa ventana), no bloqueante.
+
+**Veredicto: LISTO.** Lo crítico pasa: `analyze` limpio (salvo el info-lint preexistente sin
+relación), suite completa verde (656/656), contrato de API confirmado contra el backend real
+(entity + `menu.service.ts`), razonamiento sobre `validateGroupSelection` confirmado correcto línea
+por línea, sin código generado a mano, sin regresión de comportamiento viejo en
+`product_detail_screen.dart`/su test. Pendiente no bloqueante: actualizar el doc-comment de
+`cart_item.dart` (3 campos `explicitlyNo*`) para mencionar `allowWithout` como tercera condición.
+
 ### Refactor: `showCeltasSnackBar` compartido (limpieza de deuda técnica)
 
 Consolida el bloque `ScaffoldMessenger.of(context)..hideCurrentSnackBar()..showSnackBar(...)`,

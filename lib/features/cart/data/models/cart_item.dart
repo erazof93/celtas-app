@@ -33,10 +33,12 @@ abstract class CartItem with _$CartItem {
     @Default(<SauceOption>[]) List<SauceOption> selectedSauces,
     // Tri-state real junto con `selectedSauces`: SOLO puede ser `true`
     // cuando el producto ofrece salsas (`PublicMenuItem.sauces.isNotEmpty`)
-    // Y no es obligatorio (`PublicMenuItem.sauceGroupRequired` en `false` —
-    // con el grupo obligatorio ese chip ni se muestra en el selector, ver
-    // `product_detail_screen.dart`) Y el cliente tocó explícitamente el chip
-    // "Sin salsas" del selector — distingue "no aplica" (producto sin
+    // Y no es obligatorio (`PublicMenuItem.sauceGroupRequired` en `false`)
+    // Y `PublicMenuItem.sauceAllowWithout` es `true` (default, dato por
+    // producto configurado por el admin — con el grupo obligatorio, o con
+    // `sauceAllowWithout: false`, ese chip ni se muestra en el selector,
+    // ver `product_detail_screen.dart`) Y el cliente tocó explícitamente el
+    // chip "Sin salsas" del selector — distingue "no aplica" (producto sin
     // catálogo, este campo se queda en `false` siempre) de "el cliente
     // eligió deliberadamente ninguna". Ver `order_repository.dart`: con
     // `selectedSauces` vacío, este campo decide si `sauceIds` se manda como
@@ -48,9 +50,10 @@ abstract class CartItem with _$CartItem {
     // `explicitlyNoExtraPortions` solo pueden ser `true` cuando el
     // producto ofrece esa categoría Y no es obligatoria
     // (`PublicMenuItem.beverageGroupRequired`/`extraPortionsGroupRequired`
-    // en `false`) Y el cliente tocó el chip "Sin X" a propósito — con el
-    // grupo obligatorio ese chip ni se muestra en el selector (ver
-    // `product_detail_screen.dart`).
+    // en `false`) Y `beverageAllowWithout`/`extraPortionsAllowWithout` es
+    // `true` (default) Y el cliente tocó el chip "Sin X" a propósito — con
+    // el grupo obligatorio, o con el flag `AllowWithout` en `false`, ese
+    // chip ni se muestra en el selector (ver `product_detail_screen.dart`).
     @Default(<BeverageOption>[]) List<BeverageOption> selectedBeverages,
     @Default(false) bool explicitlyNoBeverages,
     @Default(<ExtraPortionOption>[])

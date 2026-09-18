@@ -107,6 +107,44 @@ void main() {
         sauceGroupRequired: true,
         sauceGroupMaxSelectable: 1,
       ),
+      // Bebidas opcionales con `beverageAllowWithout: false` — el admin
+      // desactivó el checkbox "Sin bebida" para este producto (mismo
+      // catálogo/máximo que i-4, que lo deja en su default `true`).
+      PublicMenuItem(
+        id: 'i-9',
+        name: 'Combo Bebida Sin Opción Vacía',
+        price: 19,
+        beverages: [cocaCola, incaKola],
+        beverageGroupMaxSelectable: 1,
+        beverageAllowWithout: false,
+      ),
+      // Salsas opcionales dejando `sauceAllowWithout` en su default (`true`,
+      // sin fijarlo a mano — `avoid_redundant_argument_values` marcaría el
+      // valor explícito por coincidir con el default) — confirma que el
+      // contrato real (`GET /menu` sin el campo) se resuelve a `true` y el
+      // checkbox "Sin salsas" se ofrece igual que si el admin lo hubiera
+      // marcado a mano.
+      PublicMenuItem(
+        id: 'i-10',
+        name: 'Salsas Burger Con Opción Vacía Por Default',
+        price: 13,
+        sauces: [mayo, mostaza],
+        sauceGroupMaxSelectable: 2,
+      ),
+      // Porciones extras OBLIGATORIAS, dejando `extraPortionsAllowWithout`
+      // en su default (`true`) — confirma que el flag no tiene efecto en un
+      // grupo obligatorio: "Sin X" nunca es válido ahí (ver doc de
+      // `_OptionGroupDropdown.allowWithout`), así que el checkbox se sigue
+      // ocultando igual que en i-7 (mismo fixture en la práctica, separado
+      // para dejar el caso documentado con su propio test).
+      PublicMenuItem(
+        id: 'i-11',
+        name: 'Combo Extra Obligatoria Con Flag Explícito',
+        price: 25,
+        extraPortions: [papasExtra, quesoExtra],
+        extraPortionsGroupRequired: true,
+        extraPortionsGroupMaxSelectable: 1,
+      ),
     ],
   );
 
@@ -497,19 +535,21 @@ void main() {
 
     testWidgets(
       'elegir una salsa y tocar ACEPTAR actualiza el resumen del dropdown '
-      'a "✓ Seleccionado" (grupo opcional, sin badge propio) y agrega la '
-      'fila con esa selección',
+      'a "✓ Seleccionado" y muestra el badge "Listo" (grupo opcional con '
+      'una selección real) y agrega la fila con esa selección',
       (tester) async {
         final (container, _) = await pumpDetail(tester, productId: 'i-3');
 
         await selectDialogOptions(tester, 'sauce', ['s-1']);
 
-        // Resumen del campo, ya cerrado el diálogo: "✓ Seleccionado", ni
-        // el nombre real ni "Listo" (i-3 es un grupo opcional, así que
-        // tampoco hay badge acá) — el detalle de qué se eligió solo se
-        // ve abriendo el diálogo (ver `_OptionGroupDropdown._summaryText`).
+        // Resumen del campo, ya cerrado el diálogo: "✓ Seleccionado" +
+        // badge "Listo" (verde) — un grupo opcional CON selección real
+        // también muestra el badge, no solo los obligatorios (ver
+        // `_OptionGroupDropdown._badge`). El nombre real de la salsa no se
+        // muestra acá — el detalle de qué se eligió solo se ve abriendo el
+        // diálogo (ver `_OptionGroupDropdown._summaryText`).
         expect(find.text('✓ Seleccionado'), findsOneWidget);
-        expect(find.text('Listo'), findsNothing);
+        expect(find.text('Listo'), findsOneWidget);
         expect(find.text('Mayonesa'), findsNothing);
         // El placeholder ya no se muestra: el campo dejó de estar vacío.
         expect(find.text('Elige tus cremas'), findsNothing);
@@ -562,17 +602,17 @@ void main() {
 
     testWidgets(
       'elegir DOS salsas reales a la vez (multi-selección genuina, no '
-      'solo una tras otra) sigue mostrando "✓ Seleccionado" (no cuenta '
-      'cuántas) y agrega la fila con las dos',
+      'solo una tras otra) sigue mostrando "✓ Seleccionado" + badge '
+      '"Listo" (no cuenta cuántas) y agrega la fila con las dos',
       (tester) async {
         final (container, _) = await pumpDetail(tester, productId: 'i-3');
 
         await selectDialogOptions(tester, 'sauce', ['s-1', 's-2']);
 
-        // Resumen del campo: "✓ Seleccionado", sin importar cuántas se
-        // eligieron — no es un contador.
+        // Resumen del campo: "✓ Seleccionado" + badge "Listo", sin importar
+        // cuántas se eligieron — no es un contador.
         expect(find.text('✓ Seleccionado'), findsOneWidget);
-        expect(find.text('Listo'), findsNothing);
+        expect(find.text('Listo'), findsOneWidget);
 
         await tester.tap(find.byKey(const ValueKey('detail-add')));
         await tester.pumpAndSettle();
@@ -890,9 +930,9 @@ void main() {
     );
 
     testWidgets(
-      'elegir una bebida y ACEPTAR muestra "✓ Seleccionado" en el resumen '
-      '(grupo opcional, sin badge) y suma el precio de la bebida al total '
-      'del botón',
+      'elegir una bebida y ACEPTAR muestra "✓ Seleccionado" + badge "Listo" '
+      'en el resumen (grupo opcional con una selección real) y suma el '
+      'precio de la bebida al total del botón',
       (tester) async {
         await pumpDetail(tester, productId: 'i-4');
 
@@ -903,7 +943,7 @@ void main() {
         );
         expect(button.enabled, isTrue);
         expect(find.text('✓ Seleccionado'), findsOneWidget);
-        expect(find.text('Listo'), findsNothing);
+        expect(find.text('Listo'), findsOneWidget);
         expect(find.text('Coca-Cola 500ml — S/3.00'), findsNothing);
         expect(find.text('Elige tus bebidas'), findsNothing);
         // 18 (i-4) + 3 (Coca-Cola) = 21.
@@ -1038,6 +1078,117 @@ void main() {
     );
   });
 
+  group(
+    'checkbox "Sin X" controlado por allowWithout (independiente de '
+    'groupRequired)',
+    () {
+      testWidgets(
+        'grupo opcional con allowWithout=false (i-9): el diálogo NO ofrece '
+        'el checkbox "Sin bebida" y el subtítulo no lo menciona',
+        (tester) async {
+          await pumpDetail(tester, productId: 'i-9');
+
+          // Subtítulo sin "o \"Sin bebida\"" — el checkbox no se ofrece,
+          // así que prometerlo en el texto sería incorrecto (ver
+          // `_OptionGroupDropdown._subtitle`).
+          expect(find.text('Elige hasta 1'), findsOneWidget);
+          expect(find.textContaining('Sin bebida'), findsNothing);
+
+          await openDropdown(tester, 'beverage');
+
+          expect(
+            find.byKey(const ValueKey('detail-beverage-option-none')),
+            findsNothing,
+          );
+          expect(
+            find.byKey(const ValueKey('detail-beverage-option-b-1')),
+            findsOneWidget,
+          );
+        },
+      );
+
+      testWidgets(
+        'grupo opcional con allowWithout=false (i-9): el botón sigue '
+        'habilitado sin elegir nada — el flag solo oculta el checkbox, no '
+        'crea una elección forzada',
+        (tester) async {
+          final (container, _) = await pumpDetail(tester, productId: 'i-9');
+
+          final button = tester.widget<CeltasButton>(
+            find.byKey(const ValueKey('detail-add')),
+          );
+          expect(button.enabled, isTrue);
+
+          await tester.tap(find.byKey(const ValueKey('detail-add')));
+          await tester.pumpAndSettle();
+
+          final item = container.read(cartProvider).items.single;
+          expect(item.selectedBeverages, isEmpty);
+          expect(item.explicitlyNoBeverages, isFalse);
+        },
+      );
+
+      testWidgets(
+        'grupo opcional con allowWithout=true por default (i-10, campo sin '
+        'fijar a mano): el diálogo SÍ ofrece el checkbox "Sin salsas"',
+        (tester) async {
+          await pumpDetail(tester, productId: 'i-10');
+
+          await openDropdown(tester, 'sauce');
+
+          expect(
+            find.byKey(const ValueKey('detail-sauce-option-none')),
+            findsOneWidget,
+          );
+        },
+      );
+
+      testWidgets(
+        'grupo OBLIGATORIO con allowWithout=true por default (i-11): el '
+        'checkbox "Sin porciones extras" se sigue ocultando igual — '
+        '"Sin X" nunca es válido en un grupo obligatorio, sin importar '
+        'este flag',
+        (tester) async {
+          await pumpDetail(tester, productId: 'i-11');
+
+          await openDropdown(tester, 'extra');
+
+          expect(
+            find.byKey(const ValueKey('detail-extra-option-none')),
+            findsNothing,
+          );
+        },
+      );
+
+      testWidgets(
+        'bebidas SIN groupRequired (i-4): el badge "Listo" aparece apenas '
+        'hay una selección real, no solo en grupos obligatorios',
+        (tester) async {
+          await pumpDetail(tester, productId: 'i-4');
+
+          expect(find.text('Listo'), findsNothing);
+
+          await selectDialogOptions(tester, 'beverage', ['b-1']);
+
+          expect(find.text('Listo'), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        'seleccionar una bebida en un grupo NO obligatorio muestra el '
+        'badge "Listo" dentro del campo (mismo caso que arriba, foco en el '
+        'flujo real de selección vía diálogo + ACEPTAR)',
+        (tester) async {
+          await pumpDetail(tester, productId: 'i-4');
+
+          await selectDialogOptions(tester, 'beverage', ['b-2']);
+
+          expect(find.text('Listo'), findsOneWidget);
+        },
+      );
+    },
+  );
+
   group('selector de porciones extras (dropdown + diálogo)', () {
     testWidgets(
       'producto sin porciones extras configuradas → no muestra la sección',
@@ -1082,8 +1233,9 @@ void main() {
     );
 
     testWidgets(
-      'elegir una porción extra muestra "✓ Seleccionado" en el resumen '
-      '(grupo opcional, sin badge) y suma el precio al total del botón',
+      'elegir una porción extra muestra "✓ Seleccionado" + badge "Listo" '
+      'en el resumen (grupo opcional con una selección real) y suma el '
+      'precio al total del botón',
       (tester) async {
         await pumpDetail(tester, productId: 'i-6');
 
@@ -1094,7 +1246,7 @@ void main() {
         );
         expect(button.enabled, isTrue);
         expect(find.text('✓ Seleccionado'), findsOneWidget);
-        expect(find.text('Listo'), findsNothing);
+        expect(find.text('Listo'), findsOneWidget);
         expect(find.text('Papas extra — S/5.00'), findsNothing);
         expect(find.text('Elige tus porciones extras'), findsNothing);
         // 22 (i-6) + 5 (Papas extra) = 27.
