@@ -1004,86 +1004,95 @@ class _OptionGroupDropdown extends StatelessWidget {
     final applied = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: CeltasColors.surface,
-          title: Text(
-            title,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: CeltasColors.cream,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final option in options)
-                  CheckboxListTile(
-                    key: ValueKey('detail-$testKey-option-${option.id}'),
-                    value: tempSelected.contains(option.id),
-                    dense: true,
-                    activeColor: CeltasColors.orange,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    title: Text(
-                      option.label,
-                      style: const TextStyle(color: CeltasColors.cream),
-                    ),
-                    onChanged: (checked) {
-                      setDialogState(() {
-                        if (checked ?? false) {
-                          tempSelected.add(option.id);
-                          // Mutuamente excluyente con "Sin X": elegir
-                          // cualquier opción real desmarca ese checkbox si
-                          // estaba activo.
-                          tempExplicitlyNone = false;
-                        } else {
-                          tempSelected.remove(option.id);
-                        }
-                      });
-                    },
-                  ),
-                if (!groupRequired && allowWithout)
-                  CheckboxListTile(
-                    key: ValueKey('detail-$testKey-option-none'),
-                    value: tempExplicitlyNone,
-                    dense: true,
-                    activeColor: CeltasColors.orange,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    title: Text(
-                      noneLabel,
-                      style: const TextStyle(color: CeltasColors.cream),
-                    ),
-                    onChanged: (checked) {
-                      setDialogState(() {
-                        tempExplicitlyNone = checked ?? false;
-                        // Mutuamente excluyente con las opciones reales:
-                        // limpia cualquier selección previa.
-                        if (tempExplicitlyNone) tempSelected.clear();
-                      });
-                    },
-                  ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              key: ValueKey('detail-$testKey-dialog-cancel'),
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text(
-                'CANCELAR',
-                style: TextStyle(color: CeltasColors.textMuted),
+        builder: (context, setDialogState) {
+          // Al llegar a `groupMaxSelectable`, las opciones sin marcar se
+          // deshabilitan (`onChanged: null`) — las ya marcadas siguen
+          // pudiendo desmarcarse. `_sauceChoiceViolation` y hermanos quedan
+          // como red de seguridad (el backend responde 400 igual si se pasa).
+          final atMax = tempSelected.length >= groupMaxSelectable;
+          return AlertDialog(
+            backgroundColor: CeltasColors.surface,
+            title: Text(
+              title,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: CeltasColors.cream,
+                fontWeight: FontWeight.w700,
               ),
             ),
-            TextButton(
-              key: ValueKey('detail-$testKey-dialog-ok'),
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text(
-                'ACEPTAR',
-                style: TextStyle(color: CeltasColors.orange),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final option in options)
+                    CheckboxListTile(
+                      key: ValueKey('detail-$testKey-option-${option.id}'),
+                      value: tempSelected.contains(option.id),
+                      dense: true,
+                      activeColor: CeltasColors.orange,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: Text(
+                        option.label,
+                        style: const TextStyle(color: CeltasColors.cream),
+                      ),
+                      onChanged: (atMax && !tempSelected.contains(option.id))
+                          ? null
+                          : (checked) {
+                              setDialogState(() {
+                                if (checked ?? false) {
+                                  tempSelected.add(option.id);
+                                  // Mutuamente excluyente con "Sin X": elegir
+                                  // cualquier opción real desmarca ese
+                                  // checkbox si estaba activo.
+                                  tempExplicitlyNone = false;
+                                } else {
+                                  tempSelected.remove(option.id);
+                                }
+                              });
+                            },
+                    ),
+                  if (!groupRequired && allowWithout)
+                    CheckboxListTile(
+                      key: ValueKey('detail-$testKey-option-none'),
+                      value: tempExplicitlyNone,
+                      dense: true,
+                      activeColor: CeltasColors.orange,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: Text(
+                        noneLabel,
+                        style: const TextStyle(color: CeltasColors.cream),
+                      ),
+                      onChanged: (checked) {
+                        setDialogState(() {
+                          tempExplicitlyNone = checked ?? false;
+                          // Mutuamente excluyente con las opciones reales:
+                          // limpia cualquier selección previa.
+                          if (tempExplicitlyNone) tempSelected.clear();
+                        });
+                      },
+                    ),
+                ],
               ),
             ),
-          ],
-        ),
+            actions: [
+              TextButton(
+                key: ValueKey('detail-$testKey-dialog-cancel'),
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text(
+                  'CANCELAR',
+                  style: TextStyle(color: CeltasColors.textMuted),
+                ),
+              ),
+              TextButton(
+                key: ValueKey('detail-$testKey-dialog-ok'),
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text(
+                  'ACEPTAR',
+                  style: TextStyle(color: CeltasColors.orange),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
     if (applied == true) {

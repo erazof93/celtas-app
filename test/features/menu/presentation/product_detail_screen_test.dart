@@ -22,6 +22,7 @@ import 'package:google_fonts/google_fonts.dart';
 void main() {
   const mayo = SauceOption(id: 's-1', name: 'Mayonesa');
   const mostaza = SauceOption(id: 's-2', name: 'Mostaza');
+  const ketchup = SauceOption(id: 's-3', name: 'Ketchup');
   const cocaCola = BeverageOption(id: 'b-1', name: 'Coca-Cola 500ml', price: 3);
   const incaKola = BeverageOption(id: 'b-2', name: 'Inca Kola 500ml', price: 3);
   const papasExtra = ExtraPortionOption(
@@ -145,6 +146,16 @@ void main() {
         extraPortionsGroupRequired: true,
         extraPortionsGroupMaxSelectable: 1,
       ),
+      // Salsas opcionales, máximo 2 sobre un catálogo de 3 — el único
+      // fixture donde el tope del diálogo deja una opción sin marcar
+      // deshabilitada con más de una ya marcada.
+      PublicMenuItem(
+        id: 'i-12',
+        name: 'Tres Salsas Burger',
+        price: 14,
+        sauces: [mayo, mostaza, ketchup],
+        sauceGroupMaxSelectable: 2,
+      ),
     ],
   );
 
@@ -239,6 +250,21 @@ void main() {
     await tester.tap(find.byKey(ValueKey('detail-$testKey-dialog-cancel')));
     await tester.pumpAndSettle();
   }
+
+  /// Si el checkbox de `optionId` acepta toques (`onChanged != null`) — el
+  /// diálogo deshabilita las opciones sin marcar al llegar a
+  /// `groupMaxSelectable` (ver `_OptionGroupDropdown._openDialog`).
+  bool isDialogOptionEnabled(
+    WidgetTester tester,
+    String testKey,
+    String optionId,
+  ) =>
+      tester
+          .widget<CheckboxListTile>(
+            find.byKey(ValueKey('detail-$testKey-option-$optionId')),
+          )
+          .onChanged !=
+      null;
 
   /// Atajo para el caso más común: abrir el diálogo, tocar una o varias
   /// opciones en orden, y confirmar con ACEPTAR.
@@ -826,29 +852,75 @@ void main() {
     );
 
     testWidgets(
-      'salsas obligatorias: seleccionar más salsas que el máximo permitido '
-      'bloquea el botón y muestra el aviso "Máximo X" en el SnackBar al '
-      'tocar "Agregar"',
+      'salsas obligatorias (max 1, 2 opciones): al marcar la 1ª, la 2ª se '
+      'deshabilita en el diálogo; al desmarcar la 1ª, la 2ª se habilita '
+      'de nuevo',
       (tester) async {
-        await pumpDetail(tester, productId: 'i-8'); // max = 1
+        final (container, _) = await pumpDetail(tester, productId: 'i-8');
 
-        await selectDialogOptions(tester, 'sauce', ['s-1', 's-2']);
+        await openDropdown(tester, 'sauce');
+        expect(isDialogOptionEnabled(tester, 'sauce', 's-1'), isTrue);
+        expect(isDialogOptionEnabled(tester, 'sauce', 's-2'), isTrue);
 
-        final button = tester.widget<CeltasButton>(
-          find.byKey(const ValueKey('detail-add')),
+        await tapDialogOption(tester, 'sauce', 's-1');
+        // La marcada sigue pudiendo desmarcarse; la otra queda bloqueada.
+        expect(isDialogOptionEnabled(tester, 'sauce', 's-1'), isTrue);
+        expect(isDialogOptionEnabled(tester, 'sauce', 's-2'), isFalse);
+
+        // Tocar la deshabilitada no la marca.
+        await tapDialogOption(tester, 'sauce', 's-2');
+        expect(
+          tester
+              .widget<CheckboxListTile>(
+                find.byKey(const ValueKey('detail-sauce-option-s-2')),
+              )
+              .value,
+          isFalse,
         );
-        expect(button.enabled, isFalse);
 
+        await tapDialogOption(tester, 'sauce', 's-1');
+        expect(isDialogOptionEnabled(tester, 'sauce', 's-2'), isTrue);
+
+        // Con la 2ª ya elegible, la selección final respeta el máximo.
+        await tapDialogOption(tester, 'sauce', 's-2');
+        await confirmDialog(tester, 'sauce');
         await tester.tap(find.byKey(const ValueKey('detail-add')));
         await tester.pumpAndSettle();
         expect(
-          find.descendant(
-            of: find.byType(SnackBar),
-            matching: find.textContaining('Máximo 1 salsa'),
-          ),
-          findsOneWidget,
+          container
+              .read(cartProvider)
+              .items
+              .single
+              .selectedSauces
+              .map((s) => s.name),
+          ['Mostaza'],
         );
-        await tester.pump(const Duration(milliseconds: 900));
+      },
+    );
+
+    testWidgets(
+      'salsas opcionales (max 2, 3 opciones): la 3ª se deshabilita apenas '
+      'hay 2 marcadas, y sigue deshabilitada al reabrir el diálogo con esa '
+      'selección ya aplicada',
+      (tester) async {
+        await pumpDetail(tester, productId: 'i-12');
+
+        await openDropdown(tester, 'sauce');
+        await tapDialogOption(tester, 'sauce', 's-1');
+        // Con 1 de 2 todavía queda cupo: ninguna se deshabilita.
+        expect(isDialogOptionEnabled(tester, 'sauce', 's-2'), isTrue);
+        expect(isDialogOptionEnabled(tester, 'sauce', 's-3'), isTrue);
+
+        await tapDialogOption(tester, 'sauce', 's-2');
+        expect(isDialogOptionEnabled(tester, 'sauce', 's-1'), isTrue);
+        expect(isDialogOptionEnabled(tester, 'sauce', 's-2'), isTrue);
+        expect(isDialogOptionEnabled(tester, 'sauce', 's-3'), isFalse);
+        // "Sin salsas" no cuenta para el tope — sigue disponible.
+        expect(isDialogOptionEnabled(tester, 'sauce', 'none'), isTrue);
+
+        await confirmDialog(tester, 'sauce');
+        await openDropdown(tester, 'sauce');
+        expect(isDialogOptionEnabled(tester, 'sauce', 's-3'), isFalse);
       },
     );
 
@@ -968,32 +1040,19 @@ void main() {
     );
 
     testWidgets(
-      'seleccionar más bebidas que el máximo permitido dentro del mismo '
-      'diálogo bloquea el botón y muestra el aviso "Máximo X" en el '
-      'SnackBar al tocar "Agregar" — esta validación NO cambió con el '
-      'punto 1 (es una regla distinta a la de "elección forzada")',
+      'bebidas (max 1, 2 opciones): al marcar la 1ª, la 2ª se deshabilita '
+      'en el diálogo; al desmarcar la 1ª, la 2ª se habilita de nuevo — el '
+      'diálogo ya no deja pasarse del máximo',
       (tester) async {
-        await pumpDetail(tester, productId: 'i-4'); // max = 1
+        await pumpDetail(tester, productId: 'i-4');
 
-        await selectDialogOptions(tester, 'beverage', ['b-1', 'b-2']);
+        await openDropdown(tester, 'beverage');
+        await tapDialogOption(tester, 'beverage', 'b-1');
+        expect(isDialogOptionEnabled(tester, 'beverage', 'b-1'), isTrue);
+        expect(isDialogOptionEnabled(tester, 'beverage', 'b-2'), isFalse);
 
-        final button = tester.widget<CeltasButton>(
-          find.byKey(const ValueKey('detail-add')),
-        );
-        expect(button.enabled, isFalse);
-
-        await tester.tap(find.byKey(const ValueKey('detail-add')));
-        await tester.pumpAndSettle();
-        expect(
-          find.descendant(
-            of: find.byType(SnackBar),
-            matching: find.textContaining('Máximo 1 bebida'),
-          ),
-          findsOneWidget,
-        );
-        // Deja correr el `Future.delayed(800ms)` del resalte antes de que
-        // termine el test (ver grupo "aviso de campo bloqueante...").
-        await tester.pump(const Duration(milliseconds: 900));
+        await tapDialogOption(tester, 'beverage', 'b-1');
+        expect(isDialogOptionEnabled(tester, 'beverage', 'b-2'), isTrue);
       },
     );
 
@@ -1255,29 +1314,19 @@ void main() {
     );
 
     testWidgets(
-      'seleccionar más porciones extras que el máximo permitido bloquea '
-      'el botón y muestra el aviso "Máximo X" en el SnackBar al tocar '
-      '"Agregar" — esta validación no cambió con el punto 1',
+      'porciones extras (max 1, 2 opciones): al marcar la 1ª, la 2ª se '
+      'deshabilita en el diálogo; al desmarcar la 1ª, la 2ª se habilita '
+      'de nuevo',
       (tester) async {
-        await pumpDetail(tester, productId: 'i-6'); // max = 1
+        await pumpDetail(tester, productId: 'i-6');
 
-        await selectDialogOptions(tester, 'extra', ['e-1', 'e-2']);
+        await openDropdown(tester, 'extra');
+        await tapDialogOption(tester, 'extra', 'e-1');
+        expect(isDialogOptionEnabled(tester, 'extra', 'e-1'), isTrue);
+        expect(isDialogOptionEnabled(tester, 'extra', 'e-2'), isFalse);
 
-        final button = tester.widget<CeltasButton>(
-          find.byKey(const ValueKey('detail-add')),
-        );
-        expect(button.enabled, isFalse);
-
-        await tester.tap(find.byKey(const ValueKey('detail-add')));
-        await tester.pumpAndSettle();
-        expect(
-          find.descendant(
-            of: find.byType(SnackBar),
-            matching: find.textContaining('Máximo 1 porción'),
-          ),
-          findsOneWidget,
-        );
-        await tester.pump(const Duration(milliseconds: 900));
+        await tapDialogOption(tester, 'extra', 'e-1');
+        expect(isDialogOptionEnabled(tester, 'extra', 'e-2'), isTrue);
       },
     );
 
@@ -1640,6 +1689,56 @@ void main() {
       await tester.pumpAndSettle();
       return (container, goRouter);
     }
+
+    testWidgets(
+      'red de seguridad del máximo: una fila del carrito que ya trae más '
+      'salsas que el máximo actual (ej. el admin lo bajó después) bloquea '
+      'GUARDAR CAMBIOS con el aviso "Máximo X", y el diálogo deja '
+      'desmarcar para corregirla',
+      (tester) async {
+        await pumpEdit(
+          tester,
+          seed: (notifier) => notifier.addItem(
+            category.items.firstWhere((i) => i.id == 'i-8'), // max = 1
+            selectedSauces: const [mayo, mostaza],
+          ),
+          pickEditingLineKey: (state) => state.items.single.lineKey,
+          productId: 'i-8',
+        );
+
+        expect(
+          tester
+              .widget<CeltasButton>(find.byKey(const ValueKey('detail-add')))
+              .enabled,
+          isFalse,
+        );
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
+        expect(
+          find.descendant(
+            of: find.byType(SnackBar),
+            matching: find.textContaining('Máximo 1 salsa'),
+          ),
+          findsOneWidget,
+        );
+        // Deja correr el `Future.delayed(800ms)` del resalte.
+        await tester.pump(const Duration(milliseconds: 900));
+
+        // Por encima del tope, las marcadas siguen desmarcables.
+        await openDropdown(tester, 'sauce');
+        expect(isDialogOptionEnabled(tester, 'sauce', 's-1'), isTrue);
+        expect(isDialogOptionEnabled(tester, 'sauce', 's-2'), isTrue);
+        await tapDialogOption(tester, 'sauce', 's-2');
+        await confirmDialog(tester, 'sauce');
+
+        expect(
+          tester
+              .widget<CeltasButton>(find.byKey(const ValueKey('detail-add')))
+              .enabled,
+          isTrue,
+        );
+      },
+    );
 
     testWidgets(
       'precarga la cantidad y las salsas de la fila que se está editando, '
