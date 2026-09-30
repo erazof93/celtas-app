@@ -30,8 +30,9 @@ import 'package:url_launcher/url_launcher.dart';
 /// y `GET /menu` (categorías con tarjetas de producto). El botón "+" de cada
 /// tarjeta agrega directo al carrito local (`cartProvider`, módulo 4) SIN
 /// pasar por el selector del detalle SOLO si el producto no ofrece salsas,
-/// bebidas NI porciones extras (`item.sauces.isEmpty && item.beverages.
-/// isEmpty && item.extraPortions.isEmpty`) — es el atajo de "agregar rápido"
+/// bebidas, porciones extras NI tipos de papas (`item.sauces.isEmpty &&
+/// item.beverages.isEmpty && item.extraPortions.isEmpty &&
+/// item.friesTypes.isEmpty`) — es el atajo de "agregar rápido"
 /// ya existente y probado, y agregar así es un estado válido para el backend
 /// (`selectedSauces`/`selectedBeverages`/`selectedExtraPortions: null`, ver
 /// `orders.service.ts`). Si el producto SÍ ofrece cualquiera de las tres, el
@@ -1031,7 +1032,8 @@ class _ProductCard extends ConsumerWidget {
                 ScaffoldMessenger.of(context).hideCurrentSnackBar();
                 if (item.sauces.isNotEmpty ||
                     item.beverages.isNotEmpty ||
-                    item.extraPortions.isNotEmpty) {
+                    item.extraPortions.isNotEmpty ||
+                    item.friesTypes.isNotEmpty) {
                   context.push('/product/${item.id}');
                   return;
                 }

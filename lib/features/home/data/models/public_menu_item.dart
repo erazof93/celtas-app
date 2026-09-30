@@ -77,8 +77,36 @@ abstract class PublicMenuItem with _$PublicMenuItem {
     @Default(false) bool extraPortionsGroupRequired,
     @Default(0) int extraPortionsGroupMaxSelectable,
     @Default(true) bool extraPortionsAllowWithout,
+    @Default(<FriesType>[]) List<FriesType> friesTypes,
+    @Default(false) bool friesTypeGroupRequired,
+    @Default(1) int friesTypeGroupMaxSelectable,
   }) = _PublicMenuItem;
 
   factory PublicMenuItem.fromJson(Map<String, dynamic> json) =>
       _$PublicMenuItemFromJson(json);
+}
+
+/// Tipo de papas que un producto ofrece (ej. "Papas fritas", "Papas al
+/// hilo"), tal como lo devuelve `GET /menu` dentro de cada ítem en
+/// `friesTypes`.
+///
+/// Contrato verificado contra `backend-celtas/src/modules/menu/menu.service.ts`
+/// (`findPublicMenu`): cada tipo expone `id`, `name` e `isDefault`, ordenados
+/// con el default primero y luego alfabético. Vacío = el producto no muestra
+/// selector de papas. `friesTypeGroupRequired` (default `false`) y
+/// `friesTypeGroupMaxSelectable` (NOT NULL default 1) viajan SIEMPRE, igual
+/// que los de bebidas/extras — ver `menu-item.entity.ts`. No suman precio y no
+/// hay flag `AllowWithout`: la app nunca ofrece "Sin papas".
+///
+/// Se reusa el mismo shape para `CartItem.selectedFriesTypes`.
+@freezed
+abstract class FriesType with _$FriesType {
+  const factory FriesType({
+    required String id,
+    required String name,
+    @Default(false) bool isDefault,
+  }) = _FriesType;
+
+  factory FriesType.fromJson(Map<String, dynamic> json) =>
+      _$FriesTypeFromJson(json);
 }

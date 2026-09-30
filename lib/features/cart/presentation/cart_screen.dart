@@ -297,7 +297,8 @@ class _CartItemRow extends ConsumerWidget {
     if (item.rewardRedemptionId != null) return false;
     if (item.selectedSauces.isNotEmpty ||
         item.selectedBeverages.isNotEmpty ||
-        item.selectedExtraPortions.isNotEmpty) {
+        item.selectedExtraPortions.isNotEmpty ||
+        item.selectedFriesTypes.isNotEmpty) {
       return true;
     }
     final categories = ref.watch(publicMenuProvider).valueOrNull;
@@ -307,7 +308,8 @@ class _CartItemRow extends ConsumerWidget {
         if (menuItem.id == item.menuItemId) {
           return menuItem.sauces.isNotEmpty ||
               menuItem.beverages.isNotEmpty ||
-              menuItem.extraPortions.isNotEmpty;
+              menuItem.extraPortions.isNotEmpty ||
+              menuItem.friesTypes.isNotEmpty;
         }
       }
     }
@@ -379,6 +381,19 @@ class _CartItemRow extends ConsumerWidget {
                         ? 'cremas: '
                               '${item.selectedSauces.map((s) => s.name).join(', ')}'
                         : 'Sin salsas',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontSize: 11.5,
+                          color: CeltasColors.textMuted,
+                          fontStyle: FontStyle.italic,
+                        ),
+                  ),
+                ],
+                if (item.selectedFriesTypes.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'papas: '
+                    '${item.selectedFriesTypes.map((f) => f.name).join(', ')}',
+                    key: ValueKey('cart-fries-${item.lineKey}'),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           fontSize: 11.5,
                           color: CeltasColors.textMuted,

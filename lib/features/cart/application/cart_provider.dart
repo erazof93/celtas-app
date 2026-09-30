@@ -122,6 +122,7 @@ class CartNotifier extends Notifier<CartState> {
     bool explicitlyNoBeverages = false,
     List<ExtraPortionOption> selectedExtraPortions = const [],
     bool explicitlyNoExtraPortions = false,
+    List<FriesType> selectedFriesTypes = const [],
     String? comment,
   }) {
     if (quantity <= 0) return;
@@ -137,6 +138,7 @@ class CartNotifier extends Notifier<CartState> {
       explicitlyNoBeverages: explicitlyNoBeverages,
       selectedExtraPortions: selectedExtraPortions,
       explicitlyNoExtraPortions: explicitlyNoExtraPortions,
+      selectedFriesTypes: selectedFriesTypes,
       comment: comment,
     );
     final items = state.items;
@@ -188,6 +190,7 @@ class CartNotifier extends Notifier<CartState> {
     bool explicitlyNoBeverages = false,
     List<ExtraPortionOption> selectedExtraPortions = const [],
     bool explicitlyNoExtraPortions = false,
+    List<FriesType> selectedFriesTypes = const [],
     String? comment,
   }) {
     if (quantity <= 0) return;
@@ -202,6 +205,7 @@ class CartNotifier extends Notifier<CartState> {
       explicitlyNoBeverages: explicitlyNoBeverages,
       selectedExtraPortions: selectedExtraPortions,
       explicitlyNoExtraPortions: explicitlyNoExtraPortions,
+      selectedFriesTypes: selectedFriesTypes,
       comment: comment,
     );
     final mergeIndex = items.indexWhere((i) => i.lineKey == updated.lineKey);

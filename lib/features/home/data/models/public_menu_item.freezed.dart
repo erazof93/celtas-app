@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$PublicMenuItem {
 
- String get id; String get name; String? get description; double get price; String? get image; List<SauceOption> get sauces; bool get sauceGroupRequired; int? get sauceGroupMaxSelectable; bool get sauceAllowWithout; List<BeverageOption> get beverages; bool get beverageGroupRequired; int get beverageGroupMaxSelectable; bool get beverageAllowWithout; List<ExtraPortionOption> get extraPortions; bool get extraPortionsGroupRequired; int get extraPortionsGroupMaxSelectable; bool get extraPortionsAllowWithout;
+ String get id; String get name; String? get description; double get price; String? get image; List<SauceOption> get sauces; bool get sauceGroupRequired; int? get sauceGroupMaxSelectable; bool get sauceAllowWithout; List<BeverageOption> get beverages; bool get beverageGroupRequired; int get beverageGroupMaxSelectable; bool get beverageAllowWithout; List<ExtraPortionOption> get extraPortions; bool get extraPortionsGroupRequired; int get extraPortionsGroupMaxSelectable; bool get extraPortionsAllowWithout; List<FriesType> get friesTypes; bool get friesTypeGroupRequired; int get friesTypeGroupMaxSelectable;
 /// Create a copy of PublicMenuItem
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +28,16 @@ $PublicMenuItemCopyWith<PublicMenuItem> get copyWith => _$PublicMenuItemCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is PublicMenuItem&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.description, description) || other.description == description)&&(identical(other.price, price) || other.price == price)&&(identical(other.image, image) || other.image == image)&&const DeepCollectionEquality().equals(other.sauces, sauces)&&(identical(other.sauceGroupRequired, sauceGroupRequired) || other.sauceGroupRequired == sauceGroupRequired)&&(identical(other.sauceGroupMaxSelectable, sauceGroupMaxSelectable) || other.sauceGroupMaxSelectable == sauceGroupMaxSelectable)&&(identical(other.sauceAllowWithout, sauceAllowWithout) || other.sauceAllowWithout == sauceAllowWithout)&&const DeepCollectionEquality().equals(other.beverages, beverages)&&(identical(other.beverageGroupRequired, beverageGroupRequired) || other.beverageGroupRequired == beverageGroupRequired)&&(identical(other.beverageGroupMaxSelectable, beverageGroupMaxSelectable) || other.beverageGroupMaxSelectable == beverageGroupMaxSelectable)&&(identical(other.beverageAllowWithout, beverageAllowWithout) || other.beverageAllowWithout == beverageAllowWithout)&&const DeepCollectionEquality().equals(other.extraPortions, extraPortions)&&(identical(other.extraPortionsGroupRequired, extraPortionsGroupRequired) || other.extraPortionsGroupRequired == extraPortionsGroupRequired)&&(identical(other.extraPortionsGroupMaxSelectable, extraPortionsGroupMaxSelectable) || other.extraPortionsGroupMaxSelectable == extraPortionsGroupMaxSelectable)&&(identical(other.extraPortionsAllowWithout, extraPortionsAllowWithout) || other.extraPortionsAllowWithout == extraPortionsAllowWithout));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is PublicMenuItem&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.description, description) || other.description == description)&&(identical(other.price, price) || other.price == price)&&(identical(other.image, image) || other.image == image)&&const DeepCollectionEquality().equals(other.sauces, sauces)&&(identical(other.sauceGroupRequired, sauceGroupRequired) || other.sauceGroupRequired == sauceGroupRequired)&&(identical(other.sauceGroupMaxSelectable, sauceGroupMaxSelectable) || other.sauceGroupMaxSelectable == sauceGroupMaxSelectable)&&(identical(other.sauceAllowWithout, sauceAllowWithout) || other.sauceAllowWithout == sauceAllowWithout)&&const DeepCollectionEquality().equals(other.beverages, beverages)&&(identical(other.beverageGroupRequired, beverageGroupRequired) || other.beverageGroupRequired == beverageGroupRequired)&&(identical(other.beverageGroupMaxSelectable, beverageGroupMaxSelectable) || other.beverageGroupMaxSelectable == beverageGroupMaxSelectable)&&(identical(other.beverageAllowWithout, beverageAllowWithout) || other.beverageAllowWithout == beverageAllowWithout)&&const DeepCollectionEquality().equals(other.extraPortions, extraPortions)&&(identical(other.extraPortionsGroupRequired, extraPortionsGroupRequired) || other.extraPortionsGroupRequired == extraPortionsGroupRequired)&&(identical(other.extraPortionsGroupMaxSelectable, extraPortionsGroupMaxSelectable) || other.extraPortionsGroupMaxSelectable == extraPortionsGroupMaxSelectable)&&(identical(other.extraPortionsAllowWithout, extraPortionsAllowWithout) || other.extraPortionsAllowWithout == extraPortionsAllowWithout)&&const DeepCollectionEquality().equals(other.friesTypes, friesTypes)&&(identical(other.friesTypeGroupRequired, friesTypeGroupRequired) || other.friesTypeGroupRequired == friesTypeGroupRequired)&&(identical(other.friesTypeGroupMaxSelectable, friesTypeGroupMaxSelectable) || other.friesTypeGroupMaxSelectable == friesTypeGroupMaxSelectable));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,name,description,price,image,const DeepCollectionEquality().hash(sauces),sauceGroupRequired,sauceGroupMaxSelectable,sauceAllowWithout,const DeepCollectionEquality().hash(beverages),beverageGroupRequired,beverageGroupMaxSelectable,beverageAllowWithout,const DeepCollectionEquality().hash(extraPortions),extraPortionsGroupRequired,extraPortionsGroupMaxSelectable,extraPortionsAllowWithout);
+int get hashCode => Object.hashAll([runtimeType,id,name,description,price,image,const DeepCollectionEquality().hash(sauces),sauceGroupRequired,sauceGroupMaxSelectable,sauceAllowWithout,const DeepCollectionEquality().hash(beverages),beverageGroupRequired,beverageGroupMaxSelectable,beverageAllowWithout,const DeepCollectionEquality().hash(extraPortions),extraPortionsGroupRequired,extraPortionsGroupMaxSelectable,extraPortionsAllowWithout,const DeepCollectionEquality().hash(friesTypes),friesTypeGroupRequired,friesTypeGroupMaxSelectable]);
 
 @override
 String toString() {
-  return 'PublicMenuItem(id: $id, name: $name, description: $description, price: $price, image: $image, sauces: $sauces, sauceGroupRequired: $sauceGroupRequired, sauceGroupMaxSelectable: $sauceGroupMaxSelectable, sauceAllowWithout: $sauceAllowWithout, beverages: $beverages, beverageGroupRequired: $beverageGroupRequired, beverageGroupMaxSelectable: $beverageGroupMaxSelectable, beverageAllowWithout: $beverageAllowWithout, extraPortions: $extraPortions, extraPortionsGroupRequired: $extraPortionsGroupRequired, extraPortionsGroupMaxSelectable: $extraPortionsGroupMaxSelectable, extraPortionsAllowWithout: $extraPortionsAllowWithout)';
+  return 'PublicMenuItem(id: $id, name: $name, description: $description, price: $price, image: $image, sauces: $sauces, sauceGroupRequired: $sauceGroupRequired, sauceGroupMaxSelectable: $sauceGroupMaxSelectable, sauceAllowWithout: $sauceAllowWithout, beverages: $beverages, beverageGroupRequired: $beverageGroupRequired, beverageGroupMaxSelectable: $beverageGroupMaxSelectable, beverageAllowWithout: $beverageAllowWithout, extraPortions: $extraPortions, extraPortionsGroupRequired: $extraPortionsGroupRequired, extraPortionsGroupMaxSelectable: $extraPortionsGroupMaxSelectable, extraPortionsAllowWithout: $extraPortionsAllowWithout, friesTypes: $friesTypes, friesTypeGroupRequired: $friesTypeGroupRequired, friesTypeGroupMaxSelectable: $friesTypeGroupMaxSelectable)';
 }
 
 
@@ -48,7 +48,7 @@ abstract mixin class $PublicMenuItemCopyWith<$Res>  {
   factory $PublicMenuItemCopyWith(PublicMenuItem value, $Res Function(PublicMenuItem) _then) = _$PublicMenuItemCopyWithImpl;
 @useResult
 $Res call({
- String id, String name, String? description, double price, String? image, List<SauceOption> sauces, bool sauceGroupRequired, int? sauceGroupMaxSelectable, bool sauceAllowWithout, List<BeverageOption> beverages, bool beverageGroupRequired, int beverageGroupMaxSelectable, bool beverageAllowWithout, List<ExtraPortionOption> extraPortions, bool extraPortionsGroupRequired, int extraPortionsGroupMaxSelectable, bool extraPortionsAllowWithout
+ String id, String name, String? description, double price, String? image, List<SauceOption> sauces, bool sauceGroupRequired, int? sauceGroupMaxSelectable, bool sauceAllowWithout, List<BeverageOption> beverages, bool beverageGroupRequired, int beverageGroupMaxSelectable, bool beverageAllowWithout, List<ExtraPortionOption> extraPortions, bool extraPortionsGroupRequired, int extraPortionsGroupMaxSelectable, bool extraPortionsAllowWithout, List<FriesType> friesTypes, bool friesTypeGroupRequired, int friesTypeGroupMaxSelectable
 });
 
 
@@ -65,7 +65,7 @@ class _$PublicMenuItemCopyWithImpl<$Res>
 
 /// Create a copy of PublicMenuItem
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? price = null,Object? image = freezed,Object? sauces = null,Object? sauceGroupRequired = null,Object? sauceGroupMaxSelectable = freezed,Object? sauceAllowWithout = null,Object? beverages = null,Object? beverageGroupRequired = null,Object? beverageGroupMaxSelectable = null,Object? beverageAllowWithout = null,Object? extraPortions = null,Object? extraPortionsGroupRequired = null,Object? extraPortionsGroupMaxSelectable = null,Object? extraPortionsAllowWithout = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? price = null,Object? image = freezed,Object? sauces = null,Object? sauceGroupRequired = null,Object? sauceGroupMaxSelectable = freezed,Object? sauceAllowWithout = null,Object? beverages = null,Object? beverageGroupRequired = null,Object? beverageGroupMaxSelectable = null,Object? beverageAllowWithout = null,Object? extraPortions = null,Object? extraPortionsGroupRequired = null,Object? extraPortionsGroupMaxSelectable = null,Object? extraPortionsAllowWithout = null,Object? friesTypes = null,Object? friesTypeGroupRequired = null,Object? friesTypeGroupMaxSelectable = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -84,7 +84,10 @@ as bool,extraPortions: null == extraPortions ? _self.extraPortions : extraPortio
 as List<ExtraPortionOption>,extraPortionsGroupRequired: null == extraPortionsGroupRequired ? _self.extraPortionsGroupRequired : extraPortionsGroupRequired // ignore: cast_nullable_to_non_nullable
 as bool,extraPortionsGroupMaxSelectable: null == extraPortionsGroupMaxSelectable ? _self.extraPortionsGroupMaxSelectable : extraPortionsGroupMaxSelectable // ignore: cast_nullable_to_non_nullable
 as int,extraPortionsAllowWithout: null == extraPortionsAllowWithout ? _self.extraPortionsAllowWithout : extraPortionsAllowWithout // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,friesTypes: null == friesTypes ? _self.friesTypes : friesTypes // ignore: cast_nullable_to_non_nullable
+as List<FriesType>,friesTypeGroupRequired: null == friesTypeGroupRequired ? _self.friesTypeGroupRequired : friesTypeGroupRequired // ignore: cast_nullable_to_non_nullable
+as bool,friesTypeGroupMaxSelectable: null == friesTypeGroupMaxSelectable ? _self.friesTypeGroupMaxSelectable : friesTypeGroupMaxSelectable // ignore: cast_nullable_to_non_nullable
+as int,
   ));
 }
 
@@ -169,10 +172,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  double price,  String? image,  List<SauceOption> sauces,  bool sauceGroupRequired,  int? sauceGroupMaxSelectable,  bool sauceAllowWithout,  List<BeverageOption> beverages,  bool beverageGroupRequired,  int beverageGroupMaxSelectable,  bool beverageAllowWithout,  List<ExtraPortionOption> extraPortions,  bool extraPortionsGroupRequired,  int extraPortionsGroupMaxSelectable,  bool extraPortionsAllowWithout)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  double price,  String? image,  List<SauceOption> sauces,  bool sauceGroupRequired,  int? sauceGroupMaxSelectable,  bool sauceAllowWithout,  List<BeverageOption> beverages,  bool beverageGroupRequired,  int beverageGroupMaxSelectable,  bool beverageAllowWithout,  List<ExtraPortionOption> extraPortions,  bool extraPortionsGroupRequired,  int extraPortionsGroupMaxSelectable,  bool extraPortionsAllowWithout,  List<FriesType> friesTypes,  bool friesTypeGroupRequired,  int friesTypeGroupMaxSelectable)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _PublicMenuItem() when $default != null:
-return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_that.sauces,_that.sauceGroupRequired,_that.sauceGroupMaxSelectable,_that.sauceAllowWithout,_that.beverages,_that.beverageGroupRequired,_that.beverageGroupMaxSelectable,_that.beverageAllowWithout,_that.extraPortions,_that.extraPortionsGroupRequired,_that.extraPortionsGroupMaxSelectable,_that.extraPortionsAllowWithout);case _:
+return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_that.sauces,_that.sauceGroupRequired,_that.sauceGroupMaxSelectable,_that.sauceAllowWithout,_that.beverages,_that.beverageGroupRequired,_that.beverageGroupMaxSelectable,_that.beverageAllowWithout,_that.extraPortions,_that.extraPortionsGroupRequired,_that.extraPortionsGroupMaxSelectable,_that.extraPortionsAllowWithout,_that.friesTypes,_that.friesTypeGroupRequired,_that.friesTypeGroupMaxSelectable);case _:
   return orElse();
 
 }
@@ -190,10 +193,10 @@ return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_t
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  double price,  String? image,  List<SauceOption> sauces,  bool sauceGroupRequired,  int? sauceGroupMaxSelectable,  bool sauceAllowWithout,  List<BeverageOption> beverages,  bool beverageGroupRequired,  int beverageGroupMaxSelectable,  bool beverageAllowWithout,  List<ExtraPortionOption> extraPortions,  bool extraPortionsGroupRequired,  int extraPortionsGroupMaxSelectable,  bool extraPortionsAllowWithout)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  double price,  String? image,  List<SauceOption> sauces,  bool sauceGroupRequired,  int? sauceGroupMaxSelectable,  bool sauceAllowWithout,  List<BeverageOption> beverages,  bool beverageGroupRequired,  int beverageGroupMaxSelectable,  bool beverageAllowWithout,  List<ExtraPortionOption> extraPortions,  bool extraPortionsGroupRequired,  int extraPortionsGroupMaxSelectable,  bool extraPortionsAllowWithout,  List<FriesType> friesTypes,  bool friesTypeGroupRequired,  int friesTypeGroupMaxSelectable)  $default,) {final _that = this;
 switch (_that) {
 case _PublicMenuItem():
-return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_that.sauces,_that.sauceGroupRequired,_that.sauceGroupMaxSelectable,_that.sauceAllowWithout,_that.beverages,_that.beverageGroupRequired,_that.beverageGroupMaxSelectable,_that.beverageAllowWithout,_that.extraPortions,_that.extraPortionsGroupRequired,_that.extraPortionsGroupMaxSelectable,_that.extraPortionsAllowWithout);case _:
+return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_that.sauces,_that.sauceGroupRequired,_that.sauceGroupMaxSelectable,_that.sauceAllowWithout,_that.beverages,_that.beverageGroupRequired,_that.beverageGroupMaxSelectable,_that.beverageAllowWithout,_that.extraPortions,_that.extraPortionsGroupRequired,_that.extraPortionsGroupMaxSelectable,_that.extraPortionsAllowWithout,_that.friesTypes,_that.friesTypeGroupRequired,_that.friesTypeGroupMaxSelectable);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -210,10 +213,10 @@ return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_t
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  String? description,  double price,  String? image,  List<SauceOption> sauces,  bool sauceGroupRequired,  int? sauceGroupMaxSelectable,  bool sauceAllowWithout,  List<BeverageOption> beverages,  bool beverageGroupRequired,  int beverageGroupMaxSelectable,  bool beverageAllowWithout,  List<ExtraPortionOption> extraPortions,  bool extraPortionsGroupRequired,  int extraPortionsGroupMaxSelectable,  bool extraPortionsAllowWithout)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  String? description,  double price,  String? image,  List<SauceOption> sauces,  bool sauceGroupRequired,  int? sauceGroupMaxSelectable,  bool sauceAllowWithout,  List<BeverageOption> beverages,  bool beverageGroupRequired,  int beverageGroupMaxSelectable,  bool beverageAllowWithout,  List<ExtraPortionOption> extraPortions,  bool extraPortionsGroupRequired,  int extraPortionsGroupMaxSelectable,  bool extraPortionsAllowWithout,  List<FriesType> friesTypes,  bool friesTypeGroupRequired,  int friesTypeGroupMaxSelectable)?  $default,) {final _that = this;
 switch (_that) {
 case _PublicMenuItem() when $default != null:
-return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_that.sauces,_that.sauceGroupRequired,_that.sauceGroupMaxSelectable,_that.sauceAllowWithout,_that.beverages,_that.beverageGroupRequired,_that.beverageGroupMaxSelectable,_that.beverageAllowWithout,_that.extraPortions,_that.extraPortionsGroupRequired,_that.extraPortionsGroupMaxSelectable,_that.extraPortionsAllowWithout);case _:
+return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_that.sauces,_that.sauceGroupRequired,_that.sauceGroupMaxSelectable,_that.sauceAllowWithout,_that.beverages,_that.beverageGroupRequired,_that.beverageGroupMaxSelectable,_that.beverageAllowWithout,_that.extraPortions,_that.extraPortionsGroupRequired,_that.extraPortionsGroupMaxSelectable,_that.extraPortionsAllowWithout,_that.friesTypes,_that.friesTypeGroupRequired,_that.friesTypeGroupMaxSelectable);case _:
   return null;
 
 }
@@ -225,7 +228,7 @@ return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_t
 @JsonSerializable()
 
 class _PublicMenuItem implements PublicMenuItem {
-  const _PublicMenuItem({required this.id, required this.name, this.description, required this.price, this.image, final  List<SauceOption> sauces = const <SauceOption>[], this.sauceGroupRequired = false, this.sauceGroupMaxSelectable, this.sauceAllowWithout = true, final  List<BeverageOption> beverages = const <BeverageOption>[], this.beverageGroupRequired = false, this.beverageGroupMaxSelectable = 0, this.beverageAllowWithout = true, final  List<ExtraPortionOption> extraPortions = const <ExtraPortionOption>[], this.extraPortionsGroupRequired = false, this.extraPortionsGroupMaxSelectable = 0, this.extraPortionsAllowWithout = true}): _sauces = sauces,_beverages = beverages,_extraPortions = extraPortions;
+  const _PublicMenuItem({required this.id, required this.name, this.description, required this.price, this.image, final  List<SauceOption> sauces = const <SauceOption>[], this.sauceGroupRequired = false, this.sauceGroupMaxSelectable, this.sauceAllowWithout = true, final  List<BeverageOption> beverages = const <BeverageOption>[], this.beverageGroupRequired = false, this.beverageGroupMaxSelectable = 0, this.beverageAllowWithout = true, final  List<ExtraPortionOption> extraPortions = const <ExtraPortionOption>[], this.extraPortionsGroupRequired = false, this.extraPortionsGroupMaxSelectable = 0, this.extraPortionsAllowWithout = true, final  List<FriesType> friesTypes = const <FriesType>[], this.friesTypeGroupRequired = false, this.friesTypeGroupMaxSelectable = 1}): _sauces = sauces,_beverages = beverages,_extraPortions = extraPortions,_friesTypes = friesTypes;
   factory _PublicMenuItem.fromJson(Map<String, dynamic> json) => _$PublicMenuItemFromJson(json);
 
 @override final  String id;
@@ -263,6 +266,15 @@ class _PublicMenuItem implements PublicMenuItem {
 @override@JsonKey() final  bool extraPortionsGroupRequired;
 @override@JsonKey() final  int extraPortionsGroupMaxSelectable;
 @override@JsonKey() final  bool extraPortionsAllowWithout;
+ final  List<FriesType> _friesTypes;
+@override@JsonKey() List<FriesType> get friesTypes {
+  if (_friesTypes is EqualUnmodifiableListView) return _friesTypes;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_friesTypes);
+}
+
+@override@JsonKey() final  bool friesTypeGroupRequired;
+@override@JsonKey() final  int friesTypeGroupMaxSelectable;
 
 /// Create a copy of PublicMenuItem
 /// with the given fields replaced by the non-null parameter values.
@@ -277,16 +289,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PublicMenuItem&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.description, description) || other.description == description)&&(identical(other.price, price) || other.price == price)&&(identical(other.image, image) || other.image == image)&&const DeepCollectionEquality().equals(other._sauces, _sauces)&&(identical(other.sauceGroupRequired, sauceGroupRequired) || other.sauceGroupRequired == sauceGroupRequired)&&(identical(other.sauceGroupMaxSelectable, sauceGroupMaxSelectable) || other.sauceGroupMaxSelectable == sauceGroupMaxSelectable)&&(identical(other.sauceAllowWithout, sauceAllowWithout) || other.sauceAllowWithout == sauceAllowWithout)&&const DeepCollectionEquality().equals(other._beverages, _beverages)&&(identical(other.beverageGroupRequired, beverageGroupRequired) || other.beverageGroupRequired == beverageGroupRequired)&&(identical(other.beverageGroupMaxSelectable, beverageGroupMaxSelectable) || other.beverageGroupMaxSelectable == beverageGroupMaxSelectable)&&(identical(other.beverageAllowWithout, beverageAllowWithout) || other.beverageAllowWithout == beverageAllowWithout)&&const DeepCollectionEquality().equals(other._extraPortions, _extraPortions)&&(identical(other.extraPortionsGroupRequired, extraPortionsGroupRequired) || other.extraPortionsGroupRequired == extraPortionsGroupRequired)&&(identical(other.extraPortionsGroupMaxSelectable, extraPortionsGroupMaxSelectable) || other.extraPortionsGroupMaxSelectable == extraPortionsGroupMaxSelectable)&&(identical(other.extraPortionsAllowWithout, extraPortionsAllowWithout) || other.extraPortionsAllowWithout == extraPortionsAllowWithout));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PublicMenuItem&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.description, description) || other.description == description)&&(identical(other.price, price) || other.price == price)&&(identical(other.image, image) || other.image == image)&&const DeepCollectionEquality().equals(other._sauces, _sauces)&&(identical(other.sauceGroupRequired, sauceGroupRequired) || other.sauceGroupRequired == sauceGroupRequired)&&(identical(other.sauceGroupMaxSelectable, sauceGroupMaxSelectable) || other.sauceGroupMaxSelectable == sauceGroupMaxSelectable)&&(identical(other.sauceAllowWithout, sauceAllowWithout) || other.sauceAllowWithout == sauceAllowWithout)&&const DeepCollectionEquality().equals(other._beverages, _beverages)&&(identical(other.beverageGroupRequired, beverageGroupRequired) || other.beverageGroupRequired == beverageGroupRequired)&&(identical(other.beverageGroupMaxSelectable, beverageGroupMaxSelectable) || other.beverageGroupMaxSelectable == beverageGroupMaxSelectable)&&(identical(other.beverageAllowWithout, beverageAllowWithout) || other.beverageAllowWithout == beverageAllowWithout)&&const DeepCollectionEquality().equals(other._extraPortions, _extraPortions)&&(identical(other.extraPortionsGroupRequired, extraPortionsGroupRequired) || other.extraPortionsGroupRequired == extraPortionsGroupRequired)&&(identical(other.extraPortionsGroupMaxSelectable, extraPortionsGroupMaxSelectable) || other.extraPortionsGroupMaxSelectable == extraPortionsGroupMaxSelectable)&&(identical(other.extraPortionsAllowWithout, extraPortionsAllowWithout) || other.extraPortionsAllowWithout == extraPortionsAllowWithout)&&const DeepCollectionEquality().equals(other._friesTypes, _friesTypes)&&(identical(other.friesTypeGroupRequired, friesTypeGroupRequired) || other.friesTypeGroupRequired == friesTypeGroupRequired)&&(identical(other.friesTypeGroupMaxSelectable, friesTypeGroupMaxSelectable) || other.friesTypeGroupMaxSelectable == friesTypeGroupMaxSelectable));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,name,description,price,image,const DeepCollectionEquality().hash(_sauces),sauceGroupRequired,sauceGroupMaxSelectable,sauceAllowWithout,const DeepCollectionEquality().hash(_beverages),beverageGroupRequired,beverageGroupMaxSelectable,beverageAllowWithout,const DeepCollectionEquality().hash(_extraPortions),extraPortionsGroupRequired,extraPortionsGroupMaxSelectable,extraPortionsAllowWithout);
+int get hashCode => Object.hashAll([runtimeType,id,name,description,price,image,const DeepCollectionEquality().hash(_sauces),sauceGroupRequired,sauceGroupMaxSelectable,sauceAllowWithout,const DeepCollectionEquality().hash(_beverages),beverageGroupRequired,beverageGroupMaxSelectable,beverageAllowWithout,const DeepCollectionEquality().hash(_extraPortions),extraPortionsGroupRequired,extraPortionsGroupMaxSelectable,extraPortionsAllowWithout,const DeepCollectionEquality().hash(_friesTypes),friesTypeGroupRequired,friesTypeGroupMaxSelectable]);
 
 @override
 String toString() {
-  return 'PublicMenuItem(id: $id, name: $name, description: $description, price: $price, image: $image, sauces: $sauces, sauceGroupRequired: $sauceGroupRequired, sauceGroupMaxSelectable: $sauceGroupMaxSelectable, sauceAllowWithout: $sauceAllowWithout, beverages: $beverages, beverageGroupRequired: $beverageGroupRequired, beverageGroupMaxSelectable: $beverageGroupMaxSelectable, beverageAllowWithout: $beverageAllowWithout, extraPortions: $extraPortions, extraPortionsGroupRequired: $extraPortionsGroupRequired, extraPortionsGroupMaxSelectable: $extraPortionsGroupMaxSelectable, extraPortionsAllowWithout: $extraPortionsAllowWithout)';
+  return 'PublicMenuItem(id: $id, name: $name, description: $description, price: $price, image: $image, sauces: $sauces, sauceGroupRequired: $sauceGroupRequired, sauceGroupMaxSelectable: $sauceGroupMaxSelectable, sauceAllowWithout: $sauceAllowWithout, beverages: $beverages, beverageGroupRequired: $beverageGroupRequired, beverageGroupMaxSelectable: $beverageGroupMaxSelectable, beverageAllowWithout: $beverageAllowWithout, extraPortions: $extraPortions, extraPortionsGroupRequired: $extraPortionsGroupRequired, extraPortionsGroupMaxSelectable: $extraPortionsGroupMaxSelectable, extraPortionsAllowWithout: $extraPortionsAllowWithout, friesTypes: $friesTypes, friesTypeGroupRequired: $friesTypeGroupRequired, friesTypeGroupMaxSelectable: $friesTypeGroupMaxSelectable)';
 }
 
 
@@ -297,7 +309,7 @@ abstract mixin class _$PublicMenuItemCopyWith<$Res> implements $PublicMenuItemCo
   factory _$PublicMenuItemCopyWith(_PublicMenuItem value, $Res Function(_PublicMenuItem) _then) = __$PublicMenuItemCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String name, String? description, double price, String? image, List<SauceOption> sauces, bool sauceGroupRequired, int? sauceGroupMaxSelectable, bool sauceAllowWithout, List<BeverageOption> beverages, bool beverageGroupRequired, int beverageGroupMaxSelectable, bool beverageAllowWithout, List<ExtraPortionOption> extraPortions, bool extraPortionsGroupRequired, int extraPortionsGroupMaxSelectable, bool extraPortionsAllowWithout
+ String id, String name, String? description, double price, String? image, List<SauceOption> sauces, bool sauceGroupRequired, int? sauceGroupMaxSelectable, bool sauceAllowWithout, List<BeverageOption> beverages, bool beverageGroupRequired, int beverageGroupMaxSelectable, bool beverageAllowWithout, List<ExtraPortionOption> extraPortions, bool extraPortionsGroupRequired, int extraPortionsGroupMaxSelectable, bool extraPortionsAllowWithout, List<FriesType> friesTypes, bool friesTypeGroupRequired, int friesTypeGroupMaxSelectable
 });
 
 
@@ -314,7 +326,7 @@ class __$PublicMenuItemCopyWithImpl<$Res>
 
 /// Create a copy of PublicMenuItem
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? price = null,Object? image = freezed,Object? sauces = null,Object? sauceGroupRequired = null,Object? sauceGroupMaxSelectable = freezed,Object? sauceAllowWithout = null,Object? beverages = null,Object? beverageGroupRequired = null,Object? beverageGroupMaxSelectable = null,Object? beverageAllowWithout = null,Object? extraPortions = null,Object? extraPortionsGroupRequired = null,Object? extraPortionsGroupMaxSelectable = null,Object? extraPortionsAllowWithout = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? price = null,Object? image = freezed,Object? sauces = null,Object? sauceGroupRequired = null,Object? sauceGroupMaxSelectable = freezed,Object? sauceAllowWithout = null,Object? beverages = null,Object? beverageGroupRequired = null,Object? beverageGroupMaxSelectable = null,Object? beverageAllowWithout = null,Object? extraPortions = null,Object? extraPortionsGroupRequired = null,Object? extraPortionsGroupMaxSelectable = null,Object? extraPortionsAllowWithout = null,Object? friesTypes = null,Object? friesTypeGroupRequired = null,Object? friesTypeGroupMaxSelectable = null,}) {
   return _then(_PublicMenuItem(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -333,6 +345,278 @@ as bool,extraPortions: null == extraPortions ? _self._extraPortions : extraPorti
 as List<ExtraPortionOption>,extraPortionsGroupRequired: null == extraPortionsGroupRequired ? _self.extraPortionsGroupRequired : extraPortionsGroupRequired // ignore: cast_nullable_to_non_nullable
 as bool,extraPortionsGroupMaxSelectable: null == extraPortionsGroupMaxSelectable ? _self.extraPortionsGroupMaxSelectable : extraPortionsGroupMaxSelectable // ignore: cast_nullable_to_non_nullable
 as int,extraPortionsAllowWithout: null == extraPortionsAllowWithout ? _self.extraPortionsAllowWithout : extraPortionsAllowWithout // ignore: cast_nullable_to_non_nullable
+as bool,friesTypes: null == friesTypes ? _self._friesTypes : friesTypes // ignore: cast_nullable_to_non_nullable
+as List<FriesType>,friesTypeGroupRequired: null == friesTypeGroupRequired ? _self.friesTypeGroupRequired : friesTypeGroupRequired // ignore: cast_nullable_to_non_nullable
+as bool,friesTypeGroupMaxSelectable: null == friesTypeGroupMaxSelectable ? _self.friesTypeGroupMaxSelectable : friesTypeGroupMaxSelectable // ignore: cast_nullable_to_non_nullable
+as int,
+  ));
+}
+
+
+}
+
+
+/// @nodoc
+mixin _$FriesType {
+
+ String get id; String get name; bool get isDefault;
+/// Create a copy of FriesType
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$FriesTypeCopyWith<FriesType> get copyWith => _$FriesTypeCopyWithImpl<FriesType>(this as FriesType, _$identity);
+
+  /// Serializes this FriesType to a JSON map.
+  Map<String, dynamic> toJson();
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is FriesType&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.isDefault, isDefault) || other.isDefault == isDefault));
+}
+
+@JsonKey(includeFromJson: false, includeToJson: false)
+@override
+int get hashCode => Object.hash(runtimeType,id,name,isDefault);
+
+@override
+String toString() {
+  return 'FriesType(id: $id, name: $name, isDefault: $isDefault)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $FriesTypeCopyWith<$Res>  {
+  factory $FriesTypeCopyWith(FriesType value, $Res Function(FriesType) _then) = _$FriesTypeCopyWithImpl;
+@useResult
+$Res call({
+ String id, String name, bool isDefault
+});
+
+
+
+
+}
+/// @nodoc
+class _$FriesTypeCopyWithImpl<$Res>
+    implements $FriesTypeCopyWith<$Res> {
+  _$FriesTypeCopyWithImpl(this._self, this._then);
+
+  final FriesType _self;
+  final $Res Function(FriesType) _then;
+
+/// Create a copy of FriesType
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? isDefault = null,}) {
+  return _then(_self.copyWith(
+id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
+as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
+as String,isDefault: null == isDefault ? _self.isDefault : isDefault // ignore: cast_nullable_to_non_nullable
+as bool,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [FriesType].
+extension FriesTypePatterns on FriesType {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _FriesType value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _FriesType() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _FriesType value)  $default,){
+final _that = this;
+switch (_that) {
+case _FriesType():
+return $default(_that);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _FriesType value)?  $default,){
+final _that = this;
+switch (_that) {
+case _FriesType() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  bool isDefault)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _FriesType() when $default != null:
+return $default(_that.id,_that.name,_that.isDefault);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  bool isDefault)  $default,) {final _that = this;
+switch (_that) {
+case _FriesType():
+return $default(_that.id,_that.name,_that.isDefault);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  bool isDefault)?  $default,) {final _that = this;
+switch (_that) {
+case _FriesType() when $default != null:
+return $default(_that.id,_that.name,_that.isDefault);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+@JsonSerializable()
+
+class _FriesType implements FriesType {
+  const _FriesType({required this.id, required this.name, this.isDefault = false});
+  factory _FriesType.fromJson(Map<String, dynamic> json) => _$FriesTypeFromJson(json);
+
+@override final  String id;
+@override final  String name;
+@override@JsonKey() final  bool isDefault;
+
+/// Create a copy of FriesType
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$FriesTypeCopyWith<_FriesType> get copyWith => __$FriesTypeCopyWithImpl<_FriesType>(this, _$identity);
+
+@override
+Map<String, dynamic> toJson() {
+  return _$FriesTypeToJson(this, );
+}
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _FriesType&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.isDefault, isDefault) || other.isDefault == isDefault));
+}
+
+@JsonKey(includeFromJson: false, includeToJson: false)
+@override
+int get hashCode => Object.hash(runtimeType,id,name,isDefault);
+
+@override
+String toString() {
+  return 'FriesType(id: $id, name: $name, isDefault: $isDefault)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$FriesTypeCopyWith<$Res> implements $FriesTypeCopyWith<$Res> {
+  factory _$FriesTypeCopyWith(_FriesType value, $Res Function(_FriesType) _then) = __$FriesTypeCopyWithImpl;
+@override @useResult
+$Res call({
+ String id, String name, bool isDefault
+});
+
+
+
+
+}
+/// @nodoc
+class __$FriesTypeCopyWithImpl<$Res>
+    implements _$FriesTypeCopyWith<$Res> {
+  __$FriesTypeCopyWithImpl(this._self, this._then);
+
+  final _FriesType _self;
+  final $Res Function(_FriesType) _then;
+
+/// Create a copy of FriesType
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? isDefault = null,}) {
+  return _then(_FriesType(
+id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
+as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
+as String,isDefault: null == isDefault ? _self.isDefault : isDefault // ignore: cast_nullable_to_non_nullable
 as bool,
   ));
 }

@@ -439,6 +439,69 @@ void main() {
   );
 
   testWidgets(
+    'botón "+" en un producto que SOLO ofrece tipos de papas → navega al '
+    'detalle en vez de agregar directo (mismo bug de clase, extendido a '
+    'friesTypes: sin esto el default nunca se aplica y un grupo obligatorio '
+    'recién falla con 400 al confirmar el pedido)',
+    (tester) async {
+      const friesOnly = PublicMenuCategory(
+        id: 'c-7',
+        name: 'Solo papas',
+        items: [
+          PublicMenuItem(
+            id: 'i-7',
+            name: 'Papas Burger',
+            price: 16,
+            friesTypes: [
+              FriesType(id: 'f-1', name: 'Papas fritas', isDefault: true),
+              FriesType(id: 'f-2', name: 'Papas al hilo'),
+            ],
+            friesTypeGroupRequired: true,
+          ),
+        ],
+      );
+      final container = ProviderContainer(
+        overrides: [
+          activeBannersProvider.overrideWith((ref) async => const []),
+          publicMenuProvider.overrideWith((ref) async => [friesOnly]),
+          businessHoursProvider.overrideWith(
+            (ref) async => const BusinessHours(
+              open: true,
+              message: null,
+              nextChangeAt: null,
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final router = GoRouter(
+        initialLocation: '/home',
+        routes: [
+          GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
+          GoRoute(
+            path: '/product/:id',
+            builder: (_, state) =>
+                Scaffold(body: Text('DETAIL ${state.pathParameters['id']}')),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('add-i-7')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('DETAIL i-7'), findsOneWidget);
+      expect(container.read(cartProvider).items, isEmpty);
+    },
+  );
+
+  testWidgets(
     'el SnackBar de "Agregado" desde el "+" rápido tiene margen para no '
     'quedar tapado por la barra flotante del carrito',
     (tester) async {

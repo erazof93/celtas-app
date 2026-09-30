@@ -72,6 +72,39 @@ void main() {
 
       expect(item.sauceGroupMaxSelectable, 2);
     });
+
+    test('parsea friesTypes con isDefault y la config de grupo', () {
+      final item = PublicMenuItem.fromJson({
+        'id': 'i-1',
+        'name': 'Papas Burger',
+        'price': 16,
+        'friesTypes': [
+          {'id': 'f-1', 'name': 'Papas fritas', 'isDefault': true},
+          {'id': 'f-2', 'name': 'Papas al hilo', 'isDefault': false},
+        ],
+        'friesTypeGroupRequired': true,
+        'friesTypeGroupMaxSelectable': 1,
+      });
+
+      expect(item.friesTypes, const [
+        FriesType(id: 'f-1', name: 'Papas fritas', isDefault: true),
+        FriesType(id: 'f-2', name: 'Papas al hilo'),
+      ]);
+      expect(item.friesTypeGroupRequired, isTrue);
+      expect(item.friesTypeGroupMaxSelectable, 1);
+    });
+
+    test('friesTypes y su config ausentes → [] / false / 1', () {
+      final item = PublicMenuItem.fromJson({
+        'id': 'i-1',
+        'name': 'Arroz chaufa',
+        'price': 18,
+      });
+
+      expect(item.friesTypes, isEmpty);
+      expect(item.friesTypeGroupRequired, isFalse);
+      expect(item.friesTypeGroupMaxSelectable, 1);
+    });
   });
 
   group('PublicMenuCategory.fromJson', () {

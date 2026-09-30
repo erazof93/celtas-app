@@ -969,6 +969,72 @@ void main() {
     );
 
     testWidgets(
+      'producto que en el menú SOLO ofrece tipos de papas (sin nada '
+      'seleccionado) → muestra el ícono de editar',
+      (tester) async {
+        await pumpCart(
+          tester,
+          couponRepository: MockCouponRepository(),
+          items: [burger],
+          menu: const [
+            PublicMenuCategory(
+              id: 'c-1',
+              name: 'Hamburguesa',
+              items: [
+                PublicMenuItem(
+                  id: 'i-1',
+                  name: 'Berserker Burger',
+                  price: 15.5,
+                  friesTypes: [FriesType(id: 'f-1', name: 'Papas fritas')],
+                ),
+              ],
+            ),
+          ],
+        );
+
+        expect(find.byKey(const ValueKey('cart-edit-i-1')), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'ítem con tipo de papas ya elegido → ícono de editar y línea '
+      '"papas: …" aunque el menú público no esté cargado',
+      (tester) async {
+        final container = ProviderContainer(
+          overrides: [
+            couponRepositoryProvider.overrideWithValue(
+              MockCouponRepository(),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+        container.read(cartProvider.notifier).addItem(
+          burger,
+          selectedFriesTypes: const [
+            FriesType(id: 'f-2', name: 'Papas al hilo'),
+          ],
+        );
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp.router(
+              theme: AppTheme.dark,
+              routerConfig: router(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const ValueKey('cart-edit-i-1::fries:f-2')),
+          findsOneWidget,
+        );
+        expect(find.text('papas: Papas al hilo'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
       'tocar el ícono navega a /product/:id pasando el CartItem actual por '
       '`extra` (modo edición, sin serializar a query string)',
       (tester) async {

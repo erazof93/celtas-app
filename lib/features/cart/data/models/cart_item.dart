@@ -1,5 +1,6 @@
 import 'package:celtas_mobile/features/home/data/models/beverage_option.dart';
 import 'package:celtas_mobile/features/home/data/models/extra_portion_option.dart';
+import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
 import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
@@ -59,6 +60,11 @@ abstract class CartItem with _$CartItem {
     @Default(<ExtraPortionOption>[])
     List<ExtraPortionOption> selectedExtraPortions,
     @Default(false) bool explicitlyNoExtraPortions,
+    // Tipos de papas elegidos (`PublicMenuItem.friesTypes`). Sin
+    // `explicitlyNo...`: la app nunca ofrece "Sin papas", así que vacío
+    // siempre significa "no aplica" y `friesTypeIds` se omite del pedido
+    // (ver `order_repository.dart`). No suman precio.
+    @Default(<FriesType>[]) List<FriesType> selectedFriesTypes,
     // Nota libre opcional del cliente para este ítem (ej. "sin cebolla"),
     // espejo de `OrderItem.comment` en el backend. `null`/vacío = sin
     // comentario — se normaliza a `null` al agregar/editar la fila (ver
@@ -103,6 +109,10 @@ abstract class CartItem with _$CartItem {
                 .toList(),
         explicitlyNoExtraPortions:
             json['explicitlyNoExtraPortions'] as bool? ?? false,
+        selectedFriesTypes:
+            (json['selectedFriesTypes'] as List<dynamic>? ?? const [])
+                .map((e) => FriesType.fromJson(e as Map<String, dynamic>))
+                .toList(),
         comment: json['comment'] as String?,
         rewardRedemptionId: json['rewardRedemptionId'] as String?,
       );
@@ -131,6 +141,10 @@ abstract class CartItem with _$CartItem {
               extraPortion.toJson(),
           ],
         if (explicitlyNoExtraPortions) 'explicitlyNoExtraPortions': true,
+        if (selectedFriesTypes.isNotEmpty)
+          'selectedFriesTypes': [
+            for (final friesType in selectedFriesTypes) friesType.toJson(),
+          ],
         if (comment != null) 'comment': comment,
         if (rewardRedemptionId != null)
           'rewardRedemptionId': rewardRedemptionId,
@@ -175,6 +189,7 @@ abstract class CartItem with _$CartItem {
     if (selectedSauces.isEmpty &&
         selectedBeverages.isEmpty &&
         selectedExtraPortions.isEmpty &&
+        selectedFriesTypes.isEmpty &&
         comment == null) {
       return menuItemId;
     }
@@ -197,6 +212,13 @@ abstract class CartItem with _$CartItem {
           .toList()
         ..sort();
       parts.add(sortedIds.join(','));
+    }
+    if (selectedFriesTypes.isNotEmpty) {
+      final sortedIds = selectedFriesTypes
+          .map((friesType) => friesType.id)
+          .toList()
+        ..sort();
+      parts.add('fries:${sortedIds.join(',')}');
     }
     if (comment != null) parts.add(comment!);
     return parts.join('::');

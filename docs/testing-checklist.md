@@ -1798,6 +1798,106 @@ como corregido se confirmó real (no cosmético) con mutación, y los 5 casos de
 consistente, estados ya cubiertos por la sección de salsas) verificados. Sin regresiones: los 330+
 tests preexistentes de salsas siguen pasando sin haberse debilitado.
 
+### Selector de tipos de papas (`friesTypes` en el detalle + carrito + `friesTypeIds` en el payload) — ✅ LISTO
+
+Auditoría 2026-09-30. **Solo tests + lectura de contrato — NO probado contra el backend real ni en
+dispositivo.**
+
+**Contrato (verificado por lectura directa, no por el resumen del encargo):**
+- `GET /menu` (`backend-celtas/src/modules/menu/menu.service.ts`, `findPublicMenu`): cada ítem
+  expone `friesTypes: { id, name, isDefault }[]` (default primero, luego alfabético),
+  `friesTypeGroupRequired: boolean` y `friesTypeGroupMaxSelectable: number` — columnas NOT NULL,
+  defaults `false`/`1` (`menu-item.entity.ts`). Espejado en `PublicMenuItem` con `@Default([])`/
+  `@Default(false)`/`@Default(1)`; `FriesType` vive en `public_menu_item.dart`.
+- `POST /orders` (`backend-celtas/src/modules/orders/dto/create-order.dto.ts`):
+  `friesTypeIds?: string[]` está en **`CreateOrderItemDto` (por ítem), NO en `CreateOrderDto`
+  (raíz)** — `@IsOptionalNonNullable()` + `@IsArray()` + `@IsUUID('4', { each: true })`.
+- Verificado ejecutando `validateSync` de class-validator contra el DTO real (script temporal
+  con `ts-node`, borrado después):
+  ```
+  omitido                -> OK
+  [] explícito           -> OK
+  uuid válido            -> OK
+  null explícito         -> 400: Cada friesTypeId debe ser un UUID válido | friesTypeIds debe ser una lista
+  string suelto          -> 400: Cada friesTypeId debe ser un UUID válido | friesTypeIds debe ser una lista
+  id no-UUID (ej. f-1)   -> 400: Cada friesTypeId debe ser un UUID válido
+  ```
+  La app nunca puede mandar `null` (en Dart `selectedFriesTypes` es `List<FriesType>` no nullable
+  y la llave se omite si está vacía). No hay un e2e de `POST /orders` con `friesTypeIds: null`
+  (sí existe para `PATCH /menu/items` en `test/fries-types.e2e-spec.ts`), pero el caso queda
+  cubierto por construcción del DTO, confirmado arriba.
+- Validación de negocio (`OrdersService.validateGroupSelection` + `resolveSelectedFriesTypes`):
+  obligatorio sin selección → 400, más que el máximo → 400, id que el producto no ofrece → 400,
+  producto sin `friesTypes` → el grupo no aplica. Cubierto por `orders.service.spec.ts`
+  (`describe('create — tipo de papas (friesTypeIds)')`): `npx jest ... -t "friesTypeIds"` →
+  **10 passed**.
+
+**Mobile:**
+- [x] `flutter analyze` → `No issues found!`
+- [x] `flutter test` → `+687: All tests passed!`
+- [x] `order_repository.dart`: `friesTypeIds` dentro de cada ítem, nunca en la raíz; se OMITE si
+      `selectedFriesTypes` está vacío (nunca `"friesTypeIds": []`). No hay tri-state como en
+      salsas porque la app nunca ofrece "Sin papas" (`allowWithout: false`).
+- [x] `CartItem.selectedFriesTypes` persiste en la caché local (`toStorageJson`/
+      `fromStorageJson`, con `isDefault`) y participa en `lineKey` como segmento
+      `fries:<idsOrdenados>`: mismo producto + mismo tipo se fusiona, distinto tipo va en fila
+      aparte, y `updateLine` reemplaza el tipo.
+- [x] Detalle: la sección "TIPO DE PAPAS" solo aparece si `friesTypes` no está vacío, va arriba
+      si es obligatoria (`_sectionOrder`), preselecciona los `isDefault` y valida obligatorio/máximo
+      con el mismo aviso que los otros grupos (scroll, vibración, borde rojo, SnackBar).
+- [x] Edición: precarga la selección previa de la fila y NO la pisa con el default. Si la fila
+      no tenía tipo (agregada antes de que existiera el selector), arranca con el default.
+- [x] Bug de clase confirmado y corregido en `home_screen.dart` (el "+" rápido ahora manda al
+      detalle si el producto ofrece `friesTypes`) y en `cart_screen.dart` (ícono de editar para
+      productos que solo ofrecen papas, más la línea "papas: …").
+
+**Tests de regresión agregados:**
+- `product_detail_screen_test.dart`: sin `friesTypes` no aparece el selector; con `friesTypes`
+  aparece sin "Sin papas"; el default llega preseleccionado; cambiar el tipo; obligatorio bloquea;
+  obligatorio eligiendo uno agrega; máximo bloquea; **salsas + bebidas + extras + papas
+  obligatorios (i-18)** solo habilita "Agregar" con los 4 grupos satisfechos; con 3 de 4 listos
+  el mensaje es el de papas; edición precarga la selección y no la pisa con el default; edición
+  de una fila sin tipo aplica el default. El helper `openDropdown` ahora hace `ensureVisible`
+  antes del tap (con 4 secciones, el campo de papas queda fuera del viewport de 390×844).
+- `cart_provider_test.dart`: fusión con el mismo tipo, filas separadas con tipos distintos,
+  `updateLine`, round-trip de persistencia (con `isDefault` y `lineKey` estable) y ninguna llave
+  en la caché cuando no hay tipo.
+- `order_repository_test.dart`: por ítem y nunca en raíz, se omite si está vacío, independiente
+  por ítem.
+- `home_screen_test.dart`: el "+" de un producto que solo ofrece papas navega al detalle.
+- `cart_screen_test.dart`: ícono de editar para un producto que solo ofrece papas en el menú;
+  ícono y línea "papas: …" en un ítem con tipo ya elegido.
+- `public_menu_test.dart`: parseo completo y defaults cuando los campos vienen ausentes.
+
+**Mutaciones (todas detectadas; restauradas desde una copia de respaldo y verificadas con
+`md5sum -c`, sin usar `git checkout --` — ver el incidente de la sección de comentario):**
+
+| # | Mutación | Tests que fallan |
+|---|---|---|
+| M1 | `_sectionOrder`: `if (item.friesTypes.isNotEmpty)` → `if (false)` (el selector desaparece) | 9 (detalle) |
+| M2 | Se quita la validación de obligatorio (`if (false)`) | 3 |
+| M3 | Se quita la preselección del default | 4 |
+| M4 | `friesTypeIds: []` siempre (no se omite si está vacío) | 2 (repositorio) |
+| M5 | `friesTypeIds` también en la raíz del body | 3 |
+| M6 | `toStorageJson` no escribe `selectedFriesTypes` | 1 (persistencia) |
+| M7 | `lineKey` ignora las papas | 3 |
+| M8 | Home "+": se revierte el fix (`friesTypes` ignorado) | 1 |
+| M9 | Carrito: el ícono de editar ignora `friesTypes` del menú | 1 |
+| M10 | Carrito: se quita la línea "papas: …" | 1 |
+
+Con todo restaurado: `flutter analyze` limpio y `flutter test` +687 verde.
+
+⚠️ Observaciones no bloqueantes:
+- `isDefault` es global al catálogo (el backend garantiza a lo sumo uno, `clearOtherDefaults`),
+  no por producto. Si un producto no ofrece el tipo default global, nada viene preseleccionado:
+  con el grupo obligatorio, el cliente tiene que elegir a mano (lo cubre i-16).
+- Falta probar end-to-end contra el backend real: crear un producto con tipos de papas en el
+  admin, activar `friesTypeGroupRequired`, hacer un pedido y ver "(Papas: …)" en el WhatsApp.
+  `friesTypeGroupRequired` debe activarse en el admin recién cuando esta versión de la app esté
+  publicada (la app anterior no manda `friesTypeIds`, ver doc de `menu-item.entity.ts`).
+
+**Veredicto: LISTO** (con la salvedad de que no se probó contra el backend real).
+
 ## Pedidos / Cupones
 
 - [x] Badges de estado de pedido visualmente distinguibles entre sí (los 5 estados)

@@ -3,6 +3,7 @@ import 'package:celtas_mobile/features/cart/data/models/cart_item.dart';
 import 'package:celtas_mobile/features/checkout/data/order_repository.dart';
 import 'package:celtas_mobile/features/home/data/models/beverage_option.dart';
 import 'package:celtas_mobile/features/home/data/models/extra_portion_option.dart';
+import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
 import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -627,6 +628,74 @@ void main() {
       );
     },
   );
+
+  group('createOrder — tipos de papas (friesTypeIds por ítem)', () {
+    Future<List<Map<String, dynamic>>> postAndCaptureItems(
+      List<CartItem> items,
+    ) async {
+      mockPostSuccess();
+      await repository.createOrder(items: items, addressId: 'addr-1');
+      final captured = verify(
+        () => dio.post<Map<String, dynamic>>(
+          '/orders',
+          data: captureAny(named: 'data'),
+        ),
+      ).captured.single as Map<String, dynamic>;
+      // Nunca en la raíz del body: el DTO del backend lo define en
+      // `CreateOrderItemDto`, no en `CreateOrderDto`.
+      expect(captured.containsKey('friesTypeIds'), isFalse);
+      return (captured['items'] as List).cast<Map<String, dynamic>>();
+    }
+
+    test('ítem con tipo de papas → manda "friesTypeIds" con sus ids', () async {
+      final items = await postAndCaptureItems(const [
+        CartItem(
+          menuItemId: 'i-1',
+          name: 'Papas Burger',
+          unitPrice: 16,
+          quantity: 2,
+          selectedFriesTypes: [
+            FriesType(id: 'f-2', name: 'Papas al hilo'),
+          ],
+        ),
+      ]);
+      expect(items.single['friesTypeIds'], ['f-2']);
+    });
+
+    test('ítem sin tipo de papas → omite la llave "friesTypeIds"', () async {
+      final items = await postAndCaptureItems(const [
+        CartItem(
+          menuItemId: 'i-2',
+          name: 'Arroz Chaufa',
+          unitPrice: 18,
+          quantity: 1,
+        ),
+      ]);
+      expect(items.single.containsKey('friesTypeIds'), isFalse);
+    });
+
+    test('varios ítems: cada uno manda su propia selección', () async {
+      final items = await postAndCaptureItems(const [
+        CartItem(
+          menuItemId: 'i-1',
+          name: 'Papas Burger',
+          unitPrice: 16,
+          quantity: 1,
+          selectedFriesTypes: [
+            FriesType(id: 'f-1', name: 'Papas fritas', isDefault: true),
+          ],
+        ),
+        CartItem(
+          menuItemId: 'i-2',
+          name: 'Arroz Chaufa',
+          unitPrice: 18,
+          quantity: 1,
+        ),
+      ]);
+      expect(items[0]['friesTypeIds'], ['f-1']);
+      expect(items[1].containsKey('friesTypeIds'), isFalse);
+    });
+  });
 
   group('createOrder — 409 local cerrado', () {
     /// Contrato verificado contra `orders.service.ts` (`create`): el check

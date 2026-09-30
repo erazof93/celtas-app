@@ -143,6 +143,7 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
   late bool _explicitlyNoBeverages;
   late final Set<String> _selectedExtraPortionIds;
   late bool _explicitlyNoExtraPortions;
+  late final Set<String> _selectedFriesTypeIds;
   late final TextEditingController _commentController;
 
   // Una `GlobalKey` por campo dropdown — necesaria para poder hacer
@@ -154,8 +155,9 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
   final GlobalKey _sauceFieldKey = GlobalKey();
   final GlobalKey _beverageFieldKey = GlobalKey();
   final GlobalKey _extraFieldKey = GlobalKey();
+  final GlobalKey _friesFieldKey = GlobalKey();
 
-  /// Id del grupo (`'sauce'`/`'beverage'`/`'extra'`) actualmente resaltado
+  /// Id del grupo (`'sauce'`/`'beverage'`/`'extra'`/`'fries'`) actualmente resaltado
   /// con borde rojo tras un intento fallido de "Agregar"/"Guardar cambios"
   /// — `null` en cualquier otro momento. Ver `_handleValidationFailure`.
   String? _highlightedViolation;
@@ -185,6 +187,22 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
         extraPortion.id,
     };
     _explicitlyNoExtraPortions = editingItem?.explicitlyNoExtraPortions ?? false;
+    // Tipos de papas: en modo edición se precarga lo que ya tenía la fila;
+    // si no tenía nada (producto nuevo o fila agregada antes de que existiera
+    // este selector), arranca con el/los `isDefault` del backend
+    // preseleccionados — no hay "Sin papas", así que vacío no es una
+    // elección que haya que respetar.
+    final editingFriesTypeIds = <String>{
+      for (final friesType
+          in editingItem?.selectedFriesTypes ?? const <FriesType>[])
+        friesType.id,
+    };
+    _selectedFriesTypeIds = editingFriesTypeIds.isNotEmpty
+        ? editingFriesTypeIds
+        : {
+            for (final friesType in widget.item.friesTypes)
+              if (friesType.isDefault) friesType.id,
+          };
     _commentController = TextEditingController(
       text: editingItem?.comment ?? '',
     );
@@ -254,6 +272,22 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
     return null;
   }
 
+  /// Mismo criterio que [_beverageChoiceViolation], para tipos de papas
+  /// (`friesTypeGroupRequired`/`friesTypeGroupMaxSelectable`, espejo de
+  /// `OrdersService.validateGroupSelection` en el backend).
+  String? get _friesTypeChoiceViolation {
+    final item = widget.item;
+    if (item.friesTypes.isEmpty) return null;
+    if (item.friesTypeGroupRequired && _selectedFriesTypeIds.isEmpty) {
+      return 'Elige tu tipo de papas (obligatorio)';
+    }
+    if (_selectedFriesTypeIds.length > item.friesTypeGroupMaxSelectable) {
+      return 'Máximo ${item.friesTypeGroupMaxSelectable} tipo(s) de papas — '
+          'quita alguno para continuar';
+    }
+    return null;
+  }
+
   /// Ids de los grupos con una violación pendiente ahora mismo, en el mismo
   /// orden en que las secciones aparecen en pantalla (`_sectionOrder`: los
   /// grupos obligatorios primero). El primero de esta lista es el que
@@ -268,12 +302,14 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
     'sauce' => _sauceChoiceViolation,
     'beverage' => _beverageChoiceViolation,
     'extra' => _extraPortionChoiceViolation,
+    'fries' => _friesTypeChoiceViolation,
     _ => null,
   };
 
   GlobalKey _fieldKeyFor(String groupKey) => switch (groupKey) {
     'sauce' => _sauceFieldKey,
     'beverage' => _beverageFieldKey,
+    'fries' => _friesFieldKey,
     _ => _extraFieldKey,
   };
 
@@ -299,7 +335,7 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
         alignment: 0.3,
       );
     }
-    HapticFeedback.mediumImpact();
+    unawaited(HapticFeedback.mediumImpact());
     if (!mounted) return;
     setState(() => _highlightedViolation = groupKey);
     showCeltasSnackBar(context, message);
@@ -333,6 +369,9 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
               _selectedExtraPortionIds.contains(extraPortion.id),
         )
         .toList();
+    final selectedFriesTypes = item.friesTypes
+        .where((friesType) => _selectedFriesTypeIds.contains(friesType.id))
+        .toList();
     // Vacío o solo espacios = sin comentario — mismo criterio que el
     // backend (`OrdersService.resolveComment`, `create-order.dto.ts`), así
     // dos filas sin nota real nunca quedan separadas por espacios sueltos.
@@ -348,6 +387,7 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
             explicitlyNoBeverages: _explicitlyNoBeverages,
             selectedExtraPortions: selectedExtraPortions,
             explicitlyNoExtraPortions: _explicitlyNoExtraPortions,
+            selectedFriesTypes: selectedFriesTypes,
             comment: comment,
           );
     } else {
@@ -360,6 +400,7 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
             explicitlyNoBeverages: _explicitlyNoBeverages,
             selectedExtraPortions: selectedExtraPortions,
             explicitlyNoExtraPortions: _explicitlyNoExtraPortions,
+            selectedFriesTypes: selectedFriesTypes,
             comment: comment,
           );
     }
@@ -421,6 +462,9 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
     }
     if (item.extraPortions.isNotEmpty) {
       (item.extraPortionsGroupRequired ? required : optional).add('extra');
+    }
+    if (item.friesTypes.isNotEmpty) {
+      (item.friesTypeGroupRequired ? required : optional).add('fries');
     }
     return [...required, ...optional];
   }
@@ -509,6 +553,30 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
               ..clear()
               ..addAll(selected);
             _explicitlyNoExtraPortions = none;
+          }),
+        ),
+      if (item.friesTypes.isNotEmpty)
+        'fries': _OptionGroupDropdown(
+          fieldKey: _friesFieldKey,
+          testKey: 'fries',
+          title: 'TIPO DE PAPAS',
+          // Nunca se muestra: `allowWithout: false` (no hay "Sin papas").
+          noneLabel: 'Sin papas',
+          hintText: 'Elige tu tipo de papas',
+          options: [
+            for (final friesType in item.friesTypes)
+              _SelectableOption(id: friesType.id, name: friesType.name),
+          ],
+          selectedIds: _selectedFriesTypeIds,
+          explicitlyNone: false,
+          groupRequired: item.friesTypeGroupRequired,
+          groupMaxSelectable: item.friesTypeGroupMaxSelectable,
+          allowWithout: false,
+          isHighlighted: _highlightedViolation == 'fries',
+          onApply: (selected, _) => setState(() {
+            _selectedFriesTypeIds
+              ..clear()
+              ..addAll(selected);
           }),
         ),
     };
@@ -681,7 +749,8 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
                 enabled:
                     _sauceChoiceViolation == null &&
                     _beverageChoiceViolation == null &&
-                    _extraPortionChoiceViolation == null,
+                    _extraPortionChoiceViolation == null &&
+                    _friesTypeChoiceViolation == null,
                 onPressed: () {
                   // Mismo orden en que las secciones aparecen en pantalla
                   // (`_sectionOrder`: obligatorios primero). Con algo
@@ -956,7 +1025,8 @@ class _OptionGroupDropdown extends StatelessWidget {
   String get _subtitle {
     final max = groupMaxSelectable;
     if (groupRequired) {
-      return max == null ? 'Elige al menos 1' : 'Elige entre 1 y $max';
+      if (max == null) return 'Elige al menos 1';
+      return max == 1 ? 'Elige 1' : 'Elige entre 1 y $max';
     }
     final fitsWholeCatalog = max == null || max >= options.length;
     if (!allowWithout) {

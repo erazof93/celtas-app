@@ -57,6 +57,10 @@ class AddressSnapshotInput {
 ///     `extraPortionsGroupRequired`/`Max` por igual (`OrdersService.
 ///     validateGroupSelection`) — a diferencia de las salsas, bebidas y
 ///     porciones extras SÍ suman precio al `subtotal` del ítem.
+///     `friesTypeIds` (por ítem, NO en la raíz del body) sale de
+///     `CartItem.selectedFriesTypes`; como la app nunca ofrece "Sin papas",
+///     vacío = se omite la llave (el backend guarda `null`). El backend
+///     valida `friesTypeGroupRequired`/`Max` igual que las otras categorías.
 ///     `comment` (texto libre, opcional, `MaxLength(140)` en el backend) se
 ///     manda SOLO si queda contenido real después de `trim()` — mismo
 ///     criterio que `sauceIds`/`addressSnapshot`/`couponCode`: nunca se
@@ -120,6 +124,11 @@ class OrderRepository {
                   ]
                 else if (item.explicitlyNoExtraPortions)
                   'extraPortionIds': const <String>[],
+                if (item.selectedFriesTypes.isNotEmpty)
+                  'friesTypeIds': [
+                    for (final friesType in item.selectedFriesTypes)
+                      friesType.id,
+                  ],
                 if (item.comment != null && item.comment!.trim().isNotEmpty)
                   'comment': item.comment!.trim(),
                 if (item.rewardRedemptionId != null)

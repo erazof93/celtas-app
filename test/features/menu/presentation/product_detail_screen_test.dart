@@ -35,6 +35,18 @@ void main() {
     name: 'Queso extra',
     price: 4,
   );
+  const papasFritas = FriesType(
+    id: 'f-1',
+    name: 'Papas fritas',
+    isDefault: true,
+  );
+  const papasHilo = FriesType(id: 'f-2', name: 'Papas al hilo');
+  const papasCrinkle = FriesType(id: 'f-4', name: 'Papas crinkle');
+  const papasHiloDefault = FriesType(
+    id: 'f-5',
+    name: 'Papas al hilo',
+    isDefault: true,
+  );
 
   const category = PublicMenuCategory(
     id: 'c-1',
@@ -172,6 +184,49 @@ void main() {
         sauces: [mayo, mostaza, ketchup],
         sauceGroupRequired: true,
       ),
+      // Tipos de papas opcionales (default real del backend: no obligatorio,
+      // máximo 1), con "Papas fritas" marcada `isDefault` — el backend las
+      // manda con el default primero (`MenuService.findPublicMenu`).
+      PublicMenuItem(
+        id: 'i-15',
+        name: 'Papas Burger',
+        price: 16,
+        friesTypes: [papasFritas, papasHilo],
+      ),
+      // Tipos de papas OBLIGATORIOS, sin ningún default.
+      PublicMenuItem(
+        id: 'i-16',
+        name: 'Papas Obligatorias Burger',
+        price: 17,
+        friesTypes: [papasHilo, papasCrinkle],
+        friesTypeGroupRequired: true,
+      ),
+      // Dos defaults con máximo 1: estado inválido que el admin podría
+      // dejar configurado — la app no debe dejar agregar con 2 preseleccionadas.
+      PublicMenuItem(
+        id: 'i-17',
+        name: 'Doble Default Burger',
+        price: 17,
+        friesTypes: [papasFritas, papasHiloDefault],
+      ),
+      // Los 4 grupos OBLIGATORIOS a la vez, papas sin default — "Agregar"
+      // solo se habilita con todos satisfechos.
+      PublicMenuItem(
+        id: 'i-18',
+        name: 'Combo Todo Obligatorio',
+        price: 30,
+        sauces: [mayo, mostaza],
+        sauceGroupRequired: true,
+        sauceGroupMaxSelectable: 1,
+        beverages: [cocaCola, incaKola],
+        beverageGroupRequired: true,
+        beverageGroupMaxSelectable: 1,
+        extraPortions: [papasExtra, quesoExtra],
+        extraPortionsGroupRequired: true,
+        extraPortionsGroupMaxSelectable: 1,
+        friesTypes: [papasHilo, papasCrinkle],
+        friesTypeGroupRequired: true,
+      ),
     ],
   );
 
@@ -240,6 +295,10 @@ void main() {
 
   /// Toca el campo tipo dropdown, que abre el diálogo con los checkboxes.
   Future<void> openDropdown(WidgetTester tester, String testKey) async {
+    // Con varias secciones (ej. i-18, los 4 grupos) el campo puede quedar
+    // fuera del viewport — se hace scroll hasta él antes de tocarlo.
+    await tester.ensureVisible(find.byKey(ValueKey('detail-$testKey-dropdown')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(ValueKey('detail-$testKey-dropdown')));
     await tester.pumpAndSettle();
   }
@@ -1995,6 +2054,74 @@ void main() {
     );
 
     testWidgets(
+      'papas: precarga la selección anterior de la fila (NO el default) y '
+      'GUARDAR CAMBIOS la conserva',
+      (tester) async {
+        final (container, _) = await pumpEdit(
+          tester,
+          seed: (notifier) => notifier.addItem(
+            category.items.firstWhere((i) => i.id == 'i-15'),
+            selectedFriesTypes: const [papasHilo],
+          ),
+          pickEditingLineKey: (state) => state.items.single.lineKey,
+          productId: 'i-15',
+        );
+
+        await openDropdown(tester, 'fries');
+        expect(
+          tester
+              .widget<CheckboxListTile>(
+                find.byKey(const ValueKey('detail-fries-option-f-2')),
+              )
+              .value,
+          isTrue,
+          reason: 'la fila tenía "al hilo": debe venir marcado',
+        );
+        expect(
+          tester
+              .widget<CheckboxListTile>(
+                find.byKey(const ValueKey('detail-fries-option-f-1')),
+              )
+              .value,
+          isFalse,
+          reason: 'el default NO debe pisar la elección previa de la fila',
+        );
+        await cancelDialog(tester, 'fries');
+
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
+
+        expect(
+          container.read(cartProvider).items.single.selectedFriesTypes,
+          [papasHilo],
+        );
+      },
+    );
+
+    testWidgets(
+      'papas: fila sin tipo elegido (agregada antes de existir el selector) '
+      '→ en edición arranca con el default preseleccionado',
+      (tester) async {
+        final (container, _) = await pumpEdit(
+          tester,
+          seed: (notifier) => notifier.addItem(
+            category.items.firstWhere((i) => i.id == 'i-15'),
+          ),
+          pickEditingLineKey: (state) => state.items.single.lineKey,
+          productId: 'i-15',
+        );
+
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
+
+        expect(
+          container.read(cartProvider).items.single.selectedFriesTypes,
+          [papasFritas],
+        );
+      },
+    );
+
+    testWidgets(
       'GUARDAR CAMBIOS con la nota editada actualiza el comentario de la '
       'fila',
       (tester) async {
@@ -2018,6 +2145,212 @@ void main() {
         final state = container.read(cartProvider);
         expect(state.items, hasLength(1));
         expect(state.items.single.comment, 'Bien cocida');
+      },
+    );
+  });
+
+  group('selector de tipos de papas (friesTypes)', () {
+    testWidgets('producto sin friesTypes → no muestra el selector', (
+      tester,
+    ) async {
+      await pumpDetail(tester); // i-1, sin friesTypes
+
+      expect(find.text('TIPO DE PAPAS'), findsNothing);
+      expect(find.byKey(const ValueKey('detail-fries-dropdown')), findsNothing);
+    });
+
+    testWidgets(
+      'producto con friesTypes → muestra el selector con sus opciones y sin '
+      '"Sin papas"',
+      (tester) async {
+        await pumpDetail(tester, productId: 'i-15');
+
+        expect(find.text('TIPO DE PAPAS'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('detail-fries-dropdown')),
+          findsOneWidget,
+        );
+
+        await openDropdown(tester, 'fries');
+        expect(find.text('Papas fritas'), findsOneWidget);
+        expect(find.text('Papas al hilo'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('detail-fries-option-none')),
+          findsNothing,
+        );
+        expect(find.text('Sin papas'), findsNothing);
+        await cancelDialog(tester, 'fries');
+      },
+    );
+
+    testWidgets(
+      'el tipo isDefault llega preseleccionado y se agrega al carrito sin '
+      'tocar el selector',
+      (tester) async {
+        final (container, _) = await pumpDetail(tester, productId: 'i-15');
+
+        await openDropdown(tester, 'fries');
+        expect(
+          tester
+              .widget<CheckboxListTile>(
+                find.byKey(const ValueKey('detail-fries-option-f-1')),
+              )
+              .value,
+          isTrue,
+        );
+        expect(
+          tester
+              .widget<CheckboxListTile>(
+                find.byKey(const ValueKey('detail-fries-option-f-2')),
+              )
+              .value,
+          isFalse,
+        );
+        await cancelDialog(tester, 'fries');
+
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
+
+        final line = container.read(cartProvider).items.single;
+        expect(line.selectedFriesTypes, [papasFritas]);
+      },
+    );
+
+    testWidgets('cambiar el tipo reemplaza el default en el carrito', (
+      tester,
+    ) async {
+      final (container, _) = await pumpDetail(tester, productId: 'i-15');
+
+      // Máximo 1: primero se desmarca el default, luego se marca al hilo.
+      await selectDialogOptions(tester, 'fries', ['f-1', 'f-2']);
+      await tester.tap(find.byKey(const ValueKey('detail-add')));
+      await tester.pumpAndSettle();
+
+      final line = container.read(cartProvider).items.single;
+      expect(line.selectedFriesTypes, [papasHilo]);
+    });
+
+    testWidgets(
+      'grupo obligatorio sin elegir → bloquea Agregar con mensaje',
+      (tester) async {
+        final (container, _) = await pumpDetail(tester, productId: 'i-16');
+
+        expect(find.text('Obligatorio'), findsOneWidget);
+        expect(find.text('Elige 1'), findsOneWidget);
+
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(
+          find.text('Elige tu tipo de papas (obligatorio)'),
+          findsOneWidget,
+        );
+        expect(container.read(cartProvider).items, isEmpty);
+        // Deja vencer el resalte (800ms) antes de desmontar.
+        await tester.pump(const Duration(seconds: 3));
+        await tester.pumpAndSettle();
+      },
+    );
+
+    testWidgets(
+      'grupo obligatorio: eligiendo un tipo ya agrega con esa selección',
+      (tester) async {
+        final (container, _) = await pumpDetail(tester, productId: 'i-16');
+
+        await selectDialogOptions(tester, 'fries', ['f-4']);
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
+
+        expect(
+          container.read(cartProvider).items.single.selectedFriesTypes,
+          [papasCrinkle],
+        );
+      },
+    );
+
+    bool addEnabled(WidgetTester tester) => tester
+        .widget<CeltasButton>(find.byKey(const ValueKey('detail-add')))
+        .enabled;
+
+    testWidgets(
+      'salsas + bebidas + extras + papas obligatorios: Agregar solo se '
+      'habilita con los 4 satisfechos, y el ítem lleva las 4 selecciones',
+      (tester) async {
+        final (container, _) = await pumpDetail(tester, productId: 'i-18');
+
+        expect(find.text('Obligatorio'), findsNWidgets(4));
+        expect(addEnabled(tester), isFalse);
+
+        await selectDialogOptions(tester, 'sauce', ['s-1']);
+        expect(addEnabled(tester), isFalse);
+        await selectDialogOptions(tester, 'beverage', ['b-1']);
+        expect(addEnabled(tester), isFalse);
+        await selectDialogOptions(tester, 'extra', ['e-2']);
+        expect(
+          addEnabled(tester),
+          isFalse,
+          reason: 'con 3 de 4 grupos listos, las papas siguen bloqueando',
+        );
+        await selectDialogOptions(tester, 'fries', ['f-4']);
+        expect(addEnabled(tester), isTrue);
+
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
+
+        final line = container.read(cartProvider).items.single;
+        expect(line.selectedSauces, [mayo]);
+        expect(line.selectedBeverages, [cocaCola]);
+        expect(line.selectedExtraPortions, [quesoExtra]);
+        expect(line.selectedFriesTypes, [papasCrinkle]);
+      },
+    );
+
+    testWidgets(
+      'con salsas/bebidas/extras listos y papas pendientes, tocar Agregar '
+      'muestra el mensaje de papas y no agrega',
+      (tester) async {
+        final (container, _) = await pumpDetail(tester, productId: 'i-18');
+
+        await selectDialogOptions(tester, 'sauce', ['s-1']);
+        await selectDialogOptions(tester, 'beverage', ['b-1']);
+        await selectDialogOptions(tester, 'extra', ['e-2']);
+
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(
+          find.text('Elige tu tipo de papas (obligatorio)'),
+          findsOneWidget,
+        );
+        expect(container.read(cartProvider).items, isEmpty);
+        await tester.pump(const Duration(seconds: 3));
+        await tester.pumpAndSettle();
+      },
+    );
+
+    testWidgets(
+      'más tipos elegidos que friesTypeGroupMaxSelectable → bloquea Agregar '
+      'con mensaje de máximo',
+      (tester) async {
+        final (container, _) = await pumpDetail(tester, productId: 'i-17');
+
+        final button = tester.widget<CeltasButton>(
+          find.byKey(const ValueKey('detail-add')),
+        );
+        expect(button.enabled, isFalse);
+
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(
+          find.text(
+            'Máximo 1 tipo(s) de papas — quita alguno para continuar',
+          ),
+          findsOneWidget,
+        );
+        expect(container.read(cartProvider).items, isEmpty);
+        await tester.pump(const Duration(seconds: 3));
+        await tester.pumpAndSettle();
       },
     );
   });

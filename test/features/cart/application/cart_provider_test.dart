@@ -314,6 +314,48 @@ void main() {
     });
   });
 
+  group('tipos de papas (selectedFriesTypes por línea)', () {
+    const fritas = FriesType(id: 'f-1', name: 'Papas fritas', isDefault: true);
+    const hilo = FriesType(id: 'f-2', name: 'Papas al hilo');
+
+    test('mismo producto + mismo tipo de papas → fusiona cantidades', () {
+      final container = createContainer();
+      final cart = container.read(cartProvider.notifier);
+      cart.addItem(burger, selectedFriesTypes: const [fritas]);
+      cart.addItem(burger, selectedFriesTypes: const [fritas]);
+
+      final items = container.read(cartProvider).items;
+      expect(items, hasLength(1));
+      expect(items.single.quantity, 2);
+    });
+
+    test('mismo producto + distinto tipo de papas → filas separadas', () {
+      final container = createContainer();
+      final cart = container.read(cartProvider.notifier);
+      cart.addItem(burger, selectedFriesTypes: const [fritas]);
+      cart.addItem(burger, selectedFriesTypes: const [hilo]);
+
+      expect(container.read(cartProvider).items, hasLength(2));
+    });
+
+    test('updateLine reemplaza el tipo de papas de la fila', () {
+      final container = createContainer();
+      final cart = container.read(cartProvider.notifier);
+      cart.addItem(burger, selectedFriesTypes: const [fritas]);
+
+      cart.updateLine(
+        'i-1::fries:f-1',
+        quantity: 1,
+        selectedSauces: const [],
+        selectedFriesTypes: const [hilo],
+      );
+
+      final line = container.read(cartProvider).items.single;
+      expect(line.selectedFriesTypes, [hilo]);
+      expect(line.lineKey, 'i-1::fries:f-2');
+    });
+  });
+
   group('updateLine (edición desde el carrito)', () {
     const mayo = SauceOption(id: 's-1', name: 'Mayonesa');
     const mostaza = SauceOption(id: 's-2', name: 'Mostaza');
@@ -970,6 +1012,37 @@ void main() {
       addTearDown(container.dispose);
       return container;
     }
+
+    test(
+        'selectedFriesTypes se guarda y se restaura (con isDefault) en un '
+        'contenedor nuevo, con el mismo lineKey', () async {
+      const fritas = FriesType(id: 'f-1', name: 'Papas fritas', isDefault: true);
+      const hilo = FriesType(id: 'f-2', name: 'Papas al hilo');
+
+      final first = persistentContainer();
+      first.read(cartProvider.notifier).addItem(
+            burger,
+            selectedFriesTypes: const [hilo, fritas],
+          );
+      first.read(cartProvider.notifier).addItem(wings);
+      await pumpEventQueue();
+      final originalKey = first.read(cartProvider).items.first.lineKey;
+
+      final second = persistentContainer();
+      final state = second.read(cartProvider);
+      expect(state.items, hasLength(2));
+      final restored = state.items.firstWhere((i) => i.menuItemId == 'i-1');
+      expect(restored.selectedFriesTypes, [hilo, fritas]);
+      expect(restored.lineKey, originalKey);
+      expect(restored.lineKey, 'i-1::fries:f-1,f-2');
+      // Ítem sin papas: la llave ni se escribe en la caché.
+      final restoredWings = state.items.firstWhere((i) => i.menuItemId == 'i-2');
+      expect(restoredWings.selectedFriesTypes, isEmpty);
+      expect(
+        restoredWings.toStorageJson().containsKey('selectedFriesTypes'),
+        isFalse,
+      );
+    });
 
     test('un carrito con ítems se rehidrata igual en un contenedor nuevo',
         () async {

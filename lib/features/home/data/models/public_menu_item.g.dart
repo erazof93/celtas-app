@@ -41,6 +41,14 @@ _PublicMenuItem _$PublicMenuItemFromJson(
   extraPortionsGroupMaxSelectable:
       (json['extraPortionsGroupMaxSelectable'] as num?)?.toInt() ?? 0,
   extraPortionsAllowWithout: json['extraPortionsAllowWithout'] as bool? ?? true,
+  friesTypes:
+      (json['friesTypes'] as List<dynamic>?)
+          ?.map((e) => FriesType.fromJson(e as Map<String, dynamic>))
+          .toList() ??
+      const <FriesType>[],
+  friesTypeGroupRequired: json['friesTypeGroupRequired'] as bool? ?? false,
+  friesTypeGroupMaxSelectable:
+      (json['friesTypeGroupMaxSelectable'] as num?)?.toInt() ?? 1,
 );
 
 Map<String, dynamic> _$PublicMenuItemToJson(
@@ -63,4 +71,20 @@ Map<String, dynamic> _$PublicMenuItemToJson(
   'extraPortionsGroupRequired': instance.extraPortionsGroupRequired,
   'extraPortionsGroupMaxSelectable': instance.extraPortionsGroupMaxSelectable,
   'extraPortionsAllowWithout': instance.extraPortionsAllowWithout,
+  'friesTypes': instance.friesTypes,
+  'friesTypeGroupRequired': instance.friesTypeGroupRequired,
+  'friesTypeGroupMaxSelectable': instance.friesTypeGroupMaxSelectable,
 };
+
+_FriesType _$FriesTypeFromJson(Map<String, dynamic> json) => _FriesType(
+  id: json['id'] as String,
+  name: json['name'] as String,
+  isDefault: json['isDefault'] as bool? ?? false,
+);
+
+Map<String, dynamic> _$FriesTypeToJson(_FriesType instance) =>
+    <String, dynamic>{
+      'id': instance.id,
+      'name': instance.name,
+      'isDefault': instance.isDefault,
+    };
