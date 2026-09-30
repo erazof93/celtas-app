@@ -209,8 +209,10 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
     if (item.sauceGroupRequired && _selectedSauceIds.isEmpty) {
       return 'Elige al menos 1 salsa (obligatorio)';
     }
-    if (_selectedSauceIds.length > item.sauceGroupMaxSelectable) {
-      return 'Máximo ${item.sauceGroupMaxSelectable} salsa(s) — quita '
+    // `null` = sin límite de salsas (ver doc de `PublicMenuItem`).
+    final max = item.sauceGroupMaxSelectable;
+    if (max != null && _selectedSauceIds.length > max) {
+      return 'Máximo $max salsa(s) — quita '
           'alguna para continuar';
     }
     return null;
@@ -915,7 +917,11 @@ class _OptionGroupDropdown extends StatelessWidget {
   final Set<String> selectedIds;
   final bool explicitlyNone;
   final bool groupRequired;
-  final int groupMaxSelectable;
+
+  /// `null` = sin límite (hoy solo posible en salsas, ver doc de
+  /// `PublicMenuItem`): ni el subtítulo menciona un tope ni el diálogo
+  /// deshabilita opciones.
+  final int? groupMaxSelectable;
 
   /// Si el checkbox "Sin X" (`noneLabel`) debe ofrecerse — dato por producto
   /// y por categoría (`item.sauceAllowWithout`/`beverageAllowWithout`/
@@ -935,12 +941,11 @@ class _OptionGroupDropdown extends StatelessWidget {
 
   final void Function(Set<String> selectedIds, bool explicitlyNone) onApply;
 
-  /// "Elige las que quieras" cuando el máximo configurado cubre TODO el
-  /// catálogo (caso salsas, que no tienen máximo real — ver
-  /// `_ProductDetailBodyState._sauceChoiceViolation`) — sin esto, un
+  /// "Elige las que quieras" cuando no hay tope (`groupMaxSelectable: null`)
+  /// o cuando el máximo configurado cubre TODO el catálogo — sin esto, un
   /// catálogo de 2 salsas con `groupMaxSelectable: 2` diría "elige hasta 2",
   /// una distinción sin sentido para el cliente si de todas formas no hay
-  /// más de 2 para elegir.
+  /// más de 2 para elegir. Obligatorio sin tope: "Elige al menos 1".
   ///
   /// Cuando el grupo es obligatorio, ya no repite la palabra "Obligatorio"
   /// acá — el campo la muestra como badge dentro de sí mismo, a la derecha
@@ -949,19 +954,18 @@ class _OptionGroupDropdown extends StatelessWidget {
   /// no se ofrece acá (ver `_openDialog`), así que prometerlo en el
   /// subtítulo sería incorrecto.
   String get _subtitle {
+    final max = groupMaxSelectable;
     if (groupRequired) {
-      return 'Elige entre 1 y $groupMaxSelectable';
+      return max == null ? 'Elige al menos 1' : 'Elige entre 1 y $max';
     }
-    final fitsWholeCatalog = groupMaxSelectable >= options.length;
+    final fitsWholeCatalog = max == null || max >= options.length;
     if (!allowWithout) {
-      return fitsWholeCatalog
-          ? 'Elige las que quieras'
-          : 'Elige hasta $groupMaxSelectable';
+      return fitsWholeCatalog ? 'Elige las que quieras' : 'Elige hasta $max';
     }
     if (fitsWholeCatalog) {
       return 'Elige las que quieras, o "$noneLabel"';
     }
-    return 'Elige hasta $groupMaxSelectable, o "$noneLabel"';
+    return 'Elige hasta $max, o "$noneLabel"';
   }
 
   /// "Sin X" es siempre información propia (no solo "ya elegiste algo"), así
@@ -1009,7 +1013,9 @@ class _OptionGroupDropdown extends StatelessWidget {
           // deshabilitan (`onChanged: null`) — las ya marcadas siguen
           // pudiendo desmarcarse. `_sauceChoiceViolation` y hermanos quedan
           // como red de seguridad (el backend responde 400 igual si se pasa).
-          final atMax = tempSelected.length >= groupMaxSelectable;
+          // Sin tope (`null`) nunca se deshabilita nada.
+          final max = groupMaxSelectable;
+          final atMax = max != null && tempSelected.length >= max;
           return AlertDialog(
             backgroundColor: CeltasColors.surface,
             title: Text(

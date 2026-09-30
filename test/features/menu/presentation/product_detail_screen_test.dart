@@ -156,6 +156,22 @@ void main() {
         sauces: [mayo, mostaza, ketchup],
         sauceGroupMaxSelectable: 2,
       ),
+      // Salsas opcionales SIN límite (`sauceGroupMaxSelectable: null`,
+      // default real del backend).
+      PublicMenuItem(
+        id: 'i-13',
+        name: 'Salsas Libres Burger',
+        price: 14,
+        sauces: [mayo, mostaza, ketchup],
+      ),
+      // Salsas OBLIGATORIAS sin límite.
+      PublicMenuItem(
+        id: 'i-14',
+        name: 'Salsas Libres Obligatorias',
+        price: 14,
+        sauces: [mayo, mostaza, ketchup],
+        sauceGroupRequired: true,
+      ),
     ],
   );
 
@@ -921,6 +937,64 @@ void main() {
         await confirmDialog(tester, 'sauce');
         await openDropdown(tester, 'sauce');
         expect(isDialogOptionEnabled(tester, 'sauce', 's-3'), isFalse);
+      },
+    );
+
+    testWidgets(
+      'salsas sin límite (sauceGroupMaxSelectable: null): ninguna opción se '
+      'deshabilita, se pueden elegir las 3 y "Agregar" las guarda todas',
+      (tester) async {
+        final (container, _) = await pumpDetail(tester, productId: 'i-13');
+
+        await openDropdown(tester, 'sauce');
+        await tapDialogOption(tester, 'sauce', 's-1');
+        await tapDialogOption(tester, 'sauce', 's-2');
+        expect(isDialogOptionEnabled(tester, 'sauce', 's-3'), isTrue);
+        await tapDialogOption(tester, 'sauce', 's-3');
+        await confirmDialog(tester, 'sauce');
+
+        expect(
+          tester
+              .widget<CeltasButton>(find.byKey(const ValueKey('detail-add')))
+              .enabled,
+          isTrue,
+        );
+        await tester.tap(find.byKey(const ValueKey('detail-add')));
+        await tester.pumpAndSettle();
+        expect(
+          container
+              .read(cartProvider)
+              .items
+              .single
+              .selectedSauces
+              .map((s) => s.name),
+          ['Mayonesa', 'Mostaza', 'Ketchup'],
+        );
+      },
+    );
+
+    testWidgets(
+      'salsas sin límite, grupo opcional: el subtítulo no menciona ningún '
+      'tope ("Elige las que quieras, o "Sin salsas"")',
+      (tester) async {
+        await pumpDetail(tester, productId: 'i-13');
+
+        expect(
+          find.text('Elige las que quieras, o "Sin salsas"'),
+          findsOneWidget,
+        );
+        expect(find.textContaining('Elige hasta'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'salsas sin límite, grupo obligatorio: el subtítulo dice "Elige al '
+      'menos 1" (no "Elige entre 1 y null")',
+      (tester) async {
+        await pumpDetail(tester, productId: 'i-14');
+
+        expect(find.text('Elige al menos 1'), findsOneWidget);
+        expect(find.textContaining('null'), findsNothing);
       },
     );
 

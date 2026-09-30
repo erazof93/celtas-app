@@ -32,6 +32,15 @@ part 'public_menu_item.g.dart';
 /// debe espejar la misma validación localmente (UX) pero nunca confiar solo
 /// en ella (el backend rechaza con 400 igual si se le manda algo inválido).
 ///
+/// `sauceGroupMaxSelectable` es el ÚNICO máximo nullable: `null` = sin límite
+/// de salsas (columna nullable, default NULL — migración
+/// `MakeSauceGroupMaxSelectableNullable` en el backend, que espeja
+/// `validateGroupSelection` con `groupMaxSelectable !== null`). Por eso NO
+/// lleva `@Default`: un `null` (o el campo ausente) debe llegar como `null`,
+/// no como `0` — con `0` la app bloquearía todas las salsas del producto.
+/// `beverageGroupMaxSelectable`/`extraPortionsGroupMaxSelectable` siguen NOT
+/// NULL default 1 en el backend, así que siguen siendo `int`.
+///
 /// `sauceAllowWithout`/`beverageAllowWithout`/`extraPortionsAllowWithout`
 /// (default `true`, viajan SIEMPRE igual que los `GroupRequired`/`Max` de
 /// arriba — ver `MenuService.findPublicMenu` en el backend, columnas NOT
@@ -58,7 +67,7 @@ abstract class PublicMenuItem with _$PublicMenuItem {
     String? image,
     @Default(<SauceOption>[]) List<SauceOption> sauces,
     @Default(false) bool sauceGroupRequired,
-    @Default(0) int sauceGroupMaxSelectable,
+    int? sauceGroupMaxSelectable,
     @Default(true) bool sauceAllowWithout,
     @Default(<BeverageOption>[]) List<BeverageOption> beverages,
     @Default(false) bool beverageGroupRequired,

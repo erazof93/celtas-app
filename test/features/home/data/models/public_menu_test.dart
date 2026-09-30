@@ -34,6 +34,44 @@ void main() {
       expect(item.description, isNull);
       expect(item.image, isNull);
     });
+
+    test(
+      'sauceGroupMaxSelectable: null (sin límite, default del backend) se '
+      'mantiene null — no cae a 0, que bloquearía todas las salsas',
+      () {
+        final item = PublicMenuItem.fromJson({
+          'id': 'i-1',
+          'name': 'Salsas libres',
+          'price': 12,
+          'sauceGroupMaxSelectable': null,
+          'beverageGroupMaxSelectable': 1,
+          'extraPortionsGroupMaxSelectable': 1,
+        });
+
+        expect(item.sauceGroupMaxSelectable, isNull);
+      },
+    );
+
+    test('sauceGroupMaxSelectable ausente → null (sin límite)', () {
+      final item = PublicMenuItem.fromJson({
+        'id': 'i-1',
+        'name': 'Salsas libres',
+        'price': 12,
+      });
+
+      expect(item.sauceGroupMaxSelectable, isNull);
+    });
+
+    test('sauceGroupMaxSelectable numérico se respeta tal cual', () {
+      final item = PublicMenuItem.fromJson({
+        'id': 'i-1',
+        'name': 'Máximo 2 salsas',
+        'price': 12,
+        'sauceGroupMaxSelectable': 2,
+      });
+
+      expect(item.sauceGroupMaxSelectable, 2);
+    });
   });
 
   group('PublicMenuCategory.fromJson', () {

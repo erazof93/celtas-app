@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$PublicMenuItem {
 
- String get id; String get name; String? get description; double get price; String? get image; List<SauceOption> get sauces; bool get sauceGroupRequired; int get sauceGroupMaxSelectable; bool get sauceAllowWithout; List<BeverageOption> get beverages; bool get beverageGroupRequired; int get beverageGroupMaxSelectable; bool get beverageAllowWithout; List<ExtraPortionOption> get extraPortions; bool get extraPortionsGroupRequired; int get extraPortionsGroupMaxSelectable; bool get extraPortionsAllowWithout;
+ String get id; String get name; String? get description; double get price; String? get image; List<SauceOption> get sauces; bool get sauceGroupRequired; int? get sauceGroupMaxSelectable; bool get sauceAllowWithout; List<BeverageOption> get beverages; bool get beverageGroupRequired; int get beverageGroupMaxSelectable; bool get beverageAllowWithout; List<ExtraPortionOption> get extraPortions; bool get extraPortionsGroupRequired; int get extraPortionsGroupMaxSelectable; bool get extraPortionsAllowWithout;
 /// Create a copy of PublicMenuItem
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -48,7 +48,7 @@ abstract mixin class $PublicMenuItemCopyWith<$Res>  {
   factory $PublicMenuItemCopyWith(PublicMenuItem value, $Res Function(PublicMenuItem) _then) = _$PublicMenuItemCopyWithImpl;
 @useResult
 $Res call({
- String id, String name, String? description, double price, String? image, List<SauceOption> sauces, bool sauceGroupRequired, int sauceGroupMaxSelectable, bool sauceAllowWithout, List<BeverageOption> beverages, bool beverageGroupRequired, int beverageGroupMaxSelectable, bool beverageAllowWithout, List<ExtraPortionOption> extraPortions, bool extraPortionsGroupRequired, int extraPortionsGroupMaxSelectable, bool extraPortionsAllowWithout
+ String id, String name, String? description, double price, String? image, List<SauceOption> sauces, bool sauceGroupRequired, int? sauceGroupMaxSelectable, bool sauceAllowWithout, List<BeverageOption> beverages, bool beverageGroupRequired, int beverageGroupMaxSelectable, bool beverageAllowWithout, List<ExtraPortionOption> extraPortions, bool extraPortionsGroupRequired, int extraPortionsGroupMaxSelectable, bool extraPortionsAllowWithout
 });
 
 
@@ -65,7 +65,7 @@ class _$PublicMenuItemCopyWithImpl<$Res>
 
 /// Create a copy of PublicMenuItem
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? price = null,Object? image = freezed,Object? sauces = null,Object? sauceGroupRequired = null,Object? sauceGroupMaxSelectable = null,Object? sauceAllowWithout = null,Object? beverages = null,Object? beverageGroupRequired = null,Object? beverageGroupMaxSelectable = null,Object? beverageAllowWithout = null,Object? extraPortions = null,Object? extraPortionsGroupRequired = null,Object? extraPortionsGroupMaxSelectable = null,Object? extraPortionsAllowWithout = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? price = null,Object? image = freezed,Object? sauces = null,Object? sauceGroupRequired = null,Object? sauceGroupMaxSelectable = freezed,Object? sauceAllowWithout = null,Object? beverages = null,Object? beverageGroupRequired = null,Object? beverageGroupMaxSelectable = null,Object? beverageAllowWithout = null,Object? extraPortions = null,Object? extraPortionsGroupRequired = null,Object? extraPortionsGroupMaxSelectable = null,Object? extraPortionsAllowWithout = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -74,8 +74,8 @@ as String?,price: null == price ? _self.price : price // ignore: cast_nullable_t
 as double,image: freezed == image ? _self.image : image // ignore: cast_nullable_to_non_nullable
 as String?,sauces: null == sauces ? _self.sauces : sauces // ignore: cast_nullable_to_non_nullable
 as List<SauceOption>,sauceGroupRequired: null == sauceGroupRequired ? _self.sauceGroupRequired : sauceGroupRequired // ignore: cast_nullable_to_non_nullable
-as bool,sauceGroupMaxSelectable: null == sauceGroupMaxSelectable ? _self.sauceGroupMaxSelectable : sauceGroupMaxSelectable // ignore: cast_nullable_to_non_nullable
-as int,sauceAllowWithout: null == sauceAllowWithout ? _self.sauceAllowWithout : sauceAllowWithout // ignore: cast_nullable_to_non_nullable
+as bool,sauceGroupMaxSelectable: freezed == sauceGroupMaxSelectable ? _self.sauceGroupMaxSelectable : sauceGroupMaxSelectable // ignore: cast_nullable_to_non_nullable
+as int?,sauceAllowWithout: null == sauceAllowWithout ? _self.sauceAllowWithout : sauceAllowWithout // ignore: cast_nullable_to_non_nullable
 as bool,beverages: null == beverages ? _self.beverages : beverages // ignore: cast_nullable_to_non_nullable
 as List<BeverageOption>,beverageGroupRequired: null == beverageGroupRequired ? _self.beverageGroupRequired : beverageGroupRequired // ignore: cast_nullable_to_non_nullable
 as bool,beverageGroupMaxSelectable: null == beverageGroupMaxSelectable ? _self.beverageGroupMaxSelectable : beverageGroupMaxSelectable // ignore: cast_nullable_to_non_nullable
@@ -169,7 +169,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  double price,  String? image,  List<SauceOption> sauces,  bool sauceGroupRequired,  int sauceGroupMaxSelectable,  bool sauceAllowWithout,  List<BeverageOption> beverages,  bool beverageGroupRequired,  int beverageGroupMaxSelectable,  bool beverageAllowWithout,  List<ExtraPortionOption> extraPortions,  bool extraPortionsGroupRequired,  int extraPortionsGroupMaxSelectable,  bool extraPortionsAllowWithout)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  double price,  String? image,  List<SauceOption> sauces,  bool sauceGroupRequired,  int? sauceGroupMaxSelectable,  bool sauceAllowWithout,  List<BeverageOption> beverages,  bool beverageGroupRequired,  int beverageGroupMaxSelectable,  bool beverageAllowWithout,  List<ExtraPortionOption> extraPortions,  bool extraPortionsGroupRequired,  int extraPortionsGroupMaxSelectable,  bool extraPortionsAllowWithout)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _PublicMenuItem() when $default != null:
 return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_that.sauces,_that.sauceGroupRequired,_that.sauceGroupMaxSelectable,_that.sauceAllowWithout,_that.beverages,_that.beverageGroupRequired,_that.beverageGroupMaxSelectable,_that.beverageAllowWithout,_that.extraPortions,_that.extraPortionsGroupRequired,_that.extraPortionsGroupMaxSelectable,_that.extraPortionsAllowWithout);case _:
@@ -190,7 +190,7 @@ return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_t
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  double price,  String? image,  List<SauceOption> sauces,  bool sauceGroupRequired,  int sauceGroupMaxSelectable,  bool sauceAllowWithout,  List<BeverageOption> beverages,  bool beverageGroupRequired,  int beverageGroupMaxSelectable,  bool beverageAllowWithout,  List<ExtraPortionOption> extraPortions,  bool extraPortionsGroupRequired,  int extraPortionsGroupMaxSelectable,  bool extraPortionsAllowWithout)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  double price,  String? image,  List<SauceOption> sauces,  bool sauceGroupRequired,  int? sauceGroupMaxSelectable,  bool sauceAllowWithout,  List<BeverageOption> beverages,  bool beverageGroupRequired,  int beverageGroupMaxSelectable,  bool beverageAllowWithout,  List<ExtraPortionOption> extraPortions,  bool extraPortionsGroupRequired,  int extraPortionsGroupMaxSelectable,  bool extraPortionsAllowWithout)  $default,) {final _that = this;
 switch (_that) {
 case _PublicMenuItem():
 return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_that.sauces,_that.sauceGroupRequired,_that.sauceGroupMaxSelectable,_that.sauceAllowWithout,_that.beverages,_that.beverageGroupRequired,_that.beverageGroupMaxSelectable,_that.beverageAllowWithout,_that.extraPortions,_that.extraPortionsGroupRequired,_that.extraPortionsGroupMaxSelectable,_that.extraPortionsAllowWithout);case _:
@@ -210,7 +210,7 @@ return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_t
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  String? description,  double price,  String? image,  List<SauceOption> sauces,  bool sauceGroupRequired,  int sauceGroupMaxSelectable,  bool sauceAllowWithout,  List<BeverageOption> beverages,  bool beverageGroupRequired,  int beverageGroupMaxSelectable,  bool beverageAllowWithout,  List<ExtraPortionOption> extraPortions,  bool extraPortionsGroupRequired,  int extraPortionsGroupMaxSelectable,  bool extraPortionsAllowWithout)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  String? description,  double price,  String? image,  List<SauceOption> sauces,  bool sauceGroupRequired,  int? sauceGroupMaxSelectable,  bool sauceAllowWithout,  List<BeverageOption> beverages,  bool beverageGroupRequired,  int beverageGroupMaxSelectable,  bool beverageAllowWithout,  List<ExtraPortionOption> extraPortions,  bool extraPortionsGroupRequired,  int extraPortionsGroupMaxSelectable,  bool extraPortionsAllowWithout)?  $default,) {final _that = this;
 switch (_that) {
 case _PublicMenuItem() when $default != null:
 return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_that.sauces,_that.sauceGroupRequired,_that.sauceGroupMaxSelectable,_that.sauceAllowWithout,_that.beverages,_that.beverageGroupRequired,_that.beverageGroupMaxSelectable,_that.beverageAllowWithout,_that.extraPortions,_that.extraPortionsGroupRequired,_that.extraPortionsGroupMaxSelectable,_that.extraPortionsAllowWithout);case _:
@@ -225,7 +225,7 @@ return $default(_that.id,_that.name,_that.description,_that.price,_that.image,_t
 @JsonSerializable()
 
 class _PublicMenuItem implements PublicMenuItem {
-  const _PublicMenuItem({required this.id, required this.name, this.description, required this.price, this.image, final  List<SauceOption> sauces = const <SauceOption>[], this.sauceGroupRequired = false, this.sauceGroupMaxSelectable = 0, this.sauceAllowWithout = true, final  List<BeverageOption> beverages = const <BeverageOption>[], this.beverageGroupRequired = false, this.beverageGroupMaxSelectable = 0, this.beverageAllowWithout = true, final  List<ExtraPortionOption> extraPortions = const <ExtraPortionOption>[], this.extraPortionsGroupRequired = false, this.extraPortionsGroupMaxSelectable = 0, this.extraPortionsAllowWithout = true}): _sauces = sauces,_beverages = beverages,_extraPortions = extraPortions;
+  const _PublicMenuItem({required this.id, required this.name, this.description, required this.price, this.image, final  List<SauceOption> sauces = const <SauceOption>[], this.sauceGroupRequired = false, this.sauceGroupMaxSelectable, this.sauceAllowWithout = true, final  List<BeverageOption> beverages = const <BeverageOption>[], this.beverageGroupRequired = false, this.beverageGroupMaxSelectable = 0, this.beverageAllowWithout = true, final  List<ExtraPortionOption> extraPortions = const <ExtraPortionOption>[], this.extraPortionsGroupRequired = false, this.extraPortionsGroupMaxSelectable = 0, this.extraPortionsAllowWithout = true}): _sauces = sauces,_beverages = beverages,_extraPortions = extraPortions;
   factory _PublicMenuItem.fromJson(Map<String, dynamic> json) => _$PublicMenuItemFromJson(json);
 
 @override final  String id;
@@ -241,7 +241,7 @@ class _PublicMenuItem implements PublicMenuItem {
 }
 
 @override@JsonKey() final  bool sauceGroupRequired;
-@override@JsonKey() final  int sauceGroupMaxSelectable;
+@override final  int? sauceGroupMaxSelectable;
 @override@JsonKey() final  bool sauceAllowWithout;
  final  List<BeverageOption> _beverages;
 @override@JsonKey() List<BeverageOption> get beverages {
@@ -297,7 +297,7 @@ abstract mixin class _$PublicMenuItemCopyWith<$Res> implements $PublicMenuItemCo
   factory _$PublicMenuItemCopyWith(_PublicMenuItem value, $Res Function(_PublicMenuItem) _then) = __$PublicMenuItemCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String name, String? description, double price, String? image, List<SauceOption> sauces, bool sauceGroupRequired, int sauceGroupMaxSelectable, bool sauceAllowWithout, List<BeverageOption> beverages, bool beverageGroupRequired, int beverageGroupMaxSelectable, bool beverageAllowWithout, List<ExtraPortionOption> extraPortions, bool extraPortionsGroupRequired, int extraPortionsGroupMaxSelectable, bool extraPortionsAllowWithout
+ String id, String name, String? description, double price, String? image, List<SauceOption> sauces, bool sauceGroupRequired, int? sauceGroupMaxSelectable, bool sauceAllowWithout, List<BeverageOption> beverages, bool beverageGroupRequired, int beverageGroupMaxSelectable, bool beverageAllowWithout, List<ExtraPortionOption> extraPortions, bool extraPortionsGroupRequired, int extraPortionsGroupMaxSelectable, bool extraPortionsAllowWithout
 });
 
 
@@ -314,7 +314,7 @@ class __$PublicMenuItemCopyWithImpl<$Res>
 
 /// Create a copy of PublicMenuItem
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? price = null,Object? image = freezed,Object? sauces = null,Object? sauceGroupRequired = null,Object? sauceGroupMaxSelectable = null,Object? sauceAllowWithout = null,Object? beverages = null,Object? beverageGroupRequired = null,Object? beverageGroupMaxSelectable = null,Object? beverageAllowWithout = null,Object? extraPortions = null,Object? extraPortionsGroupRequired = null,Object? extraPortionsGroupMaxSelectable = null,Object? extraPortionsAllowWithout = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? price = null,Object? image = freezed,Object? sauces = null,Object? sauceGroupRequired = null,Object? sauceGroupMaxSelectable = freezed,Object? sauceAllowWithout = null,Object? beverages = null,Object? beverageGroupRequired = null,Object? beverageGroupMaxSelectable = null,Object? beverageAllowWithout = null,Object? extraPortions = null,Object? extraPortionsGroupRequired = null,Object? extraPortionsGroupMaxSelectable = null,Object? extraPortionsAllowWithout = null,}) {
   return _then(_PublicMenuItem(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -323,8 +323,8 @@ as String?,price: null == price ? _self.price : price // ignore: cast_nullable_t
 as double,image: freezed == image ? _self.image : image // ignore: cast_nullable_to_non_nullable
 as String?,sauces: null == sauces ? _self._sauces : sauces // ignore: cast_nullable_to_non_nullable
 as List<SauceOption>,sauceGroupRequired: null == sauceGroupRequired ? _self.sauceGroupRequired : sauceGroupRequired // ignore: cast_nullable_to_non_nullable
-as bool,sauceGroupMaxSelectable: null == sauceGroupMaxSelectable ? _self.sauceGroupMaxSelectable : sauceGroupMaxSelectable // ignore: cast_nullable_to_non_nullable
-as int,sauceAllowWithout: null == sauceAllowWithout ? _self.sauceAllowWithout : sauceAllowWithout // ignore: cast_nullable_to_non_nullable
+as bool,sauceGroupMaxSelectable: freezed == sauceGroupMaxSelectable ? _self.sauceGroupMaxSelectable : sauceGroupMaxSelectable // ignore: cast_nullable_to_non_nullable
+as int?,sauceAllowWithout: null == sauceAllowWithout ? _self.sauceAllowWithout : sauceAllowWithout // ignore: cast_nullable_to_non_nullable
 as bool,beverages: null == beverages ? _self._beverages : beverages // ignore: cast_nullable_to_non_nullable
 as List<BeverageOption>,beverageGroupRequired: null == beverageGroupRequired ? _self.beverageGroupRequired : beverageGroupRequired // ignore: cast_nullable_to_non_nullable
 as bool,beverageGroupMaxSelectable: null == beverageGroupMaxSelectable ? _self.beverageGroupMaxSelectable : beverageGroupMaxSelectable // ignore: cast_nullable_to_non_nullable

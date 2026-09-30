@@ -20,8 +20,7 @@ _PublicMenuItem _$PublicMenuItemFromJson(
           .toList() ??
       const <SauceOption>[],
   sauceGroupRequired: json['sauceGroupRequired'] as bool? ?? false,
-  sauceGroupMaxSelectable:
-      (json['sauceGroupMaxSelectable'] as num?)?.toInt() ?? 0,
+  sauceGroupMaxSelectable: (json['sauceGroupMaxSelectable'] as num?)?.toInt(),
   sauceAllowWithout: json['sauceAllowWithout'] as bool? ?? true,
   beverages:
       (json['beverages'] as List<dynamic>?)
