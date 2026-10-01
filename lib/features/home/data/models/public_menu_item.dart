@@ -49,14 +49,11 @@ part 'public_menu_item.g.dart';
 /// (plural "Portions", igual que `extraPortionsGroupRequired`/`Max`), NO
 /// `extraPortionAllowWithout` — confirmado contra
 /// `backend-celtas/src/modules/menu/entities/menu-item.entity.ts` y
-/// `celtas-admin/src/features/menu/types.ts`. El admin puede activar este
-/// flag en un grupo obligatorio sin que tenga ningún efecto real: el checkbox
-/// solo se ofrece con el grupo OPCIONAL (`!groupRequired`) — con
-/// `groupRequired: true`, "Sin X" nunca es una selección válida
-/// (`OrdersService.validateGroupSelection` en el backend rechaza
-/// `selected.length === 0` igual, sin importar `AllowWithout`), así que
-/// ofrecerlo ahí sería un callejón sin salida para el cliente (ver
-/// `_OptionGroupDropdown._openDialog` en `product_detail_screen.dart`).
+/// `celtas-admin/src/features/menu/types.ts`. Aplica también con el grupo
+/// obligatorio: ahí "Sin X" es una elección válida que resuelve el grupo
+/// (`OrdersService.validateGroupSelection` en el backend acepta `[]` con
+/// `allowWithout: true`, pero sigue rechazando el campo omitido — ver
+/// `_sauceChoiceViolation` y hermanos en `product_detail_screen.dart`).
 @freezed
 abstract class PublicMenuItem with _$PublicMenuItem {
   const factory PublicMenuItem({

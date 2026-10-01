@@ -224,7 +224,12 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
   String? get _sauceChoiceViolation {
     final item = widget.item;
     if (item.sauces.isEmpty) return null;
-    if (item.sauceGroupRequired && _selectedSauceIds.isEmpty) {
+    // Con `allowWithout`, marcar "Sin salsas" resuelve el grupo (se manda
+    // `[]` y el backend lo acepta); dejarlo en blanco no (se omite el campo
+    // y el backend responde 400).
+    if (item.sauceGroupRequired &&
+        _selectedSauceIds.isEmpty &&
+        !(item.sauceAllowWithout && _explicitlyNoSauces)) {
       return 'Elige al menos 1 salsa (obligatorio)';
     }
     // `null` = sin límite de salsas (ver doc de `PublicMenuItem`).
@@ -247,7 +252,9 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
   String? get _beverageChoiceViolation {
     final item = widget.item;
     if (item.beverages.isEmpty) return null;
-    if (item.beverageGroupRequired && _selectedBeverageIds.isEmpty) {
+    if (item.beverageGroupRequired &&
+        _selectedBeverageIds.isEmpty &&
+        !(item.beverageAllowWithout && _explicitlyNoBeverages)) {
       return 'Elige al menos 1 bebida (obligatorio)';
     }
     if (_selectedBeverageIds.length > item.beverageGroupMaxSelectable) {
@@ -261,7 +268,9 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
   String? get _extraPortionChoiceViolation {
     final item = widget.item;
     if (item.extraPortions.isEmpty) return null;
-    if (item.extraPortionsGroupRequired && _selectedExtraPortionIds.isEmpty) {
+    if (item.extraPortionsGroupRequired &&
+        _selectedExtraPortionIds.isEmpty &&
+        !(item.extraPortionsAllowWithout && _explicitlyNoExtraPortions)) {
       return 'Elige al menos 1 porción extra (obligatorio)';
     }
     if (_selectedExtraPortionIds.length >
@@ -937,10 +946,11 @@ class _SelectableOption {
 /// Multi-selección real entre `options`, más un checkbox "Sin X"
 /// (`noneLabel`) mutuamente excluyente con ellas, ofrecido solo si
 /// `allowWithout` (dato por producto/categoría, ver su doc) lo permite. Con
-/// `groupRequired: true` hace falta elegir al menos una opción real para
-/// poder agregar/guardar ("Sin X" ni se ofrece ahí sin importar
-/// `allowWithout`, ver `_openDialog` — elegir "ninguna" no es válido en un
-/// grupo obligatorio, el backend lo rechaza igual). Con `groupRequired:
+/// `groupRequired: true` hace falta resolver el grupo para poder
+/// agregar/guardar: elegir al menos una opción real, o marcar "Sin X" si
+/// `allowWithout` lo permite (se manda `[]` explícito y el backend lo
+/// acepta; dejarlo en blanco omite el campo y el backend lo rechaza, ver
+/// `_sauceChoiceViolation` y hermanos). Con `groupRequired:
 /// false` no hay ninguna elección forzada — el cliente puede dejarlo tal
 /// cual y seguir de largo, "Sin X" (cuando `allowWithout` lo permite) es
 /// solo una forma más de dejar constancia explícita de "no quiero nada de
@@ -995,12 +1005,10 @@ class _OptionGroupDropdown extends StatelessWidget {
   /// Si el checkbox "Sin X" (`noneLabel`) debe ofrecerse — dato por producto
   /// y por categoría (`item.sauceAllowWithout`/`beverageAllowWithout`/
   /// `extraPortionsAllowWithout`, default `true`, ver doc de `PublicMenuItem`
-  /// para el contrato real). Solo tiene efecto con el grupo OPCIONAL: con
-  /// `groupRequired: true` el checkbox se sigue ocultando sin importar este
-  /// valor (ver `_openDialog`) — el admin puede activarlo en un grupo
-  /// obligatorio, pero "Sin X" ahí nunca sería una selección válida
-  /// (`OrdersService.validateGroupSelection` en el backend exige al menos
-  /// una opción real igual), así que ofrecerlo sería un callejón sin salida.
+  /// para el contrato real). Aplica igual con el grupo obligatorio: ahí
+  /// "Sin X" cuenta como una elección válida que resuelve el grupo
+  /// (`OrdersService.validateGroupSelection` en el backend acepta `[]` con
+  /// `allowWithout: true`, pero sigue rechazando el campo omitido).
   final bool allowWithout;
 
   /// `true` mientras este es el grupo que acaba de bloquear un intento de
@@ -1019,14 +1027,16 @@ class _OptionGroupDropdown extends StatelessWidget {
   /// Cuando el grupo es obligatorio, ya no repite la palabra "Obligatorio"
   /// acá — el campo la muestra como badge dentro de sí mismo, a la derecha
   /// (ver `build`/`_badge`), así que repetirla en el subtítulo sería ruido.
-  /// Con `allowWithout: false` no menciona `noneLabel` — el checkbox "Sin X"
-  /// no se ofrece acá (ver `_openDialog`), así que prometerlo en el
-  /// subtítulo sería incorrecto.
+  /// Con `allowWithout: true` agrega `o "Sin X"` (también en grupos
+  /// obligatorios); con `false` no menciona `noneLabel` — el checkbox "Sin X"
+  /// no se ofrece (ver `_openDialog`), así que prometerlo sería incorrecto.
   String get _subtitle {
     final max = groupMaxSelectable;
     if (groupRequired) {
-      if (max == null) return 'Elige al menos 1';
-      return max == 1 ? 'Elige 1' : 'Elige entre 1 y $max';
+      final base = max == null
+          ? 'Elige al menos 1'
+          : (max == 1 ? 'Elige 1' : 'Elige entre 1 y $max');
+      return allowWithout ? '$base, o "$noneLabel"' : base;
     }
     final fitsWholeCatalog = max == null || max >= options.length;
     if (!allowWithout) {
@@ -1060,11 +1070,12 @@ class _OptionGroupDropdown extends StatelessWidget {
   /// positiva, no solo el resumen "✓ Seleccionado" del campo (`_summaryText`).
   /// "Obligatorio" (naranja) solo aplica al grupo obligatorio sin nada
   /// elegido todavía; un grupo opcional sin selección no muestra ningún
-  /// badge (`null`) — el subtítulo ya cubre ese caso. `explicitlyNone` no
-  /// cuenta para "Listo" acá a propósito: "Sin X" ya queda explícito en el
-  /// resumen del campo (`noneLabel`), un badge adicional sería ruido.
+  /// badge (`null`) — el subtítulo ya cubre ese caso. En un grupo opcional
+  /// `explicitlyNone` no cuenta para "Listo" a propósito ("Sin X" ya queda
+  /// explícito en el resumen del campo); en uno obligatorio sí, porque
+  /// dejar "Obligatorio" en naranja daría a entender que falta elegir.
   ({String label, Color color})? get _badge {
-    if (selectedIds.isNotEmpty) {
+    if (selectedIds.isNotEmpty || (groupRequired && explicitlyNone)) {
       return (label: 'Listo', color: CeltasColors.success);
     }
     return groupRequired
@@ -1126,7 +1137,7 @@ class _OptionGroupDropdown extends StatelessWidget {
                               });
                             },
                     ),
-                  if (!groupRequired && allowWithout)
+                  if (allowWithout)
                     CheckboxListTile(
                       key: ValueKey('detail-$testKey-option-none'),
                       value: tempExplicitlyNone,

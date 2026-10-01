@@ -145,11 +145,10 @@ void main() {
         sauceGroupMaxSelectable: 2,
       ),
       // Porciones extras OBLIGATORIAS, dejando `extraPortionsAllowWithout`
-      // en su default (`true`) — confirma que el flag no tiene efecto en un
-      // grupo obligatorio: "Sin X" nunca es válido ahí (ver doc de
-      // `_OptionGroupDropdown.allowWithout`), así que el checkbox se sigue
-      // ocultando igual que en i-7 (mismo fixture en la práctica, separado
-      // para dejar el caso documentado con su propio test).
+      // en su default (`true`) — confirma que el flag también aplica en un
+      // grupo obligatorio: "Sin X" se ofrece y resuelve el grupo (ver doc de
+      // `_OptionGroupDropdown.allowWithout`). Mismo fixture que i-7 en la
+      // práctica, separado para dejar el caso documentado con su propio test.
       PublicMenuItem(
         id: 'i-11',
         name: 'Combo Extra Obligatoria Con Flag Explícito',
@@ -226,6 +225,18 @@ void main() {
         extraPortionsGroupMaxSelectable: 1,
         friesTypes: [papasHilo, papasCrinkle],
         friesTypeGroupRequired: true,
+      ),
+      // Salsas OBLIGATORIAS con `sauceAllowWithout: false` — mismo catálogo
+      // que i-8, pero el admin desactivó "Sin salsas": hay que elegir una
+      // salsa real sí o sí.
+      PublicMenuItem(
+        id: 'i-19',
+        name: 'Combo Salsa Obligatoria Sin Opción Vacía',
+        price: 26,
+        sauces: [mayo, mostaza],
+        sauceGroupRequired: true,
+        sauceGroupMaxSelectable: 1,
+        sauceAllowWithout: false,
       ),
     ],
   );
@@ -885,15 +896,17 @@ void main() {
     );
 
     testWidgets(
-      'salsas obligatorias: el diálogo no ofrece el checkbox "Sin salsas" '
-      'y el botón arranca deshabilitado',
+      'salsas obligatorias con allowWithout=true (default): el diálogo SÍ '
+      'ofrece el checkbox "Sin salsas" y el botón arranca deshabilitado',
       (tester) async {
         await pumpDetail(tester, productId: 'i-8');
+
+        expect(find.text('Elige 1, o "Sin salsas"'), findsOneWidget);
 
         await openDropdown(tester, 'sauce');
         expect(
           find.byKey(const ValueKey('detail-sauce-option-none')),
-          findsNothing,
+          findsOneWidget,
         );
         await cancelDialog(tester, 'sauce');
 
@@ -1052,7 +1065,7 @@ void main() {
       (tester) async {
         await pumpDetail(tester, productId: 'i-14');
 
-        expect(find.text('Elige al menos 1'), findsOneWidget);
+        expect(find.text('Elige al menos 1, o "Sin salsas"'), findsOneWidget);
         expect(find.textContaining('null'), findsNothing);
       },
     );
@@ -1228,15 +1241,15 @@ void main() {
     );
 
     testWidgets(
-      'bebidas obligatorias: el diálogo no ofrece el checkbox "Sin bebida" '
-      'y el botón arranca deshabilitado',
+      'bebidas obligatorias con allowWithout=true (default): el diálogo SÍ '
+      'ofrece el checkbox "Sin bebida" y el botón arranca deshabilitado',
       (tester) async {
         await pumpDetail(tester, productId: 'i-5');
 
         await openDropdown(tester, 'beverage');
         expect(
           find.byKey(const ValueKey('detail-beverage-option-none')),
-          findsNothing,
+          findsOneWidget,
         );
         await cancelDialog(tester, 'beverage');
 
@@ -1337,18 +1350,94 @@ void main() {
 
       testWidgets(
         'grupo OBLIGATORIO con allowWithout=true por default (i-11): el '
-        'checkbox "Sin porciones extras" se sigue ocultando igual — '
-        '"Sin X" nunca es válido en un grupo obligatorio, sin importar '
-        'este flag',
+        'checkbox "Sin porciones extras" SÍ se ofrece, y marcarlo resuelve '
+        'el grupo (agrega con explicitlyNoExtraPortions=true)',
         (tester) async {
-          await pumpDetail(tester, productId: 'i-11');
+          final (container, _) = await pumpDetail(tester, productId: 'i-11');
 
           await openDropdown(tester, 'extra');
-
           expect(
             find.byKey(const ValueKey('detail-extra-option-none')),
+            findsOneWidget,
+          );
+          await tapDialogOption(tester, 'extra', 'none');
+          await confirmDialog(tester, 'extra');
+
+          final button = tester.widget<CeltasButton>(
+            find.byKey(const ValueKey('detail-add')),
+          );
+          expect(button.enabled, isTrue);
+
+          await tester.tap(find.byKey(const ValueKey('detail-add')));
+          await tester.pumpAndSettle();
+
+          final item = container.read(cartProvider).items.single;
+          expect(item.selectedExtraPortions, isEmpty);
+          expect(item.explicitlyNoExtraPortions, isTrue);
+        },
+      );
+
+      testWidgets(
+        'salsas OBLIGATORIAS con allowWithout=true (i-8): marcar "Sin '
+        'salsas" habilita el botón, muestra "Listo" y agrega la fila con '
+        'explicitlyNoSauces=true',
+        (tester) async {
+          final (container, _) = await pumpDetail(tester, productId: 'i-8');
+
+          await selectDialogOptions(tester, 'sauce', ['none']);
+
+          expect(find.text('Listo'), findsOneWidget);
+          expect(find.text('Obligatorio'), findsNothing);
+          final button = tester.widget<CeltasButton>(
+            find.byKey(const ValueKey('detail-add')),
+          );
+          expect(button.enabled, isTrue);
+
+          await tester.tap(find.byKey(const ValueKey('detail-add')));
+          await tester.pumpAndSettle();
+
+          final item = container.read(cartProvider).items.single;
+          expect(item.selectedSauces, isEmpty);
+          expect(item.explicitlyNoSauces, isTrue);
+        },
+      );
+
+      testWidgets(
+        'bebidas OBLIGATORIAS con allowWithout=true (i-5): marcar "Sin '
+        'bebida" habilita el botón',
+        (tester) async {
+          await pumpDetail(tester, productId: 'i-5');
+
+          await selectDialogOptions(tester, 'beverage', ['none']);
+
+          final button = tester.widget<CeltasButton>(
+            find.byKey(const ValueKey('detail-add')),
+          );
+          expect(button.enabled, isTrue);
+        },
+      );
+
+      testWidgets(
+        'salsas OBLIGATORIAS con allowWithout=false (i-19): no se ofrece '
+        '"Sin salsas", el subtítulo no lo menciona y el botón sigue '
+        'deshabilitado hasta elegir una salsa real',
+        (tester) async {
+          await pumpDetail(tester, productId: 'i-19');
+
+          expect(find.text('Elige 1'), findsOneWidget);
+          expect(find.textContaining('Sin salsas'), findsNothing);
+
+          await openDropdown(tester, 'sauce');
+          expect(
+            find.byKey(const ValueKey('detail-sauce-option-none')),
             findsNothing,
           );
+          await cancelDialog(tester, 'sauce');
+
+          final button = tester.widget<CeltasButton>(
+            find.byKey(const ValueKey('detail-add')),
+          );
+          expect(button.enabled, isFalse);
         },
       );
 
@@ -1476,15 +1565,16 @@ void main() {
     );
 
     testWidgets(
-      'porciones extras obligatorias: el diálogo no ofrece el checkbox '
-      '"Sin porciones extras" y el botón arranca deshabilitado',
+      'porciones extras obligatorias con allowWithout=true (default): el '
+      'diálogo SÍ ofrece el checkbox "Sin porciones extras" y el botón '
+      'arranca deshabilitado',
       (tester) async {
         await pumpDetail(tester, productId: 'i-7');
 
         await openDropdown(tester, 'extra');
         expect(
           find.byKey(const ValueKey('detail-extra-option-none')),
-          findsNothing,
+          findsOneWidget,
         );
         await cancelDialog(tester, 'extra');
 
