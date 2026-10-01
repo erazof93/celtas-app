@@ -51,6 +51,38 @@ void main() {
       verify(() => dio.get<List<dynamic>>('/banners/active')).called(1);
     });
 
+    test(
+      'banner con title null junto a banners con título → no rompe la lista',
+      () async {
+        when(() => dio.get<List<dynamic>>('/banners/active')).thenAnswer(
+          (_) async => Response<List<dynamic>>(
+            requestOptions: RequestOptions(path: '/banners/active'),
+            data: [
+              for (final (id, title) in [
+                ('b-1', 'promo'),
+                ('b-2', null),
+                ('b-3', 'oferta'),
+              ])
+                {
+                  'id': id,
+                  'title': title,
+                  'imageUrl': 'https://res.cloudinary.com/x.webp',
+                  'actionType': 'none',
+                  'active': true,
+                  'order': 0,
+                  'createdAt': '2026-08-09T20:57:46.633Z',
+                  'updatedAt': '2026-08-09T20:57:48.872Z',
+                },
+            ],
+          ),
+        );
+
+        final banners = await repository.getActiveBanners();
+
+        expect(banners.map((b) => b.title), ['promo', null, 'oferta']);
+      },
+    );
+
     test('data vacío → lista vacía (sin banners activos)', () async {
       when(() => dio.get<List<dynamic>>('/banners/active')).thenAnswer(
         (_) async => Response<List<dynamic>>(

@@ -729,6 +729,10 @@ class _BannerCard extends ConsumerWidget {
         banner.actionType != BannerActionType.none &&
         banner.actionValue != null &&
         banner.actionValue!.isNotEmpty;
+    // `title` es opcional en el backend (banner solo imagen): sin título no se
+    // pinta texto ni el gradiente, que solo existe para hacerlo legible.
+    final title = banner.title?.trim() ?? '';
+    final hasTitle = title.isNotEmpty;
 
     return GestureDetector(
       key: ValueKey('banner-${banner.id}'),
@@ -762,53 +766,59 @@ class _BannerCard extends ConsumerWidget {
                 errorWidget: (context, url, error) => Container(
                   color: CeltasColors.surface,
                   alignment: Alignment.center,
-                  child: Text(
-                    banner.title,
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
+                  child: hasTitle
+                      ? Text(
+                          title,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        )
+                      : null,
                 ),
               )
             else
               Container(
                 color: CeltasColors.surface,
                 alignment: Alignment.center,
-                child: Text(
-                  banner.title,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
+                child: hasTitle
+                    ? Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleSmall,
+                      )
+                    : null,
               ),
             // Gradiente oscuro de izquierda a derecha (del CSS real del mockup:
             // `linear-gradient(90deg, rgba(13,13,13,.85) 20%, transparent 70%)`).
-            DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    CeltasColors.black.withValues(alpha: 0.85),
-                    Colors.transparent,
-                  ],
-                  stops: const [0.2, 0.7],
+            if (hasTitle)
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      CeltasColors.black.withValues(alpha: 0.85),
+                      Colors.transparent,
+                    ],
+                    stops: const [0.2, 0.7],
+                  ),
                 ),
               ),
-            ),
             // Título del banner (Cinzel, abajo a la izquierda). `right` deja
             // espacio para el chevron de afordancia cuando el banner es
             // tocable — sin esto, un título largo se solapa con el ícono
             // (hallazgo real de `@tester`, verificado con `tester.getRect`).
-            Positioned(
-              left: 16,
-              right: tappable ? 40 : 16,
-              bottom: 14,
-              child: Text(
-                banner.title.toUpperCase(),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: CeltasColors.cream,
+            if (hasTitle)
+              Positioned(
+                left: 16,
+                right: tappable ? 40 : 16,
+                bottom: 14,
+                child: Text(
+                  title.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: CeltasColors.cream,
+                  ),
                 ),
               ),
-            ),
             // Afordancia sutil de "tocable": no hay precedente en el mockup
             // (banner sin comportamiento de tap), así que se mantiene mínima —
             // mismo ícono/tamaño que ya usa `coupon_picker_sheet.dart` para

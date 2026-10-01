@@ -38,7 +38,9 @@ enum BannerActionType {
 abstract class Banner with _$Banner {
   const factory Banner({
     required String id,
-    required String title,
+    /// Opcional desde la migración `MakeBannerTitleNullable` del backend: un
+    /// banner puede ser solo imagen (`title: null`).
+    String? title,
     String? imageUrl,
     required BannerActionType actionType,
     String? actionValue,

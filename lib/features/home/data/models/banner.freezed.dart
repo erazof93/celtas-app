@@ -15,7 +15,9 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$Banner {
 
- String get id; String get title; String? get imageUrl; BannerActionType get actionType; String? get actionValue; DateTime? get startDate; DateTime? get endDate; bool get active; int get order; DateTime get createdAt; DateTime get updatedAt;
+ String get id;/// Opcional desde la migración `MakeBannerTitleNullable` del backend: un
+/// banner puede ser solo imagen (`title: null`).
+ String? get title; String? get imageUrl; BannerActionType get actionType; String? get actionValue; DateTime? get startDate; DateTime? get endDate; bool get active; int get order; DateTime get createdAt; DateTime get updatedAt;
 /// Create a copy of Banner
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -48,7 +50,7 @@ abstract mixin class $BannerCopyWith<$Res>  {
   factory $BannerCopyWith(Banner value, $Res Function(Banner) _then) = _$BannerCopyWithImpl;
 @useResult
 $Res call({
- String id, String title, String? imageUrl, BannerActionType actionType, String? actionValue, DateTime? startDate, DateTime? endDate, bool active, int order, DateTime createdAt, DateTime updatedAt
+ String id, String? title, String? imageUrl, BannerActionType actionType, String? actionValue, DateTime? startDate, DateTime? endDate, bool active, int order, DateTime createdAt, DateTime updatedAt
 });
 
 
@@ -65,11 +67,11 @@ class _$BannerCopyWithImpl<$Res>
 
 /// Create a copy of Banner
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? title = null,Object? imageUrl = freezed,Object? actionType = null,Object? actionValue = freezed,Object? startDate = freezed,Object? endDate = freezed,Object? active = null,Object? order = null,Object? createdAt = null,Object? updatedAt = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? title = freezed,Object? imageUrl = freezed,Object? actionType = null,Object? actionValue = freezed,Object? startDate = freezed,Object? endDate = freezed,Object? active = null,Object? order = null,Object? createdAt = null,Object? updatedAt = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
-as String,title: null == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
-as String,imageUrl: freezed == imageUrl ? _self.imageUrl : imageUrl // ignore: cast_nullable_to_non_nullable
+as String,title: freezed == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
+as String?,imageUrl: freezed == imageUrl ? _self.imageUrl : imageUrl // ignore: cast_nullable_to_non_nullable
 as String?,actionType: null == actionType ? _self.actionType : actionType // ignore: cast_nullable_to_non_nullable
 as BannerActionType,actionValue: freezed == actionValue ? _self.actionValue : actionValue // ignore: cast_nullable_to_non_nullable
 as String?,startDate: freezed == startDate ? _self.startDate : startDate // ignore: cast_nullable_to_non_nullable
@@ -163,7 +165,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String title,  String? imageUrl,  BannerActionType actionType,  String? actionValue,  DateTime? startDate,  DateTime? endDate,  bool active,  int order,  DateTime createdAt,  DateTime updatedAt)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String? title,  String? imageUrl,  BannerActionType actionType,  String? actionValue,  DateTime? startDate,  DateTime? endDate,  bool active,  int order,  DateTime createdAt,  DateTime updatedAt)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Banner() when $default != null:
 return $default(_that.id,_that.title,_that.imageUrl,_that.actionType,_that.actionValue,_that.startDate,_that.endDate,_that.active,_that.order,_that.createdAt,_that.updatedAt);case _:
@@ -184,7 +186,7 @@ return $default(_that.id,_that.title,_that.imageUrl,_that.actionType,_that.actio
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String title,  String? imageUrl,  BannerActionType actionType,  String? actionValue,  DateTime? startDate,  DateTime? endDate,  bool active,  int order,  DateTime createdAt,  DateTime updatedAt)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String? title,  String? imageUrl,  BannerActionType actionType,  String? actionValue,  DateTime? startDate,  DateTime? endDate,  bool active,  int order,  DateTime createdAt,  DateTime updatedAt)  $default,) {final _that = this;
 switch (_that) {
 case _Banner():
 return $default(_that.id,_that.title,_that.imageUrl,_that.actionType,_that.actionValue,_that.startDate,_that.endDate,_that.active,_that.order,_that.createdAt,_that.updatedAt);case _:
@@ -204,7 +206,7 @@ return $default(_that.id,_that.title,_that.imageUrl,_that.actionType,_that.actio
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String title,  String? imageUrl,  BannerActionType actionType,  String? actionValue,  DateTime? startDate,  DateTime? endDate,  bool active,  int order,  DateTime createdAt,  DateTime updatedAt)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String? title,  String? imageUrl,  BannerActionType actionType,  String? actionValue,  DateTime? startDate,  DateTime? endDate,  bool active,  int order,  DateTime createdAt,  DateTime updatedAt)?  $default,) {final _that = this;
 switch (_that) {
 case _Banner() when $default != null:
 return $default(_that.id,_that.title,_that.imageUrl,_that.actionType,_that.actionValue,_that.startDate,_that.endDate,_that.active,_that.order,_that.createdAt,_that.updatedAt);case _:
@@ -219,11 +221,13 @@ return $default(_that.id,_that.title,_that.imageUrl,_that.actionType,_that.actio
 @JsonSerializable()
 
 class _Banner implements Banner {
-  const _Banner({required this.id, required this.title, this.imageUrl, required this.actionType, this.actionValue, this.startDate, this.endDate, required this.active, required this.order, required this.createdAt, required this.updatedAt});
+  const _Banner({required this.id, this.title, this.imageUrl, required this.actionType, this.actionValue, this.startDate, this.endDate, required this.active, required this.order, required this.createdAt, required this.updatedAt});
   factory _Banner.fromJson(Map<String, dynamic> json) => _$BannerFromJson(json);
 
 @override final  String id;
-@override final  String title;
+/// Opcional desde la migración `MakeBannerTitleNullable` del backend: un
+/// banner puede ser solo imagen (`title: null`).
+@override final  String? title;
 @override final  String? imageUrl;
 @override final  BannerActionType actionType;
 @override final  String? actionValue;
@@ -267,7 +271,7 @@ abstract mixin class _$BannerCopyWith<$Res> implements $BannerCopyWith<$Res> {
   factory _$BannerCopyWith(_Banner value, $Res Function(_Banner) _then) = __$BannerCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String title, String? imageUrl, BannerActionType actionType, String? actionValue, DateTime? startDate, DateTime? endDate, bool active, int order, DateTime createdAt, DateTime updatedAt
+ String id, String? title, String? imageUrl, BannerActionType actionType, String? actionValue, DateTime? startDate, DateTime? endDate, bool active, int order, DateTime createdAt, DateTime updatedAt
 });
 
 
@@ -284,11 +288,11 @@ class __$BannerCopyWithImpl<$Res>
 
 /// Create a copy of Banner
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? title = null,Object? imageUrl = freezed,Object? actionType = null,Object? actionValue = freezed,Object? startDate = freezed,Object? endDate = freezed,Object? active = null,Object? order = null,Object? createdAt = null,Object? updatedAt = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? title = freezed,Object? imageUrl = freezed,Object? actionType = null,Object? actionValue = freezed,Object? startDate = freezed,Object? endDate = freezed,Object? active = null,Object? order = null,Object? createdAt = null,Object? updatedAt = null,}) {
   return _then(_Banner(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
-as String,title: null == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
-as String,imageUrl: freezed == imageUrl ? _self.imageUrl : imageUrl // ignore: cast_nullable_to_non_nullable
+as String,title: freezed == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
+as String?,imageUrl: freezed == imageUrl ? _self.imageUrl : imageUrl // ignore: cast_nullable_to_non_nullable
 as String?,actionType: null == actionType ? _self.actionType : actionType // ignore: cast_nullable_to_non_nullable
 as BannerActionType,actionValue: freezed == actionValue ? _self.actionValue : actionValue // ignore: cast_nullable_to_non_nullable
 as String?,startDate: freezed == startDate ? _self.startDate : startDate // ignore: cast_nullable_to_non_nullable

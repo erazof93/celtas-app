@@ -69,5 +69,26 @@ void main() {
       expect(banner.endDate, isNull);
       expect(banner.actionValue, isNull);
     });
+
+    test(
+      'title null → null (regresión: banner solo imagen tras la migración '
+      'MakeBannerTitleNullable del backend; antes `fromJson` lanzaba '
+      'TypeError y tumbaba todo el carrusel)',
+      () {
+        final banner = Banner.fromJson({
+          'id': 'b-3',
+          'title': null,
+          'imageUrl': 'https://res.cloudinary.com/x.webp',
+          'actionType': 'none',
+          'active': true,
+          'order': 2,
+          'createdAt': '2026-08-09T20:57:46.633Z',
+          'updatedAt': '2026-08-09T20:57:48.872Z',
+        });
+
+        expect(banner.title, isNull);
+        expect(banner.imageUrl, 'https://res.cloudinary.com/x.webp');
+      },
+    );
   });
 }

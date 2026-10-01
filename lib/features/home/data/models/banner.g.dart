@@ -8,7 +8,7 @@ part of 'banner.dart';
 
 _Banner _$BannerFromJson(Map<String, dynamic> json) => _Banner(
   id: json['id'] as String,
-  title: json['title'] as String,
+  title: json['title'] as String?,
   imageUrl: json['imageUrl'] as String?,
   actionType: $enumDecode(_$BannerActionTypeEnumMap, json['actionType']),
   actionValue: json['actionValue'] as String?,

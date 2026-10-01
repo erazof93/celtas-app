@@ -766,6 +766,45 @@ void main() {
     expect(find.text('COMBO FAMILIAR'), findsOneWidget);
   });
 
+  testWidgets(
+    'banner sin título (title null) → se renderiza solo la imagen, sin texto '
+    'ni gradiente, y no rompe el carrusel',
+    (tester) async {
+      final imageOnly = Banner(
+        id: 'b-img',
+        actionType: BannerActionType.none,
+        active: true,
+        order: 1,
+        createdAt: DateTime.utc(2026, 8, 9),
+        updatedAt: DateTime.utc(2026, 8, 9),
+      );
+      await pumpHome(tester, banners: [imageOnly, banner], menu: [category]);
+
+      final card = find.byKey(const ValueKey('banner-b-img'));
+      expect(card, findsOneWidget);
+      expect(
+        find.descendant(of: card, matching: find.byType(Text)),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: card,
+          matching: find.byWidgetPredicate(
+            (w) =>
+                w is DecoratedBox &&
+                w.decoration is BoxDecoration &&
+                (w.decoration as BoxDecoration).gradient != null,
+          ),
+        ),
+        findsNothing,
+      );
+
+      await tester.fling(find.byType(PageView), const Offset(-400, 0), 1000);
+      await tester.pumpAndSettle();
+      expect(find.text('APROVECHA LA 2X1'), findsOneWidget);
+    },
+  );
+
   testWidgets('chip "Todas" seleccionado por defecto', (tester) async {
     await pumpHome(tester, menu: [category]);
 
@@ -808,7 +847,7 @@ void main() {
         await pumpHome(tester, banners: [longTitleBanner], menu: [category]);
 
         final textRect = tester.getRect(
-          find.text(longTitleBanner.title.toUpperCase()),
+          find.text(longTitleBanner.title!.toUpperCase()),
         );
         final chevronRect = tester.getRect(
           find.byIcon(Icons.chevron_right_rounded),
