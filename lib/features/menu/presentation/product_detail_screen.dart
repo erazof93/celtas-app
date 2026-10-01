@@ -1048,34 +1048,31 @@ class _OptionGroupDropdown extends StatelessWidget {
     return 'Elige hasta $max, o "$noneLabel"';
   }
 
-  /// "Sin X" es siempre información propia (no solo "ya elegiste algo"), así
-  /// que se muestra igual sin importar `groupRequired`. Con una selección
-  /// real, la señal depende del tipo de grupo — un grupo OBLIGATORIO ya
-  /// tiene al badge ("Obligatorio"/"Listo", ver `_badge`) como única fuente
-  /// de esa señal, así que acá queda en blanco para no duplicarla; un grupo
-  /// OPCIONAL no tiene badge (`_badge` es `null` ahí), así que el resumen
-  /// SÍ necesita decir algo — "✓ Seleccionado" en vez del detalle real (ese
-  /// sigue disponible abriendo el diálogo, `_openDialog`).
+  /// Si el cliente ya resolvió este grupo: eligió al menos una opción real,
+  /// o marcó "Sin X" (solo posible con `allowWithout`). Fuente única de la
+  /// señal "Listo"/"✓ Seleccionado" — se aplica igual a los 4 grupos y sin
+  /// importar `groupRequired`, para que todos se vean consistentes.
+  bool get _isResolved =>
+      selectedIds.isNotEmpty || (allowWithout && explicitlyNone);
+
+  /// Texto del campo cuando el grupo está resuelto (`_isResolved`): el
+  /// `noneLabel` si eligió "Sin X", "✓ Seleccionado" si eligió opciones
+  /// reales (el detalle sigue disponible abriendo el diálogo,
+  /// `_openDialog`). Vacío si no hay nada elegido — el campo muestra
+  /// `hintText`.
   String get _summaryText {
-    if (explicitlyNone) return noneLabel;
-    if (groupRequired) return '';
-    if (selectedIds.isEmpty) return '';
-    return '✓ Seleccionado';
+    if (!_isResolved) return '';
+    return selectedIds.isEmpty ? noneLabel : '✓ Seleccionado';
   }
 
   /// Badge dentro del campo, a la derecha (ver `build`). "Listo"
-  /// (`CeltasColors.success`, ver justificación en `app_theme.dart`) se
-  /// muestra apenas hay alguna opción REAL elegida, sea el grupo obligatorio
-  /// u opcional — un grupo opcional con selección también merece esa señal
-  /// positiva, no solo el resumen "✓ Seleccionado" del campo (`_summaryText`).
+  /// (`CeltasColors.success`, ver justificación en `app_theme.dart`) apenas
+  /// el grupo está resuelto (`_isResolved`), sea obligatorio u opcional.
   /// "Obligatorio" (naranja) solo aplica al grupo obligatorio sin nada
   /// elegido todavía; un grupo opcional sin selección no muestra ningún
-  /// badge (`null`) — el subtítulo ya cubre ese caso. En un grupo opcional
-  /// `explicitlyNone` no cuenta para "Listo" a propósito ("Sin X" ya queda
-  /// explícito en el resumen del campo); en uno obligatorio sí, porque
-  /// dejar "Obligatorio" en naranja daría a entender que falta elegir.
+  /// badge (`null`) — el subtítulo ya cubre ese caso.
   ({String label, Color color})? get _badge {
-    if (selectedIds.isNotEmpty || (groupRequired && explicitlyNone)) {
+    if (_isResolved) {
       return (label: 'Listo', color: CeltasColors.success);
     }
     return groupRequired

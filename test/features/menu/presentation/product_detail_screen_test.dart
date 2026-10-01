@@ -880,18 +880,21 @@ void main() {
 
     testWidgets(
       'salsas obligatorias: el badge del campo pasa de "Obligatorio" (nada '
-      'elegido) a "Listo" (verde) apenas se elige una salsa',
+      'elegido) a "Listo" (verde) y el campo muestra "✓ Seleccionado" '
+      'apenas se elige una salsa — igual que un grupo opcional',
       (tester) async {
         await pumpDetail(tester, productId: 'i-8');
 
         expect(find.text('Obligatorio'), findsOneWidget);
         expect(find.text('Listo'), findsNothing);
+        expect(find.text('Elige tus cremas'), findsOneWidget);
 
         await selectDialogOptions(tester, 'sauce', ['s-1']);
 
         expect(find.text('Obligatorio'), findsNothing);
         expect(find.text('Listo'), findsOneWidget);
-        expect(find.text('✓ Seleccionado'), findsNothing);
+        expect(find.text('✓ Seleccionado'), findsOneWidget);
+        expect(find.text('Elige tus cremas'), findsNothing);
       },
     );
 
@@ -1215,9 +1218,8 @@ void main() {
     testWidgets(
       'bebidas obligatorias: el badge del campo pasa de "Obligatorio" '
       '(nada elegido) a "Listo" (verde) apenas se elige una bebida, y el '
-      'placeholder "Elige tus bebidas" se mantiene en ambos casos (el '
-      'resumen de un grupo obligatorio siempre queda en blanco, el badge '
-      'lleva la señal real de "completo")',
+      'placeholder "Elige tus bebidas" se reemplaza por "✓ Seleccionado" '
+      '— misma señal que en un grupo opcional',
       (tester) async {
         await pumpDetail(tester, productId: 'i-5');
 
@@ -1228,15 +1230,38 @@ void main() {
         await selectDialogOptions(tester, 'beverage', ['b-1']);
 
         expect(find.text('Obligatorio'), findsNothing);
-        // Un solo "Listo": el badge (`_RequiredBadge`, verde) — el resumen
-        // del campo queda en blanco con una selección real en un grupo
-        // obligatorio (`_OptionGroupDropdown._summaryText` corta antes con
-        // `if (groupRequired) return '';`), nunca dice "✓ Seleccionado" (esa
-        // señal es solo para grupos opcionales, que no tienen badge). El
-        // placeholder sigue mostrándose ahí en su lugar.
         expect(find.text('Listo'), findsOneWidget);
-        expect(find.text('✓ Seleccionado'), findsNothing);
-        expect(find.text('Elige tus bebidas'), findsOneWidget);
+        expect(find.text('✓ Seleccionado'), findsOneWidget);
+        expect(find.text('Elige tus bebidas'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'bebidas OPCIONALES: marcar "Sin bebida" muestra "Sin bebida" en el '
+      'campo + badge "Listo" (antes solo el texto, sin badge)',
+      (tester) async {
+        await pumpDetail(tester, productId: 'i-4');
+
+        await selectDialogOptions(tester, 'beverage', ['none']);
+
+        expect(find.text('Sin bebida'), findsOneWidget);
+        expect(find.text('Listo'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'tipo de papas obligatorio: elegir uno muestra "✓ Seleccionado" + '
+      'badge "Listo", igual que los otros grupos',
+      (tester) async {
+        await pumpDetail(tester, productId: 'i-16');
+
+        expect(find.text('Obligatorio'), findsOneWidget);
+
+        await selectDialogOptions(tester, 'fries', ['f-2']);
+
+        expect(find.text('✓ Seleccionado'), findsOneWidget);
+        expect(find.text('Listo'), findsOneWidget);
+        expect(find.text('Obligatorio'), findsNothing);
       },
     );
 
