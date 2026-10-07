@@ -59,12 +59,13 @@ class AddressLocationPicker extends ConsumerStatefulWidget {
       _AddressLocationPickerState();
 }
 
-class _AddressLocationPickerState
-    extends ConsumerState<AddressLocationPicker> {
+class _AddressLocationPickerState extends ConsumerState<AddressLocationPicker> {
   static const _debounceDuration = Duration(milliseconds: 400);
 
   Timer? _debounce;
   Timer? _mapDebounce;
+  int _locationGeneration = 0;
+  int _textGeneration = 0;
   List<GeoapifySuggestion> _suggestions = const [];
   bool _suggestionsLoading = false;
   bool _showSuggestions = false;
@@ -105,6 +106,10 @@ class _AddressLocationPickerState
     super.didUpdateWidget(oldWidget);
     if (widget.latitude != oldWidget.latitude ||
         widget.longitude != oldWidget.longitude) {
+      if (widget.latitude != _mapCenter.latitude ||
+          widget.longitude != _mapCenter.longitude) {
+        _locationGeneration++;
+      }
       if (widget.latitude != null && widget.longitude != null) {
         setState(() {
           _mapCenter = LatLng(widget.latitude!, widget.longitude!);
@@ -123,6 +128,8 @@ class _AddressLocationPickerState
   }
 
   void _onTextChanged(String text) {
+    _locationGeneration++;
+    final generation = ++_textGeneration;
     _debounce?.cancel();
     if (text.trim().length < 4) {
       setState(() {
@@ -135,7 +142,7 @@ class _AddressLocationPickerState
     _debounce = Timer(_debounceDuration, () async {
       final repo = ref.read(geoapifyRepositoryProvider);
       final results = await repo.autocomplete(text);
-      if (!mounted) return;
+      if (!mounted || generation != _textGeneration) return;
       setState(() {
         _suggestions = results;
         _suggestionsLoading = false;
@@ -145,6 +152,10 @@ class _AddressLocationPickerState
   }
 
   void _selectSuggestion(GeoapifySuggestion suggestion) {
+    _locationGeneration++;
+    _textGeneration++;
+    _debounce?.cancel();
+    _mapDebounce?.cancel();
     widget.fullAddressController.text = suggestion.bestFullAddress;
     final district = suggestion.bestDistrict;
     if (district != null) {
@@ -156,6 +167,7 @@ class _AddressLocationPickerState
       _hasInteracted = true;
       _suggestions = const [];
       _showSuggestions = false;
+      _suggestionsLoading = false;
     });
     _fieldFocusNode.unfocus();
     widget.onLocationChanged(point);
@@ -170,6 +182,7 @@ class _AddressLocationPickerState
   /// misma regla de debounce que ya aplica el autocompletado de texto, ver
   /// skill `geoapify-direcciones`.
   void _onMapCenterChanged(LatLng point) {
+    final generation = ++_locationGeneration;
     setState(() {
       _mapCenter = point;
       _hasInteracted = true;
@@ -178,14 +191,16 @@ class _AddressLocationPickerState
     _mapDebounce?.cancel();
     _mapDebounce = Timer(
       _debounceDuration,
-      () => _reverseGeocodeAndFill(point),
+      () => _reverseGeocodeAndFill(point, generation),
     );
   }
 
   Future<void> _useCurrentLocation() async {
+    final generation = ++_locationGeneration;
     await ref
         .read(currentLocationControllerProvider.notifier)
         .requestCurrentPosition();
+    if (!mounted || generation != _locationGeneration) return;
     final result = ref.read(currentLocationControllerProvider);
     final position = result.valueOrNull;
     if (position == null) {
@@ -198,16 +213,17 @@ class _AddressLocationPickerState
       _hasInteracted = true;
     });
     widget.onLocationChanged(point);
-    await _reverseGeocodeAndFill(point);
+    _mapDebounce?.cancel();
+    await _reverseGeocodeAndFill(point, generation);
   }
 
-  Future<void> _reverseGeocodeAndFill(LatLng point) async {
+  Future<void> _reverseGeocodeAndFill(LatLng point, int generation) async {
     final repo = ref.read(geoapifyRepositoryProvider);
     final result = await repo.reverseGeocode(
       latitude: point.latitude,
       longitude: point.longitude,
     );
-    if (!mounted || result == null) return;
+    if (!mounted || result == null || generation != _locationGeneration) return;
     widget.fullAddressController.text = result.bestFullAddress;
     final district = result.bestDistrict;
     if (district != null) {
@@ -236,7 +252,9 @@ class _AddressLocationPickerState
               'No se pudo obtener tu ubicación. Puedes ubicarla en el mapa manualmente.';
       }
     }
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -304,7 +322,7 @@ class _AddressLocationPickerState
               _hasInteracted
                   ? 'Arrastra el mapa para ajustar el pin sobre tu dirección exacta.'
                   : 'Busca tu dirección, usa el GPS, o arrastra el mapa para ubicarte '
-                      '(obligatorio para calcular el costo de envío).',
+                        '(obligatorio para calcular el costo de envío).',
               style: textTheme.bodySmall?.copyWith(
                 fontSize: 11.5,
                 color: CeltasColors.textSubtle,
@@ -367,9 +385,9 @@ class _SuggestionsList extends StatelessWidget {
                 suggestion.formatted,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontSize: 13,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontSize: 13),
               ),
               onTap: () => onSelected(suggestion),
             );

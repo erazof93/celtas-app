@@ -8,9 +8,11 @@ import 'package:celtas_mobile/features/addresses/presentation/widgets/principal_
 import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
 import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
 import 'package:celtas_mobile/features/checkout/application/checkout_providers.dart';
+import 'package:celtas_mobile/features/checkout/data/models/delivery_estimate.dart';
 import 'package:celtas_mobile/features/orders/application/order_history_providers.dart';
 import 'package:celtas_mobile/features/profile/application/profile_providers.dart';
 import 'package:celtas_mobile/features/settings/application/settings_providers.dart';
+import 'package:celtas_mobile/shared/utils/preview_money.dart';
 import 'package:celtas_mobile/shared/widgets/business_closed_notice.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_text_field.dart';
@@ -54,8 +56,41 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   double? _addAddressLongitude;
 
   bool _confirming = false;
+  bool _preparingOrder = false;
   String? _orderError;
   String? _pendingWhatsappUrl;
+  final _addressSectionKey = GlobalKey();
+
+  Address? _currentAddress() {
+    final addresses = ref.read(addressListProvider);
+    if (addresses.isLoading || addresses.hasError) return null;
+    for (final address in addresses.valueOrNull ?? <Address>[]) {
+      if (address.id == _selectedAddressId) return address;
+    }
+    return null;
+  }
+
+  DeliveryEstimate? _currentCoveredEstimate(String addressId) {
+    final state = ref.read(deliveryFeeEstimateProvider(addressId));
+    if (state.isLoading ||
+        state.hasError ||
+        state is! AsyncData<DeliveryEstimate>) {
+      return null;
+    }
+    return state.value.isCovered ? state.value : null;
+  }
+
+  void _changeAddress() {
+    final context = _addressSectionKey.currentContext;
+    if (context != null) Scrollable.ensureVisible(context);
+  }
+
+  Future<void> _locateAddress() async {
+    await context.push('/addresses');
+    if (!mounted) return;
+    final id = _selectedAddressId;
+    if (id != null) ref.invalidate(deliveryFeeEstimateProvider(id));
+  }
 
   @override
   void dispose() {
@@ -83,7 +118,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       _addAddressError = null;
     });
     try {
-      final created = await ref.read(addressListProvider.notifier).addAddress(
+      final created = await ref
+          .read(addressListProvider.notifier)
+          .addAddress(
             alias: _aliasController.text.trim(),
             fullAddress: _fullAddressController.text.trim(),
             reference: _referenceController.text.trim().isEmpty
@@ -130,23 +167,50 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     });
   }
 
-  Future<void> _confirmOrder(CartState cart) async {
-    final addressId = _selectedAddressId!;
+  Future<void> _confirmOrder() async {
+    if (_confirming || _preparingOrder) return;
+    final address = _currentAddress();
+    if (address == null) return;
+    final estimate = _currentCoveredEstimate(address.id);
+    if (estimate == null || ref.read(cartProvider).items.isEmpty) return;
+    final cart = ref.read(cartProvider);
+    final addressId = address.id;
+    setState(() {
+      _preparingOrder = true;
+      _orderError = null;
+    });
     // El teléfono se pide recién acá, no en el registro (decisión de
     // producto) — aplica igual para cuentas de Google y de registro
     // tradicional, sin distinguir por `provider`. Si el modal se cancela, no
     // pasa nada: se queda en el checkout, sin pedido creado.
-    final user = ref.read(authControllerProvider).user;
-    if (user?.phone == null || user!.phone!.trim().isEmpty) {
-      final phoneSaved = await _promptForPhone();
-      if (!phoneSaved) return;
-    }
-    setState(() {
-      _confirming = true;
-      _orderError = null;
-    });
     try {
-      final result = await ref.read(orderRepositoryProvider).createOrder(
+      final user = ref.read(authControllerProvider).user;
+      if (user?.phone == null || user!.phone!.trim().isEmpty) {
+        final phoneSaved = await _promptForPhone();
+        if (!mounted) return;
+        if (!phoneSaved) {
+          setState(() => _confirming = false);
+          return;
+        }
+      }
+      // No enviar el snapshot capturado si cambió durante el modal o si la
+      // cotización se invalidó. El usuario revisa los datos nuevos primero.
+      if (!mounted) return;
+      if (_currentAddress() != address ||
+          _currentCoveredEstimate(addressId) != estimate ||
+          ref.read(cartProvider) != cart ||
+          cart.items.isEmpty) {
+        setState(() {
+          _confirming = false;
+          _orderError =
+              'Tu dirección o pedido cambió. Revisa los datos y confirma nuevamente.';
+        });
+        return;
+      }
+      setState(() => _confirming = true);
+      final result = await ref
+          .read(orderRepositoryProvider)
+          .createOrder(
             items: cart.items,
             addressId: addressId,
             couponCode: cart.coupon?.code,
@@ -175,6 +239,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       });
     } on ApiException catch (e) {
       if (!mounted) return;
+      if (e.statusCode == 400) {
+        // Puede ser cobertura, catálogo o cupón: conservar el mensaje real.
+        ref.invalidate(deliveryFeeEstimateProvider(addressId));
+      }
       // 409: el local está cerrado (horario programado o cierre manual
       // desde el panel), verificado ANTES de tocar la base — no se creó
       // nada a medias. Es un bloqueo claro ("no puedes pedir ahora"), no un
@@ -198,6 +266,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           _orderError = 'Ocurrió un error inesperado. Inténtalo de nuevo.';
         });
       }
+    } finally {
+      if (mounted) setState(() => _preparingOrder = false);
     }
   }
 
@@ -288,30 +358,44 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final textTheme = Theme.of(context).textTheme;
 
     addressesAsync.whenData((addresses) {
-      if (_selectionInitialized) return;
+      if (addressesAsync.isLoading || addressesAsync.hasError) return;
+      if (_selectionInitialized &&
+          addresses.any((address) => address.id == _selectedAddressId)) {
+        return;
+      }
       _selectionInitialized = true;
       if (addresses.isEmpty) {
+        _selectedAddressId = null;
         _showAddForm = true;
       } else {
         // Arranca en la dirección activa (la elegida en el Home / AddressesScreen
         // si sigue existiendo, si no la principal), no ciegamente en la primera.
         final selectedId = ref.read(selectedAddressIdProvider);
         _selectedAddressId =
-            resolveActiveAddress(addresses, selectedId)?.id ?? addresses.first.id;
+            resolveActiveAddress(addresses, selectedId)?.id ??
+            addresses.first.id;
       }
     });
 
-    // Preview de envío: solo hay algo que estimar con una dirección real
-    // seleccionada — leído DESPUÉS del `whenData` de arriba a propósito, que
-    // puede mutar `_selectedAddressId` de forma síncrona en este mismo build
-    // (selección automática de la principal). Best-effort, igual criterio
-    // que `businessHoursAsync`: en error o mientras carga, `deliveryFee`
-    // queda `null` y simplemente no se muestra la fila, sin bloquear nada.
-    final selectedAddressId = _selectedAddressId;
-    final deliveryFee = selectedAddressId == null
+    final selectedAddress = _currentAddress();
+    final selectedAddressId = selectedAddress?.id;
+    final deliveryAsync = selectedAddressId == null
         ? null
-        : ref.watch(deliveryFeeEstimateProvider(selectedAddressId)).valueOrNull;
-    final displayTotal = cart.total + (deliveryFee ?? 0);
+        : ref.watch(deliveryFeeEstimateProvider(selectedAddressId));
+    // valueOrNull puede retener datos previos al refrescar: no cotizar con ellos.
+    final estimate =
+        deliveryAsync is AsyncData<DeliveryEstimate> &&
+            !deliveryAsync.isLoading &&
+            !deliveryAsync.hasError
+        ? deliveryAsync.value
+        : null;
+    final covered = estimate?.isCovered == true;
+    final displayTotal = covered
+        ? PreviewMoney.fromCents(
+            PreviewMoney.toCents(cart.total) +
+                PreviewMoney.toCents(estimate!.deliveryFee),
+          )
+        : null;
 
     return Scaffold(
       body: SafeArea(
@@ -343,7 +427,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   if (businessHoursAsync.valueOrNull?.open == false) ...[
                     BusinessClosedNotice(
                       key: const ValueKey('checkout-closed-notice'),
-                      message: businessHoursAsync.valueOrNull!.message ??
+                      message:
+                          businessHoursAsync.valueOrNull!.message ??
                           'El local está cerrado en este momento',
                     ),
                     const SizedBox(height: 18),
@@ -351,12 +436,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   Text('DIRECCIÓN DE ENTREGA', style: textTheme.labelSmall),
                   const SizedBox(height: 10),
                   _AddressSection(
+                    key: _addressSectionKey,
                     addressesAsync: addressesAsync,
                     selectedAddressId: _selectedAddressId,
                     showAddForm: _showAddForm,
                     onSelect: (id) => setState(() {
                       _selectedAddressId = id;
                       _showAddForm = false;
+                      _orderError = null;
                     }),
                     onToggleAddForm: () =>
                         setState(() => _showAddForm = !_showAddForm),
@@ -375,14 +462,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           : null,
                       submitLabel: 'GUARDAR DIRECCIÓN',
                       aliasFieldKey: const ValueKey('checkout-address-alias'),
-                      fullAddressFieldKey:
-                          const ValueKey('checkout-address-full'),
-                      districtFieldKey:
-                          const ValueKey('checkout-address-district'),
-                      referenceFieldKey:
-                          const ValueKey('checkout-address-reference'),
-                      submitButtonKey:
-                          const ValueKey('checkout-address-save'),
+                      fullAddressFieldKey: const ValueKey(
+                        'checkout-address-full',
+                      ),
+                      districtFieldKey: const ValueKey(
+                        'checkout-address-district',
+                      ),
+                      referenceFieldKey: const ValueKey(
+                        'checkout-address-reference',
+                      ),
+                      submitButtonKey: const ValueKey('checkout-address-save'),
                       latitude: _addAddressLatitude,
                       longitude: _addAddressLongitude,
                       onLocationChanged: _onAddAddressLocationChanged,
@@ -414,18 +503,32 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       color: CeltasColors.gold,
                     ),
                   ],
-                  if (deliveryFee != null) ...[
+                  if (covered) ...[
                     const SizedBox(height: 6),
                     _SummaryRow(
                       label: 'Envío',
-                      value: 'S/ ${deliveryFee.toStringAsFixed(2)}',
+                      value: 'S/ ${estimate!.deliveryFee.toStringAsFixed(2)}',
                       color: CeltasColors.textMuted,
+                    ),
+                  ],
+                  if (selectedAddress != null) ...[
+                    const SizedBox(height: 6),
+                    _DeliverySummary(
+                      state: deliveryAsync!,
+                      address: selectedAddress,
+                      onRetry: () => ref.invalidate(
+                        deliveryFeeEstimateProvider(selectedAddress.id),
+                      ),
+                      onChangeAddress: _changeAddress,
+                      onLocateAddress: _locateAddress,
                     ),
                   ],
                   const SizedBox(height: 6),
                   _SummaryRow(
                     label: 'Total',
-                    value: 'S/ ${displayTotal.toStringAsFixed(2)}',
+                    value: displayTotal == null
+                        ? 'Total por calcular'
+                        : 'S/ ${displayTotal.toStringAsFixed(2)}',
                     weight: FontWeight.w800,
                     fontSize: 18,
                   ),
@@ -478,9 +581,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     onPressed:
                         cart.items.isEmpty ||
                             _confirming ||
-                            _selectedAddressId == null
+                            _preparingOrder ||
+                            selectedAddress == null ||
+                            !covered
                         ? null
-                        : () => _confirmOrder(cart),
+                        : _confirmOrder,
                   ),
                 ],
               ),
@@ -494,8 +599,91 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
 // ─── Dirección ──────────────────────────────────────────────────────────────
 
+class _DeliverySummary extends StatelessWidget {
+  const _DeliverySummary({
+    required this.state,
+    required this.address,
+    required this.onRetry,
+    required this.onChangeAddress,
+    required this.onLocateAddress,
+  });
+
+  final AsyncValue<DeliveryEstimate> state;
+  final Address address;
+  final VoidCallback onRetry;
+  final VoidCallback onChangeAddress;
+  final VoidCallback onLocateAddress;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodySmall;
+    if (state.isLoading) return Text('Calculando delivery...', style: style);
+    if (state.hasError) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'No pudimos calcular el delivery.',
+            style: style?.copyWith(color: CeltasColors.redLight),
+          ),
+          TextButton(
+            key: const ValueKey('delivery-retry'),
+            onPressed: onRetry,
+            child: const Text('REINTENTAR'),
+          ),
+        ],
+      );
+    }
+    final estimate = state.requireValue;
+    if (!estimate.isCovered) {
+      final missingCoordinates =
+          address.latitude == null || address.longitude == null;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            missingCoordinates
+                ? 'Esta dirección necesita una ubicación en el mapa.'
+                : 'Fuera de cobertura',
+            style: style?.copyWith(color: CeltasColors.redLight),
+          ),
+          if (!missingCoordinates)
+            Text(
+              'Esta dirección no pertenece a una zona de delivery disponible.',
+              style: style,
+            ),
+          TextButton(
+            key: const ValueKey('delivery-change-address'),
+            onPressed: onChangeAddress,
+            child: const Text('CAMBIAR DIRECCIÓN'),
+          ),
+          if (missingCoordinates)
+            TextButton(
+              key: const ValueKey('delivery-locate-address'),
+              onPressed: onLocateAddress,
+              child: const Text('UBICAR DIRECCIÓN'),
+            ),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (estimate.deliveryMode == DeliveryMode.zones)
+          Text('Zona de delivery: ${estimate.zone!.name}', style: style),
+        if (estimate.isFarOrder)
+          Text(
+            'Tu dirección está más lejos de lo habitual.',
+            style: style?.copyWith(color: CeltasColors.gold),
+          ),
+      ],
+    );
+  }
+}
+
 class _AddressSection extends StatelessWidget {
   const _AddressSection({
+    super.key,
     required this.addressesAsync,
     required this.selectedAddressId,
     required this.showAddForm,
@@ -546,10 +734,10 @@ class _AddressSection extends StatelessWidget {
                 child: Text(
                   '+ Agregar nueva dirección',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: CeltasColors.gold,
-                      ),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: CeltasColors.gold,
+                  ),
                 ),
               ),
           ],
@@ -578,9 +766,9 @@ class _AddressError extends ConsumerWidget {
         children: [
           Text(
             message,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: CeltasColors.redLight,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: CeltasColors.redLight),
           ),
           const SizedBox(height: 8),
           TextButton(
@@ -655,10 +843,7 @@ class _AddressCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    [
-                      address.fullAddress,
-                      address.district,
-                    ].join(', '),
+                    [address.fullAddress, address.district].join(', '),
                     style: textTheme.bodySmall?.copyWith(
                       fontSize: 12.5,
                       color: CeltasColors.textMuted,
@@ -680,11 +865,7 @@ class _AddressCard extends StatelessWidget {
               ),
               alignment: Alignment.center,
               child: selected
-                  ? const Icon(
-                      Icons.check,
-                      size: 13,
-                      color: CeltasColors.black,
-                    )
+                  ? const Icon(Icons.check, size: 13, color: CeltasColors.black)
                   : null,
             ),
           ],
@@ -817,7 +998,12 @@ class _PhoneRequiredDialogState extends ConsumerState<_PhoneRequiredDialog> {
       await ref.read(profileProvider.notifier).updateProfile(phone: value);
       if (mounted) Navigator.of(context).pop(true);
     } on ApiException catch (e) {
-      if (mounted) setState(() { _saving = false; _error = e.message; });
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = e.message;
+        });
+      }
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -861,9 +1047,7 @@ class _PhoneRequiredDialogState extends ConsumerState<_PhoneRequiredDialog> {
       children: [
         Text(
           'Necesitamos un teléfono de contacto para tu pedido.',
-          style: textTheme.bodyMedium?.copyWith(
-            color: CeltasColors.textMuted,
-          ),
+          style: textTheme.bodyMedium?.copyWith(color: CeltasColors.textMuted),
         ),
         const SizedBox(height: 14),
         CeltasTextField(
@@ -904,9 +1088,7 @@ class _PhoneRequiredDialogState extends ConsumerState<_PhoneRequiredDialog> {
         Text(
           '¿Confirmas que tu número es '
           '${_formatted(_phoneController.text.trim())}?',
-          style: textTheme.bodyMedium?.copyWith(
-            color: CeltasColors.textMuted,
-          ),
+          style: textTheme.bodyMedium?.copyWith(color: CeltasColors.textMuted),
         ),
         if (_error != null) ...[
           const SizedBox(height: 10),
@@ -969,10 +1151,10 @@ class _SummaryRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = Theme.of(context).textTheme.bodyMedium?.copyWith(
-          fontSize: fontSize,
-          fontWeight: weight,
-          color: color,
-        );
+      fontSize: fontSize,
+      fontWeight: weight,
+      color: color,
+    );
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -1012,8 +1194,9 @@ class _FillPathPainter extends CustomPainter {
     final paint = Paint()
       ..style = PaintingStyle.fill
       ..color = color;
-    final scaled = parseSvgPath(path)
-        .transform(Matrix4.diagonal3Values(scale, scale, 1).storage);
+    final scaled = parseSvgPath(
+      path,
+    ).transform(Matrix4.diagonal3Values(scale, scale, 1).storage);
     canvas.drawPath(scaled, paint);
   }
 

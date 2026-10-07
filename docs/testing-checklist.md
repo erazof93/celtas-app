@@ -29,8 +29,8 @@ Los números de tests previos no son promesas sobre la suite vigente.
 | Carrito | Persistencia filtrada, fusión/edición, cantidades, flags Sin X, precios preview y mínimo del cupón |
 | Contrato | Envelope, tipos/números/nullable, omitido/null/[], DTOs y snapshots del backend local |
 | Direcciones | Coordenadas requeridas al guardar, históricos nullable, principal vs selección, permisos/GPS, overlays y respuestas tardías |
-| Delivery | Estimación/fallo, dirección sin coordenadas, cálculo definitivo y ausencia de bloqueo por distancia |
-| Checkout | Teléfono/revisión, cierre, pedido registrado aunque falle URL, reabrir WhatsApp sin duplicar pedido |
+| Delivery | Contrato completo DISTANCE/ZONES, campos obligatorios/modo inválido, cero covered vs uncovered, loading/error/retry, zona, far independiente, dirección sin coordenadas, A/B invertidos e invalidación del mismo ID |
+| Checkout | Gate de estimate covered, total pendiente sin cotización, corrección de ubicación, revalidación tras teléfono, 400 conserva carrito/cupón/dirección y refresca estimate sin asumir cobertura; cierre, WhatsApp sin duplicar pedido |
 | Rewards | Hitos dinámicos/vacíos, catálogos separados, pending/redeemed, fin de mes Lima y celebración una vez |
 | Version gate | Build menor/igual/mayor, datos ausentes/mal tipados, red, Navigator, back/barrera y fallo de tienda |
 | FCM | Login/rotación/refresh, permisos y resumed, foreground/tap/terminated, payload, cola del historial y logout |
@@ -41,6 +41,17 @@ No validar integración completa de NotificationService solo con tests de
 NotificationTarget. Test de UI envuelto en ProviderScope no acredita que
 el main real tenga bootstrap correcto. Animaciones continuas requieren
 pumps controlados; pumpAndSettle no siempre termina.
+
+Delivery se cotiza solo en checkout por POST con addressId; el carrito no debe
+depender de estimate ni persistirlo. Probar DISTANCE covered sin coordenadas
+según semántica del servidor, ZONES uncovered con acción de ubicación y covered
+con tarifa cero. Far debe permitir confirmar en ambos modos. Para el picker,
+probar respuestas reverse geocoding invertidas: texto/distrito permanecen en
+el pin más reciente, incluso si cambió antes de lanzar el siguiente request.
+Antes de activar ZONES, validar en backend de prueba el recálculo y rechazo
+400 entre estimate covered y creación; los tests con mocks no reemplazan esa
+validación integrada ni QA en dispositivo. No ejecutar los E2E reales sin
+autorizar entorno, cuenta y dispositivo.
 
 ## Comandos clasificados por efectos
 

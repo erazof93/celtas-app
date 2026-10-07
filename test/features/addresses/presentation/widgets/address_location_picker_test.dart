@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/addresses/application/geoapify_providers.dart';
 import 'package:celtas_mobile/features/addresses/data/geoapify_repository.dart';
+import 'package:celtas_mobile/features/addresses/data/models/geoapify_suggestion.dart';
 import 'package:celtas_mobile/features/addresses/presentation/widgets/address_location_picker.dart';
 import 'package:celtas_mobile/features/addresses/presentation/widgets/address_map_picker.dart';
 import 'package:flutter/material.dart';
@@ -25,7 +28,8 @@ void main() {
     // crash real que confirma que este test necesita el mapa real montado,
     // igual que en dispositivo.
     dotenv.loadFromString(
-      envString: 'API_BASE_URL=https://backend-celtas.onrender.com\n'
+      envString:
+          'API_BASE_URL=https://backend-celtas.onrender.com\n'
           'GEOAPIFY_API_KEY=test-key-for-widget-tests',
     );
   });
@@ -115,4 +119,49 @@ void main() {
       ).called(1);
     },
   );
+
+  testWidgets('reverse B termina antes de A: texto y distrito siguen en B', (
+    tester,
+  ) async {
+    final a = Completer<GeoapifySuggestion?>();
+    final b = Completer<GeoapifySuggestion?>();
+    when(
+      () => repository.reverseGeocode(latitude: -12, longitude: -77),
+    ).thenAnswer((_) => a.future);
+    when(
+      () => repository.reverseGeocode(latitude: -13, longitude: -78),
+    ).thenAnswer((_) => b.future);
+    await pumpPicker(tester);
+    final map = tester.widget<AddressMapPicker>(find.byType(AddressMapPicker));
+    map.onCenterChanged(const LatLng(-12, -77));
+    await tester.pump(const Duration(milliseconds: 400));
+    map.onCenterChanged(const LatLng(-13, -78));
+    await tester.pump(const Duration(milliseconds: 400));
+    const pointB = GeoapifySuggestion(
+      formatted: 'Dirección B',
+      latitude: -13,
+      longitude: -78,
+      district: 'Distrito B',
+    );
+    b.complete(pointB);
+    await tester.pump();
+    a.complete(
+      const GeoapifySuggestion(
+        formatted: 'Dirección A',
+        latitude: -12,
+        longitude: -77,
+        district: 'Distrito A',
+      ),
+    );
+    await tester.pump();
+    final picker = tester.widget<AddressLocationPicker>(
+      find.byType(AddressLocationPicker),
+    );
+    expect(picker.fullAddressController.text, pointB.bestFullAddress);
+    expect(picker.districtController.text, 'Distrito B');
+    expect(
+      tester.widget<AddressMapPicker>(find.byType(AddressMapPicker)).center,
+      const LatLng(-13, -78),
+    );
+  });
 }

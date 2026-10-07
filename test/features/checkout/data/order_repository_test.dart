@@ -1,5 +1,6 @@
 import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/features/cart/data/models/cart_item.dart';
+import 'package:celtas_mobile/features/checkout/data/models/delivery_estimate.dart';
 import 'package:celtas_mobile/features/checkout/data/order_repository.dart';
 import 'package:celtas_mobile/features/home/data/models/beverage_option.dart';
 import 'package:celtas_mobile/features/home/data/models/extra_portion_option.dart';
@@ -45,10 +46,7 @@ void main() {
 
   void mockPostSuccess() {
     when(
-      () => dio.post<Map<String, dynamic>>(
-        '/orders',
-        data: any(named: 'data'),
-      ),
+      () => dio.post<Map<String, dynamic>>('/orders', data: any(named: 'data')),
     ).thenAnswer(
       (_) async => Response<Map<String, dynamic>>(
         requestOptions: RequestOptions(path: '/orders'),
@@ -58,134 +56,136 @@ void main() {
   }
 
   group('createOrder — payload de items con salsas', () {
-    test('ítem sin salsas seleccionadas → no manda la llave "sauceIds"', () async {
+    test(
+      'ítem sin salsas seleccionadas → no manda la llave "sauceIds"',
+      () async {
+        mockPostSuccess();
+
+        await repository.createOrder(
+          items: const [
+            CartItem(
+              menuItemId: 'i-1',
+              name: 'Berserker Burger',
+              unitPrice: 15.5,
+              quantity: 1,
+            ),
+          ],
+          addressId: 'addr-1',
+        );
+
+        final captured =
+            verify(
+                  () => dio.post<Map<String, dynamic>>(
+                    '/orders',
+                    data: captureAny(named: 'data'),
+                  ),
+                ).captured.single
+                as Map<String, dynamic>;
+        final items = captured['items'] as List;
+        final item = items.single as Map<String, dynamic>;
+        expect(item['menuItemId'], 'i-1');
+        expect(item['quantity'], 1);
+        expect(item.containsKey('sauceIds'), isFalse);
+      },
+    );
+
+    test('ítem con explicitlyNoSauces=true y selectedSauces vacío → manda '
+        '"sauceIds": [] explícito (no ausente)', () async {
       mockPostSuccess();
 
       await repository.createOrder(
         items: const [
           CartItem(
             menuItemId: 'i-1',
-            name: 'Berserker Burger',
-            unitPrice: 15.5,
+            name: 'Salsas Burger',
+            unitPrice: 12,
+            quantity: 1,
+            explicitlyNoSauces: true,
+          ),
+        ],
+        addressId: 'addr-1',
+      );
+
+      final captured =
+          verify(
+                () => dio.post<Map<String, dynamic>>(
+                  '/orders',
+                  data: captureAny(named: 'data'),
+                ),
+              ).captured.single
+              as Map<String, dynamic>;
+      final item = (captured['items'] as List).single as Map<String, dynamic>;
+      expect(item.containsKey('sauceIds'), isTrue);
+      expect(item['sauceIds'], <String>[]);
+    });
+
+    test('ítem con salsas seleccionadas → manda "sauceIds" con los ids '
+        '(no los nombres)', () async {
+      mockPostSuccess();
+
+      await repository.createOrder(
+        items: const [
+          CartItem(
+            menuItemId: 'i-1',
+            name: 'Celtas Burguesa Clásica',
+            unitPrice: 20,
+            quantity: 2,
+            selectedSauces: [
+              SauceOption(id: 's-1', name: 'Mayonesa'),
+              SauceOption(id: 's-2', name: 'Mostaza'),
+            ],
+          ),
+        ],
+        addressId: 'addr-1',
+      );
+
+      final captured =
+          verify(
+                () => dio.post<Map<String, dynamic>>(
+                  '/orders',
+                  data: captureAny(named: 'data'),
+                ),
+              ).captured.single
+              as Map<String, dynamic>;
+      final item = (captured['items'] as List).single as Map<String, dynamic>;
+      expect(item['sauceIds'], ['s-1', 's-2']);
+    });
+
+    test('varios ítems: cada uno manda su propia selección de salsas de forma '
+        'independiente', () async {
+      mockPostSuccess();
+
+      await repository.createOrder(
+        items: const [
+          CartItem(
+            menuItemId: 'i-1',
+            name: 'Celtas Burguesa Clásica',
+            unitPrice: 20,
+            quantity: 1,
+            selectedSauces: [SauceOption(id: 's-1', name: 'Mayonesa')],
+          ),
+          CartItem(
+            menuItemId: 'i-2',
+            name: 'Arroz Chaufa',
+            unitPrice: 18,
             quantity: 1,
           ),
         ],
         addressId: 'addr-1',
       );
 
-      final captured = verify(
-        () => dio.post<Map<String, dynamic>>(
-          '/orders',
-          data: captureAny(named: 'data'),
-        ),
-      ).captured.single as Map<String, dynamic>;
-      final items = captured['items'] as List;
-      final item = items.single as Map<String, dynamic>;
-      expect(item['menuItemId'], 'i-1');
-      expect(item['quantity'], 1);
-      expect(item.containsKey('sauceIds'), isFalse);
+      final captured =
+          verify(
+                () => dio.post<Map<String, dynamic>>(
+                  '/orders',
+                  data: captureAny(named: 'data'),
+                ),
+              ).captured.single
+              as Map<String, dynamic>;
+      final items = (captured['items'] as List).cast<Map<String, dynamic>>();
+      expect(items[0]['sauceIds'], ['s-1']);
+      expect(items[1].containsKey('sauceIds'), isFalse);
     });
-
-    test(
-      'ítem con explicitlyNoSauces=true y selectedSauces vacío → manda '
-      '"sauceIds": [] explícito (no ausente)',
-      () async {
-        mockPostSuccess();
-
-        await repository.createOrder(
-          items: const [
-            CartItem(
-              menuItemId: 'i-1',
-              name: 'Salsas Burger',
-              unitPrice: 12,
-              quantity: 1,
-              explicitlyNoSauces: true,
-            ),
-          ],
-          addressId: 'addr-1',
-        );
-
-        final captured = verify(
-          () => dio.post<Map<String, dynamic>>(
-            '/orders',
-            data: captureAny(named: 'data'),
-          ),
-        ).captured.single as Map<String, dynamic>;
-        final item = (captured['items'] as List).single as Map<String, dynamic>;
-        expect(item.containsKey('sauceIds'), isTrue);
-        expect(item['sauceIds'], <String>[]);
-      },
-    );
-
-    test(
-      'ítem con salsas seleccionadas → manda "sauceIds" con los ids '
-      '(no los nombres)',
-      () async {
-        mockPostSuccess();
-
-        await repository.createOrder(
-          items: const [
-            CartItem(
-              menuItemId: 'i-1',
-              name: 'Celtas Burguesa Clásica',
-              unitPrice: 20,
-              quantity: 2,
-              selectedSauces: [
-                SauceOption(id: 's-1', name: 'Mayonesa'),
-                SauceOption(id: 's-2', name: 'Mostaza'),
-              ],
-            ),
-          ],
-          addressId: 'addr-1',
-        );
-
-        final captured = verify(
-          () => dio.post<Map<String, dynamic>>(
-            '/orders',
-            data: captureAny(named: 'data'),
-          ),
-        ).captured.single as Map<String, dynamic>;
-        final item = (captured['items'] as List).single as Map<String, dynamic>;
-        expect(item['sauceIds'], ['s-1', 's-2']);
-      },
-    );
-
-    test(
-      'varios ítems: cada uno manda su propia selección de salsas de forma '
-      'independiente',
-      () async {
-        mockPostSuccess();
-
-        await repository.createOrder(
-          items: const [
-            CartItem(
-              menuItemId: 'i-1',
-              name: 'Celtas Burguesa Clásica',
-              unitPrice: 20,
-              quantity: 1,
-              selectedSauces: [SauceOption(id: 's-1', name: 'Mayonesa')],
-            ),
-            CartItem(
-              menuItemId: 'i-2',
-              name: 'Arroz Chaufa',
-              unitPrice: 18,
-              quantity: 1,
-            ),
-          ],
-          addressId: 'addr-1',
-        );
-
-        final captured = verify(
-          () => dio.post<Map<String, dynamic>>(
-            '/orders',
-            data: captureAny(named: 'data'),
-          ),
-        ).captured.single as Map<String, dynamic>;
-        final items = (captured['items'] as List).cast<Map<String, dynamic>>();
-        expect(items[0]['sauceIds'], ['s-1']);
-        expect(items[1].containsKey('sauceIds'), isFalse);
-      },
-    );
 
     test('el total nunca se manda: lo calcula el backend', () async {
       mockPostSuccess();
@@ -202,138 +202,142 @@ void main() {
         addressId: 'addr-1',
       );
 
-      final captured = verify(
-        () => dio.post<Map<String, dynamic>>(
-          '/orders',
-          data: captureAny(named: 'data'),
-        ),
-      ).captured.single as Map<String, dynamic>;
+      final captured =
+          verify(
+                () => dio.post<Map<String, dynamic>>(
+                  '/orders',
+                  data: captureAny(named: 'data'),
+                ),
+              ).captured.single
+              as Map<String, dynamic>;
       expect(captured.containsKey('total'), isFalse);
+      for (final key in ['subtotal', 'discount', 'deliveryFee', 'unitPrice']) {
+        expect(captured.containsKey(key), isFalse);
+        for (final item in captured['items'] as List) {
+          expect((item as Map).containsKey(key), isFalse);
+        }
+      }
     });
 
-    test(
-      'ítem sin comentario → no manda la llave "comment"',
-      () async {
-        mockPostSuccess();
+    test('ítem sin comentario → no manda la llave "comment"', () async {
+      mockPostSuccess();
 
-        await repository.createOrder(
-          items: const [
-            CartItem(
-              menuItemId: 'i-1',
-              name: 'Berserker Burger',
-              unitPrice: 15.5,
-              quantity: 1,
-            ),
-          ],
-          addressId: 'addr-1',
-        );
-
-        final captured = verify(
-          () => dio.post<Map<String, dynamic>>(
-            '/orders',
-            data: captureAny(named: 'data'),
+      await repository.createOrder(
+        items: const [
+          CartItem(
+            menuItemId: 'i-1',
+            name: 'Berserker Burger',
+            unitPrice: 15.5,
+            quantity: 1,
           ),
-        ).captured.single as Map<String, dynamic>;
-        final item = (captured['items'] as List).single as Map<String, dynamic>;
-        expect(item.containsKey('comment'), isFalse);
-      },
-    );
+        ],
+        addressId: 'addr-1',
+      );
 
-    test(
-      'ítem con comentario → manda "comment" trimeado',
-      () async {
-        mockPostSuccess();
+      final captured =
+          verify(
+                () => dio.post<Map<String, dynamic>>(
+                  '/orders',
+                  data: captureAny(named: 'data'),
+                ),
+              ).captured.single
+              as Map<String, dynamic>;
+      final item = (captured['items'] as List).single as Map<String, dynamic>;
+      expect(item.containsKey('comment'), isFalse);
+    });
 
-        await repository.createOrder(
-          items: const [
-            CartItem(
-              menuItemId: 'i-1',
-              name: 'Berserker Burger',
-              unitPrice: 15.5,
-              quantity: 1,
-              comment: '  Sin cebolla, bien cocida  ',
-            ),
-          ],
-          addressId: 'addr-1',
-        );
+    test('ítem con comentario → manda "comment" trimeado', () async {
+      mockPostSuccess();
 
-        final captured = verify(
-          () => dio.post<Map<String, dynamic>>(
-            '/orders',
-            data: captureAny(named: 'data'),
+      await repository.createOrder(
+        items: const [
+          CartItem(
+            menuItemId: 'i-1',
+            name: 'Berserker Burger',
+            unitPrice: 15.5,
+            quantity: 1,
+            comment: '  Sin cebolla, bien cocida  ',
           ),
-        ).captured.single as Map<String, dynamic>;
-        final item = (captured['items'] as List).single as Map<String, dynamic>;
-        expect(item['comment'], 'Sin cebolla, bien cocida');
-      },
-    );
+        ],
+        addressId: 'addr-1',
+      );
 
-    test(
-      'ítem con comentario solo espacios → no manda la llave "comment" '
-      '(mismo criterio que sauceIds: nunca una llave irrelevante)',
-      () async {
-        mockPostSuccess();
+      final captured =
+          verify(
+                () => dio.post<Map<String, dynamic>>(
+                  '/orders',
+                  data: captureAny(named: 'data'),
+                ),
+              ).captured.single
+              as Map<String, dynamic>;
+      final item = (captured['items'] as List).single as Map<String, dynamic>;
+      expect(item['comment'], 'Sin cebolla, bien cocida');
+    });
 
-        await repository.createOrder(
-          items: const [
-            CartItem(
-              menuItemId: 'i-1',
-              name: 'Berserker Burger',
-              unitPrice: 15.5,
-              quantity: 1,
-              comment: '   ',
-            ),
-          ],
-          addressId: 'addr-1',
-        );
+    test('ítem con comentario solo espacios → no manda la llave "comment" '
+        '(mismo criterio que sauceIds: nunca una llave irrelevante)', () async {
+      mockPostSuccess();
 
-        final captured = verify(
-          () => dio.post<Map<String, dynamic>>(
-            '/orders',
-            data: captureAny(named: 'data'),
+      await repository.createOrder(
+        items: const [
+          CartItem(
+            menuItemId: 'i-1',
+            name: 'Berserker Burger',
+            unitPrice: 15.5,
+            quantity: 1,
+            comment: '   ',
           ),
-        ).captured.single as Map<String, dynamic>;
-        final item = (captured['items'] as List).single as Map<String, dynamic>;
-        expect(item.containsKey('comment'), isFalse);
-      },
-    );
+        ],
+        addressId: 'addr-1',
+      );
 
-    test(
-      'varios ítems: cada uno manda su propio comentario de forma '
-      'independiente',
-      () async {
-        mockPostSuccess();
+      final captured =
+          verify(
+                () => dio.post<Map<String, dynamic>>(
+                  '/orders',
+                  data: captureAny(named: 'data'),
+                ),
+              ).captured.single
+              as Map<String, dynamic>;
+      final item = (captured['items'] as List).single as Map<String, dynamic>;
+      expect(item.containsKey('comment'), isFalse);
+    });
 
-        await repository.createOrder(
-          items: const [
-            CartItem(
-              menuItemId: 'i-1',
-              name: 'Celtas Burguesa Clásica',
-              unitPrice: 20,
-              quantity: 1,
-              comment: 'Sin cebolla',
-            ),
-            CartItem(
-              menuItemId: 'i-2',
-              name: 'Arroz Chaufa',
-              unitPrice: 18,
-              quantity: 1,
-            ),
-          ],
-          addressId: 'addr-1',
-        );
+    test('varios ítems: cada uno manda su propio comentario de forma '
+        'independiente', () async {
+      mockPostSuccess();
 
-        final captured = verify(
-          () => dio.post<Map<String, dynamic>>(
-            '/orders',
-            data: captureAny(named: 'data'),
+      await repository.createOrder(
+        items: const [
+          CartItem(
+            menuItemId: 'i-1',
+            name: 'Celtas Burguesa Clásica',
+            unitPrice: 20,
+            quantity: 1,
+            comment: 'Sin cebolla',
           ),
-        ).captured.single as Map<String, dynamic>;
-        final items = (captured['items'] as List).cast<Map<String, dynamic>>();
-        expect(items[0]['comment'], 'Sin cebolla');
-        expect(items[1].containsKey('comment'), isFalse);
-      },
-    );
+          CartItem(
+            menuItemId: 'i-2',
+            name: 'Arroz Chaufa',
+            unitPrice: 18,
+            quantity: 1,
+          ),
+        ],
+        addressId: 'addr-1',
+      );
+
+      final captured =
+          verify(
+                () => dio.post<Map<String, dynamic>>(
+                  '/orders',
+                  data: captureAny(named: 'data'),
+                ),
+              ).captured.single
+              as Map<String, dynamic>;
+      final items = (captured['items'] as List).cast<Map<String, dynamic>>();
+      expect(items[0]['comment'], 'Sin cebolla');
+      expect(items[1].containsKey('comment'), isFalse);
+    });
 
     test(
       'ítem sin rewardRedemptionId → no manda la llave "rewardRedemptionId"',
@@ -352,12 +356,14 @@ void main() {
           addressId: 'addr-1',
         );
 
-        final captured = verify(
-          () => dio.post<Map<String, dynamic>>(
-            '/orders',
-            data: captureAny(named: 'data'),
-          ),
-        ).captured.single as Map<String, dynamic>;
+        final captured =
+            verify(
+                  () => dio.post<Map<String, dynamic>>(
+                    '/orders',
+                    data: captureAny(named: 'data'),
+                  ),
+                ).captured.single
+                as Map<String, dynamic>;
         final item = (captured['items'] as List).single as Map<String, dynamic>;
         expect(item.containsKey('rewardRedemptionId'), isFalse);
       },
@@ -382,54 +388,55 @@ void main() {
           addressId: 'addr-1',
         );
 
-        final captured = verify(
-          () => dio.post<Map<String, dynamic>>(
-            '/orders',
-            data: captureAny(named: 'data'),
-          ),
-        ).captured.single as Map<String, dynamic>;
+        final captured =
+            verify(
+                  () => dio.post<Map<String, dynamic>>(
+                    '/orders',
+                    data: captureAny(named: 'data'),
+                  ),
+                ).captured.single
+                as Map<String, dynamic>;
         final item = (captured['items'] as List).single as Map<String, dynamic>;
         expect(item['rewardRedemptionId'], 'reward-1');
         expect(item.containsKey('unitPrice'), isFalse);
       },
     );
 
-    test(
-      'varios ítems: cada uno manda su propio rewardRedemptionId de forma '
-      'independiente',
-      () async {
-        mockPostSuccess();
+    test('varios ítems: cada uno manda su propio rewardRedemptionId de forma '
+        'independiente', () async {
+      mockPostSuccess();
 
-        await repository.createOrder(
-          items: const [
-            CartItem(
-              menuItemId: 'i-1',
-              name: 'Berserker Burger',
-              unitPrice: 0,
-              quantity: 1,
-              rewardRedemptionId: 'reward-1',
-            ),
-            CartItem(
-              menuItemId: 'i-2',
-              name: 'Arroz Chaufa',
-              unitPrice: 18,
-              quantity: 1,
-            ),
-          ],
-          addressId: 'addr-1',
-        );
-
-        final captured = verify(
-          () => dio.post<Map<String, dynamic>>(
-            '/orders',
-            data: captureAny(named: 'data'),
+      await repository.createOrder(
+        items: const [
+          CartItem(
+            menuItemId: 'i-1',
+            name: 'Berserker Burger',
+            unitPrice: 0,
+            quantity: 1,
+            rewardRedemptionId: 'reward-1',
           ),
-        ).captured.single as Map<String, dynamic>;
-        final items = (captured['items'] as List).cast<Map<String, dynamic>>();
-        expect(items[0]['rewardRedemptionId'], 'reward-1');
-        expect(items[1].containsKey('rewardRedemptionId'), isFalse);
-      },
-    );
+          CartItem(
+            menuItemId: 'i-2',
+            name: 'Arroz Chaufa',
+            unitPrice: 18,
+            quantity: 1,
+          ),
+        ],
+        addressId: 'addr-1',
+      );
+
+      final captured =
+          verify(
+                () => dio.post<Map<String, dynamic>>(
+                  '/orders',
+                  data: captureAny(named: 'data'),
+                ),
+              ).captured.single
+              as Map<String, dynamic>;
+      final items = (captured['items'] as List).cast<Map<String, dynamic>>();
+      expect(items[0]['rewardRedemptionId'], 'reward-1');
+      expect(items[1].containsKey('rewardRedemptionId'), isFalse);
+    });
 
     test('parsea id/total/whatsappUrl de la respuesta', () async {
       mockPostSuccess();
@@ -452,182 +459,170 @@ void main() {
     });
   });
 
-  group(
-    'createOrder — payload de items con bebidas/porciones extras (mismo '
-    'tri-state que sauceIds)',
-    () {
-      test(
-        'ítem sin bebidas ni extras seleccionados → no manda '
-        '"beverageIds" ni "extraPortionIds"',
-        () async {
-          mockPostSuccess();
+  group('createOrder — payload de items con bebidas/porciones extras (mismo '
+      'tri-state que sauceIds)', () {
+    test('ítem sin bebidas ni extras seleccionados → no manda '
+        '"beverageIds" ni "extraPortionIds"', () async {
+      mockPostSuccess();
 
-          await repository.createOrder(
-            items: const [
-              CartItem(
-                menuItemId: 'i-1',
-                name: 'Berserker Burger',
-                unitPrice: 15.5,
-                quantity: 1,
-              ),
-            ],
-            addressId: 'addr-1',
-          );
-
-          final captured = verify(
-            () => dio.post<Map<String, dynamic>>(
-              '/orders',
-              data: captureAny(named: 'data'),
-            ),
-          ).captured.single as Map<String, dynamic>;
-          final item = (captured['items'] as List).single as Map<String, dynamic>;
-          expect(item.containsKey('beverageIds'), isFalse);
-          expect(item.containsKey('extraPortionIds'), isFalse);
-        },
+      await repository.createOrder(
+        items: const [
+          CartItem(
+            menuItemId: 'i-1',
+            name: 'Berserker Burger',
+            unitPrice: 15.5,
+            quantity: 1,
+          ),
+        ],
+        addressId: 'addr-1',
       );
 
-      test(
-        'ítem con explicitlyNoBeverages=true y selectedBeverages vacío → '
-        'manda "beverageIds": [] explícito (no ausente)',
-        () async {
-          mockPostSuccess();
+      final captured =
+          verify(
+                () => dio.post<Map<String, dynamic>>(
+                  '/orders',
+                  data: captureAny(named: 'data'),
+                ),
+              ).captured.single
+              as Map<String, dynamic>;
+      final item = (captured['items'] as List).single as Map<String, dynamic>;
+      expect(item.containsKey('beverageIds'), isFalse);
+      expect(item.containsKey('extraPortionIds'), isFalse);
+    });
 
-          await repository.createOrder(
-            items: const [
-              CartItem(
-                menuItemId: 'i-1',
-                name: 'Combo Burger',
-                unitPrice: 18,
-                quantity: 1,
-                explicitlyNoBeverages: true,
-              ),
-            ],
-            addressId: 'addr-1',
-          );
+    test('ítem con explicitlyNoBeverages=true y selectedBeverages vacío → '
+        'manda "beverageIds": [] explícito (no ausente)', () async {
+      mockPostSuccess();
 
-          final captured = verify(
-            () => dio.post<Map<String, dynamic>>(
-              '/orders',
-              data: captureAny(named: 'data'),
-            ),
-          ).captured.single as Map<String, dynamic>;
-          final item = (captured['items'] as List).single as Map<String, dynamic>;
-          expect(item.containsKey('beverageIds'), isTrue);
-          expect(item['beverageIds'], <String>[]);
-        },
+      await repository.createOrder(
+        items: const [
+          CartItem(
+            menuItemId: 'i-1',
+            name: 'Combo Burger',
+            unitPrice: 18,
+            quantity: 1,
+            explicitlyNoBeverages: true,
+          ),
+        ],
+        addressId: 'addr-1',
       );
 
-      test(
-        'ítem con explicitlyNoExtraPortions=true y selectedExtraPortions '
-        'vacío → manda "extraPortionIds": [] explícito (no ausente)',
-        () async {
-          mockPostSuccess();
+      final captured =
+          verify(
+                () => dio.post<Map<String, dynamic>>(
+                  '/orders',
+                  data: captureAny(named: 'data'),
+                ),
+              ).captured.single
+              as Map<String, dynamic>;
+      final item = (captured['items'] as List).single as Map<String, dynamic>;
+      expect(item.containsKey('beverageIds'), isTrue);
+      expect(item['beverageIds'], <String>[]);
+    });
 
-          await repository.createOrder(
-            items: const [
-              CartItem(
-                menuItemId: 'i-1',
-                name: 'Combo Burger',
-                unitPrice: 18,
-                quantity: 1,
-                explicitlyNoExtraPortions: true,
-              ),
-            ],
-            addressId: 'addr-1',
-          );
+    test('ítem con explicitlyNoExtraPortions=true y selectedExtraPortions '
+        'vacío → manda "extraPortionIds": [] explícito (no ausente)', () async {
+      mockPostSuccess();
 
-          final captured = verify(
-            () => dio.post<Map<String, dynamic>>(
-              '/orders',
-              data: captureAny(named: 'data'),
-            ),
-          ).captured.single as Map<String, dynamic>;
-          final item = (captured['items'] as List).single as Map<String, dynamic>;
-          expect(item.containsKey('extraPortionIds'), isTrue);
-          expect(item['extraPortionIds'], <String>[]);
-        },
+      await repository.createOrder(
+        items: const [
+          CartItem(
+            menuItemId: 'i-1',
+            name: 'Combo Burger',
+            unitPrice: 18,
+            quantity: 1,
+            explicitlyNoExtraPortions: true,
+          ),
+        ],
+        addressId: 'addr-1',
       );
 
-      test(
-        'ítem con bebidas y porciones extras seleccionadas → manda los ids '
-        '(no los nombres ni los precios)',
-        () async {
-          mockPostSuccess();
+      final captured =
+          verify(
+                () => dio.post<Map<String, dynamic>>(
+                  '/orders',
+                  data: captureAny(named: 'data'),
+                ),
+              ).captured.single
+              as Map<String, dynamic>;
+      final item = (captured['items'] as List).single as Map<String, dynamic>;
+      expect(item.containsKey('extraPortionIds'), isTrue);
+      expect(item['extraPortionIds'], <String>[]);
+    });
 
-          await repository.createOrder(
-            items: const [
-              CartItem(
-                menuItemId: 'i-1',
-                name: 'Combo Burger',
-                unitPrice: 18,
-                quantity: 2,
-                selectedBeverages: [
-                  BeverageOption(id: 'b-1', name: 'Coca-Cola 500ml', price: 3),
-                ],
-                selectedExtraPortions: [
-                  ExtraPortionOption(
-                    id: 'e-1',
-                    name: 'Papas extra',
-                    price: 5,
-                  ),
-                ],
-              ),
+    test('ítem con bebidas y porciones extras seleccionadas → manda los ids '
+        '(no los nombres ni los precios)', () async {
+      mockPostSuccess();
+
+      await repository.createOrder(
+        items: const [
+          CartItem(
+            menuItemId: 'i-1',
+            name: 'Combo Burger',
+            unitPrice: 18,
+            quantity: 2,
+            selectedBeverages: [
+              BeverageOption(id: 'b-1', name: 'Coca-Cola 500ml', price: 3),
             ],
-            addressId: 'addr-1',
-          );
-
-          final captured = verify(
-            () => dio.post<Map<String, dynamic>>(
-              '/orders',
-              data: captureAny(named: 'data'),
-            ),
-          ).captured.single as Map<String, dynamic>;
-          final item = (captured['items'] as List).single as Map<String, dynamic>;
-          expect(item['beverageIds'], ['b-1']);
-          expect(item['extraPortionIds'], ['e-1']);
-        },
+            selectedExtraPortions: [
+              ExtraPortionOption(id: 'e-1', name: 'Papas extra', price: 5),
+            ],
+          ),
+        ],
+        addressId: 'addr-1',
       );
 
-      test(
-        'varios ítems: cada uno manda su propia selección de bebidas/extras '
-        'de forma independiente',
-        () async {
-          mockPostSuccess();
+      final captured =
+          verify(
+                () => dio.post<Map<String, dynamic>>(
+                  '/orders',
+                  data: captureAny(named: 'data'),
+                ),
+              ).captured.single
+              as Map<String, dynamic>;
+      final item = (captured['items'] as List).single as Map<String, dynamic>;
+      expect(item['beverageIds'], ['b-1']);
+      expect(item['extraPortionIds'], ['e-1']);
+    });
 
-          await repository.createOrder(
-            items: const [
-              CartItem(
-                menuItemId: 'i-1',
-                name: 'Combo Burger',
-                unitPrice: 18,
-                quantity: 1,
-                selectedBeverages: [
-                  BeverageOption(id: 'b-1', name: 'Coca-Cola 500ml', price: 3),
-                ],
-              ),
-              CartItem(
-                menuItemId: 'i-2',
-                name: 'Arroz Chaufa',
-                unitPrice: 18,
-                quantity: 1,
-              ),
+    test('varios ítems: cada uno manda su propia selección de bebidas/extras '
+        'de forma independiente', () async {
+      mockPostSuccess();
+
+      await repository.createOrder(
+        items: const [
+          CartItem(
+            menuItemId: 'i-1',
+            name: 'Combo Burger',
+            unitPrice: 18,
+            quantity: 1,
+            selectedBeverages: [
+              BeverageOption(id: 'b-1', name: 'Coca-Cola 500ml', price: 3),
             ],
-            addressId: 'addr-1',
-          );
-
-          final captured = verify(
-            () => dio.post<Map<String, dynamic>>(
-              '/orders',
-              data: captureAny(named: 'data'),
-            ),
-          ).captured.single as Map<String, dynamic>;
-          final items = (captured['items'] as List).cast<Map<String, dynamic>>();
-          expect(items[0]['beverageIds'], ['b-1']);
-          expect(items[1].containsKey('beverageIds'), isFalse);
-        },
+          ),
+          CartItem(
+            menuItemId: 'i-2',
+            name: 'Arroz Chaufa',
+            unitPrice: 18,
+            quantity: 1,
+          ),
+        ],
+        addressId: 'addr-1',
       );
-    },
-  );
+
+      final captured =
+          verify(
+                () => dio.post<Map<String, dynamic>>(
+                  '/orders',
+                  data: captureAny(named: 'data'),
+                ),
+              ).captured.single
+              as Map<String, dynamic>;
+      final items = (captured['items'] as List).cast<Map<String, dynamic>>();
+      expect(items[0]['beverageIds'], ['b-1']);
+      expect(items[1].containsKey('beverageIds'), isFalse);
+    });
+  });
 
   group('createOrder — tipos de papas (friesTypeIds por ítem)', () {
     Future<List<Map<String, dynamic>>> postAndCaptureItems(
@@ -635,12 +630,14 @@ void main() {
     ) async {
       mockPostSuccess();
       await repository.createOrder(items: items, addressId: 'addr-1');
-      final captured = verify(
-        () => dio.post<Map<String, dynamic>>(
-          '/orders',
-          data: captureAny(named: 'data'),
-        ),
-      ).captured.single as Map<String, dynamic>;
+      final captured =
+          verify(
+                () => dio.post<Map<String, dynamic>>(
+                  '/orders',
+                  data: captureAny(named: 'data'),
+                ),
+              ).captured.single
+              as Map<String, dynamic>;
       // Nunca en la raíz del body: el DTO del backend lo define en
       // `CreateOrderItemDto`, no en `CreateOrderDto`.
       expect(captured.containsKey('friesTypeIds'), isFalse);
@@ -654,9 +651,7 @@ void main() {
           name: 'Papas Burger',
           unitPrice: 16,
           quantity: 2,
-          selectedFriesTypes: [
-            FriesType(id: 'f-2', name: 'Papas al hilo'),
-          ],
+          selectedFriesTypes: [FriesType(id: 'f-2', name: 'Papas al hilo')],
         ),
       ]);
       expect(items.single['friesTypeIds'], ['f-2']);
@@ -708,10 +703,8 @@ void main() {
     /// temporalmente: Cerrado por mantenimiento").
     void mockPost409(String message) {
       when(
-        () => dio.post<Map<String, dynamic>>(
-          '/orders',
-          data: any(named: 'data'),
-        ),
+        () =>
+            dio.post<Map<String, dynamic>>('/orders', data: any(named: 'data')),
       ).thenThrow(
         DioException(
           requestOptions: RequestOptions(path: '/orders'),
@@ -725,13 +718,45 @@ void main() {
       );
     }
 
+    test('horario programado: conserva el mensaje real del backend y el '
+        'statusCode 409', () async {
+      mockPost409(
+        'El local está cerrado en este momento. Hoy atendemos de 11:00 a '
+        '23:00',
+      );
+
+      Object? caught;
+      try {
+        await repository.createOrder(
+          items: const [
+            CartItem(
+              menuItemId: 'i-1',
+              name: 'Berserker Burger',
+              unitPrice: 15.5,
+              quantity: 1,
+            ),
+          ],
+          addressId: 'addr-1',
+        );
+      } catch (e) {
+        caught = e;
+      }
+
+      expect(caught, isA<ApiException>());
+      final exception = caught as ApiException;
+      expect(
+        exception.message,
+        'El local está cerrado en este momento. Hoy atendemos de 11:00 a '
+        '23:00',
+      );
+      expect(exception.statusCode, 409);
+    });
+
     test(
-      'horario programado: conserva el mensaje real del backend y el '
-      'statusCode 409',
+      'cierre manual con motivo: conserva el mensaje real del backend',
       () async {
         mockPost409(
-          'El local está cerrado en este momento. Hoy atendemos de 11:00 a '
-          '23:00',
+          'El local está cerrado temporalmente: Cerrado por mantenimiento',
         );
 
         Object? caught;
@@ -755,47 +780,16 @@ void main() {
         final exception = caught as ApiException;
         expect(
           exception.message,
-          'El local está cerrado en este momento. Hoy atendemos de 11:00 a '
-          '23:00',
+          'El local está cerrado temporalmente: Cerrado por mantenimiento',
         );
         expect(exception.statusCode, 409);
       },
     );
-
-    test('cierre manual con motivo: conserva el mensaje real del backend', () async {
-      mockPost409('El local está cerrado temporalmente: Cerrado por mantenimiento');
-
-      Object? caught;
-      try {
-        await repository.createOrder(
-          items: const [
-            CartItem(
-              menuItemId: 'i-1',
-              name: 'Berserker Burger',
-              unitPrice: 15.5,
-              quantity: 1,
-            ),
-          ],
-          addressId: 'addr-1',
-        );
-      } catch (e) {
-        caught = e;
-      }
-
-      expect(caught, isA<ApiException>());
-      final exception = caught as ApiException;
-      expect(
-        exception.message,
-        'El local está cerrado temporalmente: Cerrado por mantenimiento',
-      );
-      expect(exception.statusCode, 409);
-    });
   });
 
   group('estimateDeliveryFee — POST /orders/estimate-delivery-fee', () {
     test(
-      'manda { addressId } y devuelve SOLO deliveryFee (ignora isFarOrder/'
-      'distanceMeters, aunque vengan en la respuesta)',
+      'manda { addressId } y devuelve los seis campos de estimate',
       () async {
         when(
           () => dio.post<Map<String, dynamic>>(
@@ -804,25 +798,39 @@ void main() {
           ),
         ).thenAnswer(
           (_) async => Response<Map<String, dynamic>>(
-            requestOptions:
-                RequestOptions(path: '/orders/estimate-delivery-fee'),
+            requestOptions: RequestOptions(
+              path: '/orders/estimate-delivery-fee',
+            ),
             data: const {
               'deliveryFee': 6.5,
               'isFarOrder': true,
               'distanceMeters': 8200,
+              'isCovered': true,
+              'deliveryMode': 'ZONES',
+              'zone': {'id': 'zone-1', 'name': 'Zona cercana'},
             },
           ),
         );
 
         final fee = await repository.estimateDeliveryFee('addr-1');
 
-        expect(fee, 6.5);
-        final captured = verify(
-          () => dio.post<Map<String, dynamic>>(
-            '/orders/estimate-delivery-fee',
-            data: captureAny(named: 'data'),
-          ),
-        ).captured.single as Map<String, dynamic>;
+        expect(fee.deliveryFee, 6.5);
+        expect(fee.isFarOrder, isTrue);
+        expect(fee.distanceMeters, 8200);
+        expect(fee.isCovered, isTrue);
+        expect(fee.deliveryMode, DeliveryMode.zones);
+        expect(
+          fee.zone,
+          const DeliveryZone(id: 'zone-1', name: 'Zona cercana'),
+        );
+        final captured =
+            verify(
+                  () => dio.post<Map<String, dynamic>>(
+                    '/orders/estimate-delivery-fee',
+                    data: captureAny(named: 'data'),
+                  ),
+                ).captured.single
+                as Map<String, dynamic>;
         expect(captured, {'addressId': 'addr-1'});
       },
     );
@@ -835,11 +843,11 @@ void main() {
         ),
       ).thenThrow(
         DioException(
-          requestOptions:
-              RequestOptions(path: '/orders/estimate-delivery-fee'),
+          requestOptions: RequestOptions(path: '/orders/estimate-delivery-fee'),
           response: Response<Map<String, dynamic>>(
-            requestOptions:
-                RequestOptions(path: '/orders/estimate-delivery-fee'),
+            requestOptions: RequestOptions(
+              path: '/orders/estimate-delivery-fee',
+            ),
             statusCode: 404,
             data: const {
               'success': false,

@@ -2,11 +2,14 @@ import 'dart:convert';
 
 import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/features/cart/data/models/cart_item.dart';
+import 'package:celtas_mobile/features/checkout/data/models/delivery_estimate.dart';
 import 'package:celtas_mobile/features/checkout/data/models/order_result.dart';
 import 'package:dio/dio.dart';
 
-/// Snapshot de dirección para un pedido sin dirección guardada (el usuario
-/// llena el formulario inline del checkout en vez de elegir una existente).
+/// Entrada alternativa de snapshot. El formulario inline del checkout guarda
+/// una dirección y envía su addressId; no utiliza esta entrada.
+/// No usar en checkout ZONES sin resolver y enviar coordenadas primero.
+/// El checkout actual guarda la dirección y utiliza addressId.
 class AddressSnapshotInput {
   const AddressSnapshotInput({
     required this.alias,
@@ -24,11 +27,11 @@ class AddressSnapshotInput {
   /// string, no un objeto — igual al shape que ya arma `resolveAddressSnapshot`
   /// en el backend a partir de una `Address` guardada.
   String toJsonString() => jsonEncode({
-        'alias': alias,
-        'fullAddress': fullAddress,
-        'reference': reference,
-        'district': district,
-      });
+    'alias': alias,
+    'fullAddress': fullAddress,
+    'reference': reference,
+    'district': district,
+  });
 }
 
 /// Repositorio de pedidos contra el backend real.
@@ -72,8 +75,8 @@ class AddressSnapshotInput {
 ///     backend fuerza `unitPrice` a 0 y valida pertenencia/uso/vigencia
 ///     dentro de la misma transacción, con lock pesimista — nunca se manda
 ///     `unitPrice`, el cliente nunca decide el monto real.
-///   - `addressId` O `addressSnapshot` (JSON string) — nunca ambos, nunca
-///     ninguno (el backend responde 400).
+///   - La app exige `addressId` O `addressSnapshot` (JSON string). El backend
+///     prioriza addressId si recibe ambos y responde 400 si no recibe ninguno.
 ///   - `couponCode` opcional: se valida y canjea en la MISMA transacción del
 ///     pedido; si ya no es válido (usado/expirado entre la vista previa del
 ///     carrito y la confirmación), el pedido no se crea y el 400 trae el
@@ -112,8 +115,7 @@ class OrderRepository {
                   'sauceIds': const <String>[],
                 if (item.selectedBeverages.isNotEmpty)
                   'beverageIds': [
-                    for (final beverage in item.selectedBeverages)
-                      beverage.id,
+                    for (final beverage in item.selectedBeverages) beverage.id,
                   ]
                 else if (item.explicitlyNoBeverages)
                   'beverageIds': const <String>[],
@@ -148,21 +150,16 @@ class OrderRepository {
     }
   }
 
-  /// `POST /orders/estimate-delivery-fee` — solo de lectura, nunca crea un
-  /// pedido. Contrato ya confirmado: body `{ addressId }`, response
-  /// `{ deliveryFee, isFarOrder, distanceMeters }`. Esta capa usa
-  /// EXCLUSIVAMENTE `deliveryFee` — el cliente nunca debe enterarse de
-  /// `isFarOrder`/`distanceMeters` (decisión de producto: no desalentar
-  /// pedidos que el negocio en la práctica sí puede cubrir), así que ni
-  /// siquiera se parsean.
-  Future<double> estimateDeliveryFee(String addressId) async {
+  /// Preview completo por dirección guardada. El backend es autoridad de
+  /// tarifa y cobertura y vuelve a resolver ambos al crear el pedido.
+  Future<DeliveryEstimate> estimateDeliveryFee(String addressId) async {
     try {
       final response = await _dio.post<Map<String, dynamic>>(
         '/orders/estimate-delivery-fee',
         data: {'addressId': addressId},
       );
       final data = response.data ?? const {};
-      return (data['deliveryFee'] as num).toDouble();
+      return DeliveryEstimate.fromJson(data);
     } on DioException catch (e) {
       throw apiExceptionFromDio(e);
     }

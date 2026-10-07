@@ -1,6 +1,7 @@
 import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/features/addresses/data/address_repository.dart';
 import 'package:celtas_mobile/features/addresses/data/models/address.dart';
+import 'package:celtas_mobile/features/checkout/application/checkout_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Repositorio de direcciones contra el backend real.
@@ -42,6 +43,7 @@ class AddressListNotifier extends AsyncNotifier<List<Address>> {
       latitude: latitude,
       longitude: longitude,
     );
+    ref.invalidate(deliveryFeeEstimateProvider(created.id));
     if (isDefault) {
       // El backend desmarca la principal anterior (`unsetDefault` en
       // `addresses.service.ts`) — el append optimista dejaría dos `isDefault`
@@ -81,6 +83,9 @@ class AddressListNotifier extends AsyncNotifier<List<Address>> {
       latitude: latitude,
       longitude: longitude,
     );
+    // El mismo id puede representar nuevas coordenadas. Invalidar antes del
+    // GET evita conservar la cotización incluso si el refresco de lista falla.
+    ref.invalidate(deliveryFeeEstimateProvider(id));
     state = AsyncData(await repository.getAddresses());
   }
 
@@ -103,6 +108,7 @@ class AddressListNotifier extends AsyncNotifier<List<Address>> {
       }
     }
     await repository.deleteAddress(id);
+    ref.invalidate(deliveryFeeEstimateProvider(id));
     var remaining = await repository.getAddresses();
     if (removed?.isDefault == true &&
         remaining.isNotEmpty &&
@@ -116,5 +122,5 @@ class AddressListNotifier extends AsyncNotifier<List<Address>> {
 
 final addressListProvider =
     AsyncNotifierProvider<AddressListNotifier, List<Address>>(
-  AddressListNotifier.new,
-);
+      AddressListNotifier.new,
+    );

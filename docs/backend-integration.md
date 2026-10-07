@@ -67,10 +67,40 @@ exigen coordenadas para guardar nuevas/editar. PATCH se vuelve a consultar
 para direcciones; perfil sí utiliza su respuesta para actualizar estado.
 El backend actual utiliza merge para evitar sobrescritura por undefined.
 
-La estimación de delivery recibe addressId y devuelve deliveryFee,
-isFarOrder y distanceMeters. Mobile solo consume la tarifa. El servidor
-aplica distancia/configuración; sin coordenadas utiliza tarifa cero sin
-bloquear. Este fallback no autoriza a eliminar el guard de formularios.
+La estimación mantiene `POST /orders/estimate-delivery-fee` con `{addressId}`.
+El payload interior del envelope contiene `deliveryFee: number`,
+`isFarOrder: boolean`, `distanceMeters: number | null`, `isCovered: boolean`,
+`deliveryMode: DISTANCE | ZONES` y `zone: {id, name} | null`. Todos los campos
+son obligatorios; distancia y zona admiten null. Mobile consume el contrato
+completo con un modelo tipado. Un modo desconocido o contrato inválido es error,
+sin defaults de tarifa/cobertura/modo.
+
+Backend es autoridad de pricing y coverage y recalcula al crear el pedido.
+DISTANCE cobra exclusivamente por tiers, devuelve covered y zone=null;
+conserva su política de direcciones históricas sin coordenadas. ZONES cobra
+exclusivamente la tarifa de una zona activa, sin fallback. Fuera de cobertura
+devuelve isCovered=false, zone=null y fee=0 como marcador, y rechaza el pedido.
+Una tarifa cero con isCovered=true sí es válida. isFarOrder solo advierte
+distancia: no cambia la tarifa ni bloquea una dirección covered.
+
+Checkout es el gate: requiere dirección existente y estimate actual covered.
+Loading, error técnico (con retry), uncovered y ubicación pendiente se muestran
+separadamente; solo covered permite mostrar el total preview y confirmar.
+El carrito sigue permitiendo Continuar y no cotiza ni persiste delivery.
+ZONES covered muestra zone.name únicamente en checkout. Sin coordenadas y con
+uncovered se ofrece ubicar/cambiar dirección; no se reclasifica DISTANCE covered.
+
+La familia Riverpod por addressId aísla respuestas A/B. Actualizar/eliminar una
+dirección invalida su estimate incluso si conserva el ID. Checkout reconcilia
+selecciones eliminadas y revalida dirección, estimate y carrito después del
+modal de teléfono. Un 400 conserva carrito/cupón/dirección y mensaje backend e
+invalida estimate; no todo 400 significa uncovered. Reverse geocoding descarta
+respuestas cuya generación ya no corresponde al pin actual.
+
+AddressSnapshotInput no incluye coordenadas y no se usa en checkout. No utilizar
+ese camino para checkout ZONES sin resolver y enviar coordenadas primero.
+El soporte debe validarse integrado contra backend de prueba antes de activar
+ZONES; estos contratos no acreditan comportamiento en producción.
 
 ## Cupones, estrellas y settings
 
