@@ -8,6 +8,7 @@ import 'package:celtas_mobile/features/home/data/models/extra_portion_option.dar
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
 import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
 import 'package:celtas_mobile/features/rewards/data/models/reward_catalog_item.dart';
+import 'package:celtas_mobile/shared/utils/preview_money.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
@@ -39,8 +40,9 @@ abstract class CartState with _$CartState {
       items.fold(0, (sum, item) => sum + item.quantity);
 
   /// Subtotal sin descuento.
-  double get subtotal =>
-      items.fold(0, (sum, item) => sum + item.lineTotal);
+  double get subtotal => PreviewMoney.fromCents(
+    items.fold<int>(0, (sum, item) => sum + PreviewMoney.toCents(item.lineTotal)),
+  );
 
   /// Descuento que aplicaría el cupón validado, espejando la fórmula del
   /// backend (`CouponsService.applyDiscount`): porcentaje sobre el subtotal o
@@ -49,14 +51,19 @@ abstract class CartState with _$CartState {
   double get discount {
     final coupon = this.coupon;
     if (coupon == null) return 0;
-    final raw = coupon.discountType == CouponDiscountType.percentage
-        ? subtotal * coupon.discountValue / 100
-        : coupon.discountValue;
-    return raw.clamp(0, subtotal);
+    return PreviewMoney.fromCents(
+      PreviewMoney.discountCents(
+        PreviewMoney.toCents(subtotal),
+        coupon.discountValue,
+        percentage: coupon.discountType == CouponDiscountType.percentage,
+      ),
+    );
   }
 
   /// Total con descuento aplicado (vista previa para la UI).
-  double get total => subtotal - discount;
+  double get total => PreviewMoney.fromCents(
+    PreviewMoney.toCents(subtotal) - PreviewMoney.toCents(discount),
+  );
 
   /// Snapshot para la caché local (`CartStorage`). Excluye a propósito:
   /// - los ítems de premio (`rewardRedemptionId != null`),

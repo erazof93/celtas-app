@@ -674,6 +674,51 @@ void main() {
   });
 
   group('cupón', () {
+    for (final (price, discount, total) in [
+      (10.01, 5.01, 5.00),
+      (10.05, 5.03, 5.02),
+      (10.03, 5.02, 5.01),
+      (0.01, 0.01, 0.00),
+    ]) {
+      test('$price al 50% redondea descuento antes de restar', () {
+        final container = createContainer();
+        final notifier = container.read(cartProvider.notifier);
+        notifier.addItem(burger.copyWith(price: price));
+        notifier.applyCoupon(percentageCoupon.copyWith(discountValue: 50));
+        final state = container.read(cartProvider);
+        expect(state.discount, discount);
+        expect(state.total, total);
+      });
+    }
+
+    test('descuento fijo normaliza midpoint y limita al subtotal', () {
+      final container = createContainer();
+      final notifier = container.read(cartProvider.notifier);
+      notifier.addItem(burger.copyWith(price: 10.05));
+      notifier.applyCoupon(fixedCoupon.copyWith(discountValue: 1.005));
+      expect(container.read(cartProvider).discount, 1.01);
+      expect(container.read(cartProvider).total, 9.04);
+      notifier.applyCoupon(fixedCoupon.copyWith(discountValue: 20.005));
+      expect(container.read(cartProvider).discount, 10.05);
+      expect(container.read(cartProvider).total, 0);
+    });
+
+    test('0.10 + 0.70 acepta mínimo 0.80 y conserva cupón al reevaluar', () {
+      final container = createContainer();
+      final notifier = container.read(cartProvider.notifier);
+      notifier.addItem(burger.copyWith(price: 0.10));
+      notifier.addItem(wings.copyWith(price: 0.70), quantity: 2);
+      final coupon = percentageCoupon.copyWith(minPurchaseAmount: 0.80);
+      expect(notifier.applyCoupon(coupon), isTrue);
+      // Dispara _clearCouponIfInvalid al volver al mínimo exacto.
+      notifier.decrement(wings.id);
+      expect(container.read(cartProvider).subtotal, 0.80);
+      expect(container.read(cartProvider).coupon, coupon);
+      expect(container.read(cartProvider).couponRemovedNotice, isNull);
+      notifier.removeCoupon();
+      expect(notifier.applyCoupon(coupon), isTrue);
+    });
+
     test(
         'applyCoupon guarda el cupón y total = subtotal − descuento, '
         'devuelve true', () {

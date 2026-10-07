@@ -1,6 +1,7 @@
 import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/features/coupons/data/models/user_coupon.dart';
 import 'package:celtas_mobile/features/coupons/data/models/validated_coupon.dart';
+import 'package:celtas_mobile/shared/utils/preview_money.dart';
 import 'package:dio/dio.dart';
 
 /// Repositorio de cupones contra el backend real.
@@ -36,7 +37,7 @@ class CouponRepository {
         '/coupons/validate',
         data: {
           'code': code,
-          'subtotal': ?subtotal,
+          if (subtotal != null) 'subtotal': PreviewMoney.normalize(subtotal),
         },
       );
       return ValidatedCoupon.fromJson(response.data ?? const {});

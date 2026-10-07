@@ -2,6 +2,7 @@ import 'package:celtas_mobile/features/home/data/models/beverage_option.dart';
 import 'package:celtas_mobile/features/home/data/models/extra_portion_option.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
 import 'package:celtas_mobile/features/home/data/models/sauce_option.dart';
+import 'package:celtas_mobile/shared/utils/preview_money.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'cart_item.freezed.dart';
@@ -156,11 +157,17 @@ abstract class CartItem with _$CartItem {
   /// (el premio cubre el producto base, no lo que el cliente agregó
   /// encima). Preview local para la UI — el total real siempre lo calcula
   /// el backend al crear el pedido.
-  double get extrasUnitPrice =>
-      selectedBeverages.fold(0.0, (sum, option) => sum + option.price) +
-      selectedExtraPortions.fold(0.0, (sum, option) => sum + option.price);
+  double get extrasUnitPrice => PreviewMoney.fromCents(
+    [
+      ...selectedBeverages.map((option) => option.price),
+      ...selectedExtraPortions.map((option) => option.price),
+    ].fold<int>(0, (sum, price) => sum + PreviewMoney.toCents(price)),
+  );
 
-  double get lineTotal => (unitPrice + extrasUnitPrice) * quantity;
+  double get lineTotal => PreviewMoney.fromCents(
+    (PreviewMoney.toCents(unitPrice) + PreviewMoney.toCents(extrasUnitPrice)) *
+        quantity,
+  );
 
   /// Identifica una fila única del carrito. El mismo producto CON la misma
   /// combinación de salsas, bebidas Y porciones extras, Y el mismo

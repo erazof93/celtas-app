@@ -34,6 +34,19 @@ void main() {
   };
 
   group('validateCoupon', () {
+    test('normaliza 0.10 + 0.70 a 0.80 en el payload de validación', () async {
+      when(() => dio.post<Map<String, dynamic>>(
+        '/coupons/validate', data: any(named: 'data'),
+      )).thenAnswer((_) async => Response<Map<String, dynamic>>(
+        requestOptions: RequestOptions(path: '/coupons/validate'),
+        data: couponJson,
+      ));
+      await repository.validateCoupon('A1B2C3D4', subtotal: 0.10 + 0.70);
+      verify(() => dio.post<Map<String, dynamic>>(
+        '/coupons/validate', data: {'code': 'A1B2C3D4', 'subtotal': 0.80},
+      )).called(1);
+    });
+
     test('éxito: POST /coupons/validate con { code } y parsea la respuesta',
         () async {
       when(() => dio.post<Map<String, dynamic>>(

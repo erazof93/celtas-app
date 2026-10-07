@@ -578,6 +578,27 @@ void main() {
       expect(find.text('REINTENTAR'), findsOneWidget);
     });
 
+    testWidgets('picker permite mínimo 0.80 con líneas 0.10 y 0.70', (tester) async {
+      final repository = MockCouponRepository();
+      final coupon = activeCoupon.copyWith(minPurchaseAmount: 0.80);
+      when(() => repository.getMyCoupons()).thenAnswer((_) async => [coupon]);
+      when(() => repository.validateCoupon(coupon.code, subtotal: 0.80))
+          .thenAnswer((_) async => percentageCoupon.copyWith(minPurchaseAmount: 0.80));
+      final container = await pumpCart(
+        tester,
+        couponRepository: repository,
+        items: [burger.copyWith(price: 0.10), wings.copyWith(price: 0.70)],
+      );
+      expect(container.read(cartProvider).subtotal, 0.80);
+      await tester.tap(find.byKey(const ValueKey('cart-coupon-picker')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Te faltan'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('coupon-picker-uc-1')));
+      await tester.pumpAndSettle();
+      expect(container.read(cartProvider).coupon?.code, coupon.code);
+      verify(() => repository.validateCoupon(coupon.code, subtotal: 0.80)).called(1);
+    });
+
     testWidgets(
         'subtotal EXACTAMENTE igual al mínimo → elegible (no "menor que")',
         (tester) async {
