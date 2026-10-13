@@ -9,12 +9,12 @@ import 'package:celtas_mobile/features/home/application/home_providers.dart';
 import 'package:celtas_mobile/features/home/data/models/banner.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_category.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
+import 'package:celtas_mobile/features/home/presentation/widgets/content_recovery_notice.dart';
 import 'package:celtas_mobile/features/home/presentation/widgets/product_images_terms_sheet.dart';
 import 'package:celtas_mobile/features/notifications/application/notification_providers.dart';
 import 'package:celtas_mobile/features/settings/application/settings_providers.dart';
 import 'package:celtas_mobile/features/settings/data/models/business_hours.dart';
 import 'package:celtas_mobile/shared/widgets/business_closed_notice.dart';
-import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_snackbar.dart';
 import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
 import 'package:celtas_mobile/shared/widgets/svg_stroke_icon.dart';
@@ -64,7 +64,8 @@ import 'package:url_launcher/url_launcher.dart';
 /// Estados:
 ///   - Carga: spinner + `SlowBackendNotice` (el backend de Render puede tardar
 ///     30-50s en despertar).
-///   - Error: mensaje + botón de reintento.
+///   - Error: un aviso común con reintento de las secciones afectadas.
+///     Los datos previos se conservan y se identifican como no actualizados.
 ///   - Vacío: sin banners activos → se oculta el carrusel (no es error); sin
 ///     categorías → mensaje de menú vacío.
 ///
@@ -193,6 +194,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Widget build(BuildContext context) {
     final bannersAsync = ref.watch(activeBannersProvider);
     final menuAsync = ref.watch(publicMenuProvider);
+    // Menu takes priority when both resources fail; one notice retries both.
+    final contentError = menuAsync.error ?? bannersAsync.error;
+    final refreshingContent =
+        (menuAsync.isLoading && menuAsync.hasValue) ||
+        (bannersAsync.isLoading && bannersAsync.hasValue);
+    final retrying =
+        (menuAsync.hasError && menuAsync.isLoading) ||
+        (bannersAsync.hasError && bannersAsync.isLoading);
     final businessHours = ref.watch(businessHoursProvider).valueOrNull;
     final (cartCount, cartTotal) = ref.watch(
       cartProvider.select((state) => (state.totalCount, state.total)),
@@ -206,6 +215,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             Column(
               children: [
                 const _HomeHeader(),
+                if (contentError != null || refreshingContent)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      CeltasSpacing.page,
+                      0,
+                      CeltasSpacing.page,
+                      12,
+                    ),
+                    child: ContentRecoveryNotice(
+                      key: const ValueKey('home-content-notice'),
+                      error: contentError,
+                      hasPreviousData:
+                          menuAsync.hasValue || bannersAsync.hasValue,
+                      onRetry: retrying
+                          ? null
+                          : () => unawaited(
+                              ref.read(homeRefreshProvider).failed(),
+                            ),
+                    ),
+                  ),
                 // Cartel FIJO (no scrollea con el menú), debajo del header y
                 // antes del contenido — a diferencia del aviso del checkout
                 // (que sí vive dentro de la lista scrolleable), acá se pidió
@@ -222,7 +251,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     ),
                     child: BusinessClosedNotice(
                       key: const ValueKey('home-closed-notice'),
-                      message: businessHours!.message ??
+                      message:
+                          businessHours!.message ??
                           'El local está cerrado en este momento',
                     ),
                   ),
@@ -230,20 +260,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   child: RefreshIndicator(
                     color: CeltasColors.orange,
                     backgroundColor: CeltasColors.surface,
-                    onRefresh: () async {
-                      ref.invalidate(activeBannersProvider);
-                      ref.invalidate(publicMenuProvider);
-                      try {
-                        await Future.wait([
-                          ref.read(activeBannersProvider.future),
-                          ref.read(publicMenuProvider.future),
-                        ]);
-                      } catch (_) {
-                        // Los estados de error de cada provider ya se
-                        // muestran en la UI (banners/menú) — el refresh no
-                        // debe lanzar una excepción async sin manejar.
-                      }
-                    },
+                    onRefresh: () => ref.read(homeRefreshProvider).all(),
                     child: ListView(
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding: EdgeInsets.fromLTRB(
@@ -258,12 +275,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         // Carrusel de banners: se oculta si no hay banners
                         // activos.
                         bannersAsync.when(
+                          skipError: true,
+                          skipLoadingOnReload: true,
                           loading: () => const _BannersLoading(),
-                          error: (error, _) => _BannersError(
-                            onRetry: () {
-                              ref.invalidate(activeBannersProvider);
-                            },
-                          ),
+                          error: (error, _) => const _BannersError(),
                           data: (banners) => banners.isEmpty
                               ? const SizedBox.shrink()
                               : _BannerCarousel(banners: banners),
@@ -271,13 +286,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         const SizedBox(height: 18),
                         // Menú por categorías.
                         menuAsync.when(
+                          skipError: true,
+                          skipLoadingOnReload: true,
                           loading: () => const _MenuLoading(),
-                          error: (error, _) => _MenuError(
-                            message: error.toString(),
-                            onRetry: () {
-                              ref.invalidate(publicMenuProvider);
-                            },
-                          ),
+                          error: (error, _) =>
+                              _MenuError(message: error.toString()),
                           data: (categories) => categories.isEmpty
                               ? const _EmptyMenu()
                               : _MenuList(categories: categories),
@@ -286,8 +299,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         Center(
                           child: GestureDetector(
                             key: const ValueKey('home-terms-link'),
-                            onTap: () =>
-                                ProductImagesTermsSheet.show(context),
+                            onTap: () => ProductImagesTermsSheet.show(context),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -779,10 +791,7 @@ class _BannerCard extends ConsumerWidget {
                 color: CeltasColors.surface,
                 alignment: Alignment.center,
                 child: hasTitle
-                    ? Text(
-                        title,
-                        style: Theme.of(context).textTheme.titleSmall,
-                      )
+                    ? Text(title, style: Theme.of(context).textTheme.titleSmall)
                     : null,
               ),
             // Gradiente oscuro de izquierda a derecha (del CSS real del mockup:
@@ -1214,45 +1223,20 @@ class _BannersLoading extends StatelessWidget {
   }
 }
 
-/// Error del carrusel de banners: caja compacta con mensaje y reintento.
-/// Antes este error se tragaba en silencio (`SizedBox.shrink`); ahora el
-/// usuario puede reintentar sin perder el menú que ya cargó.
+/// Sin banners previos: identifica la sección que falló. La acción de
+/// recuperación vive en el aviso común debajo del encabezado.
 class _BannersError extends StatelessWidget {
-  const _BannersError({required this.onRetry});
-
-  final VoidCallback onRetry;
+  const _BannersError();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 140,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: CeltasColors.surface,
-        borderRadius: BorderRadius.circular(CeltasRadii.banner),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.cloud_off_rounded,
-            size: 22,
-            color: CeltasColors.textSubtle,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'No se pudieron cargar los banners',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: CeltasColors.textMuted),
-            ),
-          ),
-          TextButton(
-            onPressed: onRetry,
-            style: TextButton.styleFrom(foregroundColor: CeltasColors.orange),
-            child: const Text('REINTENTAR'),
-          ),
-        ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Text(
+        'No se pudieron cargar los banners',
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(color: CeltasColors.textMuted),
       ),
     );
   }
@@ -1284,10 +1268,9 @@ class _MenuLoading extends StatelessWidget {
 }
 
 class _MenuError extends StatelessWidget {
-  const _MenuError({required this.message, required this.onRetry});
+  const _MenuError({required this.message});
 
   final String message;
-  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -1313,8 +1296,6 @@ class _MenuError extends StatelessWidget {
               context,
             ).textTheme.bodySmall?.copyWith(color: CeltasColors.textMuted),
           ),
-          const SizedBox(height: 16),
-          CeltasButton(label: 'REINTENTAR', onPressed: onRetry),
         ],
       ),
     );

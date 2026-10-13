@@ -15,7 +15,8 @@ import 'package:mocktail/mocktail.dart';
 
 class MockAuthRepository extends Mock implements AuthRepository {}
 
-class MockNotificationRepository extends Mock implements NotificationRepository {}
+class MockNotificationRepository extends Mock
+    implements NotificationRepository {}
 
 /// Espía de `AddressSelectionStorage`: cuenta cuántas veces `logout()` la
 /// limpia, sin tocar `SharedPreferences`.
@@ -69,8 +70,9 @@ void main() {
       overrides: [
         authRepositoryProvider.overrideWithValue(repository),
         notificationRepositoryProvider.overrideWithValue(notificationRepo),
-        addressSelectionStorageProvider
-            .overrideWithValue(addressSelectionStorage),
+        addressSelectionStorageProvider.overrideWithValue(
+          addressSelectionStorage,
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -102,7 +104,9 @@ void main() {
       expect(state.status, AuthStatus.unauthenticated);
       expect(state.user, isNull);
       expect(state.accessToken, isNull);
-      verifyNever(() => repository.refresh(any()));
+      verifyNever(
+        () => repository.refresh(any(), cancelToken: any(named: 'cancelToken')),
+      );
     });
 
     test('refreshToken vacío → estado unauthenticated', () async {
@@ -114,95 +118,144 @@ void main() {
         container.read(authControllerProvider).status,
         AuthStatus.unauthenticated,
       );
-      verifyNever(() => repository.refresh(any()));
+      verifyNever(
+        () => repository.refresh(any(), cancelToken: any(named: 'cancelToken')),
+      );
     });
   });
 
   group('bootstrap — con refresh token guardado', () {
-    test('refresh exitoso → estado authenticated con accessToken en memoria',
-        () async {
-      final tokens = AuthTokens(
-        accessToken: 'access-new',
-        refreshToken: 'refresh-new',
-        user: user,
-      );
-      when(() => repository.readRefreshToken())
-          .thenAnswer((_) async => 'refresh-old');
-      when(() => repository.refresh('refresh-old'))
-          .thenAnswer((_) async => tokens);
-      when(() => repository.saveRefreshToken('refresh-new'))
-          .thenAnswer((_) async {});
+    test(
+      'refresh exitoso → estado authenticated con accessToken en memoria',
+      () async {
+        final tokens = AuthTokens(
+          accessToken: 'access-new',
+          refreshToken: 'refresh-new',
+          user: user,
+        );
+        when(
+          () => repository.readRefreshToken(),
+        ).thenAnswer((_) async => 'refresh-old');
+        when(
+          () => repository.refresh(
+            'refresh-old',
+            cancelToken: any(named: 'cancelToken'),
+          ),
+        ).thenAnswer((_) async => tokens);
+        when(
+          () => repository.saveRefreshToken(
+            'refresh-new',
+            isCurrent: any(named: 'isCurrent'),
+          ),
+        ).thenAnswer((_) async {});
 
-      await pumpBootstrap();
+        await pumpBootstrap();
 
-      final state = container.read(authControllerProvider);
-      expect(state.status, AuthStatus.authenticated);
-      expect(state.accessToken, 'access-new');
-      expect(state.user, user);
-      // Rotación: el refresh token nuevo emitido por el backend se persiste.
-      verify(() => repository.saveRefreshToken('refresh-new')).called(1);
-    });
+        final state = container.read(authControllerProvider);
+        expect(state.status, AuthStatus.authenticated);
+        expect(state.accessToken, 'access-new');
+        expect(state.user, user);
+        // Rotación: el refresh token nuevo emitido por el backend se persiste.
+        verify(
+          () => repository.saveRefreshToken(
+            'refresh-new',
+            isCurrent: any(named: 'isCurrent'),
+          ),
+        ).called(1);
+      },
+    );
 
-    test('refresh responde 401 definitivo → limpia sesión y queda sin sesión',
-        () async {
-      when(() => repository.readRefreshToken())
-          .thenAnswer((_) async => 'refresh-old');
-      when(() => repository.refresh('refresh-old')).thenThrow(dio401());
-      when(() => repository.clearRefreshToken()).thenAnswer((_) async {});
+    test(
+      'refresh responde 401 definitivo → limpia sesión y queda sin sesión',
+      () async {
+        when(
+          () => repository.readRefreshToken(),
+        ).thenAnswer((_) async => 'refresh-old');
+        when(
+          () => repository.refresh(
+            'refresh-old',
+            cancelToken: any(named: 'cancelToken'),
+          ),
+        ).thenThrow(dio401());
+        when(() => repository.clearRefreshToken()).thenAnswer((_) async {});
 
-      await pumpBootstrap();
+        await pumpBootstrap();
 
-      expect(
-        container.read(authControllerProvider).status,
-        AuthStatus.unauthenticated,
-      );
-      verify(() => repository.clearRefreshToken()).called(1);
-    });
+        expect(
+          container.read(authControllerProvider).status,
+          AuthStatus.unauthenticated,
+        );
+        verify(() => repository.clearRefreshToken()).called(1);
+      },
+    );
 
-    test('error transitorio (red) → estado error y NO limpia la sesión',
-        () async {
-      when(() => repository.readRefreshToken())
-          .thenAnswer((_) async => 'refresh-old');
-      when(() => repository.refresh('refresh-old')).thenThrow(
-        DioException(
-          requestOptions: RequestOptions(path: '/auth/refresh'),
-          type: DioExceptionType.connectionError,
-        ),
-      );
+    test(
+      'error transitorio (red) → estado error y NO limpia la sesión',
+      () async {
+        when(
+          () => repository.readRefreshToken(),
+        ).thenAnswer((_) async => 'refresh-old');
+        when(
+          () => repository.refresh(
+            'refresh-old',
+            cancelToken: any(named: 'cancelToken'),
+          ),
+        ).thenThrow(
+          DioException(
+            requestOptions: RequestOptions(path: '/auth/refresh'),
+            type: DioExceptionType.connectionError,
+          ),
+        );
 
-      await pumpBootstrap();
+        await pumpBootstrap();
 
-      expect(container.read(authControllerProvider).status, AuthStatus.error);
-      verifyNever(() => repository.clearRefreshToken());
-    });
+        expect(container.read(authControllerProvider).status, AuthStatus.error);
+        verifyNever(() => repository.clearRefreshToken());
+      },
+    );
   });
 
   group('login / logout', () {
-    test('login exitoso → persiste refreshToken y queda authenticated', () async {
-      final tokens = AuthTokens(
-        accessToken: 'access-1',
-        refreshToken: 'refresh-1',
-        user: user,
-      );
-      // `build()` agenda `bootstrap()` en un microtask; sin refresh token
-      // guardado termina en unauthenticated antes de que corra el login.
-      when(() => repository.readRefreshToken()).thenAnswer((_) async => null);
-      when(() => repository.login(email: any(named: 'email'), password: any(named: 'password')))
-          .thenAnswer((_) async => tokens);
-      when(() => repository.saveRefreshToken('refresh-1'))
-          .thenAnswer((_) async {});
+    test(
+      'login exitoso → persiste refreshToken y queda authenticated',
+      () async {
+        final tokens = AuthTokens(
+          accessToken: 'access-1',
+          refreshToken: 'refresh-1',
+          user: user,
+        );
+        // `build()` agenda `bootstrap()` en un microtask; sin refresh token
+        // guardado termina en unauthenticated antes de que corra el login.
+        when(() => repository.readRefreshToken()).thenAnswer((_) async => null);
+        when(
+          () => repository.login(
+            email: any(named: 'email'),
+            password: any(named: 'password'),
+          ),
+        ).thenAnswer((_) async => tokens);
+        when(
+          () => repository.saveRefreshToken(
+            'refresh-1',
+            isCurrent: any(named: 'isCurrent'),
+          ),
+        ).thenAnswer((_) async {});
 
-      await container.read(authControllerProvider.notifier).login(
-            email: 'cliente@celtas.pe',
-            password: 'secret',
-          );
+        await container
+            .read(authControllerProvider.notifier)
+            .login(email: 'cliente@celtas.pe', password: 'secret');
 
-      final state = container.read(authControllerProvider);
-      expect(state.status, AuthStatus.authenticated);
-      expect(state.accessToken, 'access-1');
-      expect(state.user, user);
-      verify(() => repository.saveRefreshToken('refresh-1')).called(1);
-    });
+        final state = container.read(authControllerProvider);
+        expect(state.status, AuthStatus.authenticated);
+        expect(state.accessToken, 'access-1');
+        expect(state.user, user);
+        verify(
+          () => repository.saveRefreshToken(
+            'refresh-1',
+            isCurrent: any(named: 'isCurrent'),
+          ),
+        ).called(1);
+      },
+    );
 
     test('logout → des-registra el fcmToken, cierra sesión de Google, limpia '
         'refreshToken y queda sin sesión', () async {
@@ -226,8 +279,9 @@ void main() {
     test('logout → si clearFcmToken falla (red/backend dormido), el logout '
         'local igual completa', () async {
       when(() => repository.readRefreshToken()).thenAnswer((_) async => null);
-      when(() => notificationRepo.clearFcmToken())
-          .thenThrow(const ApiException('No se pudo conectar con el servidor.'));
+      when(
+        () => notificationRepo.clearFcmToken(),
+      ).thenThrow(const ApiException('No se pudo conectar con el servidor.'));
       when(() => repository.signOutFromGoogle()).thenAnswer((_) async {});
       when(() => repository.clearRefreshToken()).thenAnswer((_) async {});
 
@@ -251,8 +305,12 @@ void main() {
       );
       when(() => repository.readRefreshToken()).thenAnswer((_) async => null);
       when(() => repository.loginWithGoogle()).thenAnswer((_) async => tokens);
-      when(() => repository.saveRefreshToken('refresh-google'))
-          .thenAnswer((_) async {});
+      when(
+        () => repository.saveRefreshToken(
+          'refresh-google',
+          isCurrent: any(named: 'isCurrent'),
+        ),
+      ).thenAnswer((_) async {});
 
       await pumpBootstrap();
       await container.read(authControllerProvider.notifier).loginWithGoogle();
@@ -261,14 +319,20 @@ void main() {
       expect(state.status, AuthStatus.authenticated);
       expect(state.accessToken, 'access-google');
       expect(state.user, user);
-      verify(() => repository.saveRefreshToken('refresh-google')).called(1);
+      verify(
+        () => repository.saveRefreshToken(
+          'refresh-google',
+          isCurrent: any(named: 'isCurrent'),
+        ),
+      ).called(1);
     });
 
     test('usuario cierra el picker → propaga la cancelación y NO cambia el '
         'estado', () async {
       when(() => repository.readRefreshToken()).thenAnswer((_) async => null);
-      when(() => repository.loginWithGoogle())
-          .thenThrow(const GoogleSignInCanceledException());
+      when(
+        () => repository.loginWithGoogle(),
+      ).thenThrow(const GoogleSignInCanceledException());
 
       await pumpBootstrap();
       await expectLater(
@@ -280,34 +344,45 @@ void main() {
         container.read(authControllerProvider).status,
         AuthStatus.unauthenticated,
       );
-      verifyNever(() => repository.saveRefreshToken(any()));
-    });
-
-    test('409 del backend → propaga el ApiException sin cambiar el estado',
-        () async {
-      when(() => repository.readRefreshToken()).thenAnswer((_) async => null);
-      when(() => repository.loginWithGoogle()).thenThrow(
-        const ApiException(
-          'Este correo ya está registrado con contraseña. '
-          'Inicia sesión tradicional o usa "olvidé mi contraseña".',
-          statusCode: 409,
+      verifyNever(
+        () => repository.saveRefreshToken(
+          any(),
+          isCurrent: any(named: 'isCurrent'),
         ),
       );
-
-      await pumpBootstrap();
-      await expectLater(
-        container.read(authControllerProvider.notifier).loginWithGoogle(),
-        throwsA(
-          isA<ApiException>()
-              .having((e) => e.statusCode, 'statusCode', 409),
-        ),
-      );
-
-      expect(
-        container.read(authControllerProvider).status,
-        AuthStatus.unauthenticated,
-      );
-      verifyNever(() => repository.saveRefreshToken(any()));
     });
+
+    test(
+      '409 del backend → propaga el ApiException sin cambiar el estado',
+      () async {
+        when(() => repository.readRefreshToken()).thenAnswer((_) async => null);
+        when(() => repository.loginWithGoogle()).thenThrow(
+          const ApiException(
+            'Este correo ya está registrado con contraseña. '
+            'Inicia sesión tradicional o usa "olvidé mi contraseña".',
+            statusCode: 409,
+          ),
+        );
+
+        await pumpBootstrap();
+        await expectLater(
+          container.read(authControllerProvider.notifier).loginWithGoogle(),
+          throwsA(
+            isA<ApiException>().having((e) => e.statusCode, 'statusCode', 409),
+          ),
+        );
+
+        expect(
+          container.read(authControllerProvider).status,
+          AuthStatus.unauthenticated,
+        );
+        verifyNever(
+          () => repository.saveRefreshToken(
+            any(),
+            isCurrent: any(named: 'isCurrent'),
+          ),
+        );
+      },
+    );
   });
 }

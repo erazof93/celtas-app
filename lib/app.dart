@@ -1,14 +1,17 @@
 import 'package:celtas_mobile/core/router/app_router.dart';
 import 'package:celtas_mobile/core/theme/app_theme.dart';
-import 'package:celtas_mobile/features/settings/application/app_version_check.dart';
-import 'package:celtas_mobile/features/settings/application/settings_providers.dart';
-import 'package:celtas_mobile/features/settings/presentation/widgets/force_update_dialog.dart';
+import 'package:celtas_mobile/features/notifications/application/notification_service.dart';
+import 'package:celtas_mobile/features/settings/application/app_version_gate_controller.dart';
+import 'package:celtas_mobile/features/settings/application/version_gate_diagnostics.dart';
+import 'package:celtas_mobile/features/settings/presentation/widgets/force_update_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Raíz de la app: tema + router con guard de sesión.
 class CeltasApp extends ConsumerWidget {
-  const CeltasApp({super.key});
+  const CeltasApp({super.key, this.notifications});
+  final NotificationService? notifications;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -19,59 +22,110 @@ class CeltasApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
       routerConfig: router,
-      // `builder` envuelve el contenido ya ruteado (el `Navigator` de
-      // `go_router` ya existe acá) — es el punto seguro para montar el
-      // overlay obligatorio de versión mínima sin pelear con el
-      // `navigatorKey` interno de `GoRouter`.
-      builder: (context, child) => _AppVersionGate(child: child),
+      // El Router solo se monta después de la verificación inicial y mientras
+      // no haya bloqueo. Su instancia y la sesión permanecen en Riverpod.
+      builder: (context, child) =>
+          _AppVersionGate(notifications: notifications, child: child),
     );
   }
 }
 
-/// Muestra `ForceUpdateDialog` (no descartable) apenas
-/// `appVersionCheckProvider` resuelve `isUpdateRequired: true`. Fail-open por
-/// diseño: mientras carga, si falla, o si el backend no bloquea, no hace
-/// nada — ver doc de `appVersionCheckProvider`.
+/// Gate declarativo fuera de las rutas de go_router.
 class _AppVersionGate extends ConsumerStatefulWidget {
-  const _AppVersionGate({required this.child});
+  const _AppVersionGate({required this.child, this.notifications});
 
   final Widget? child;
+  final NotificationService? notifications;
 
   @override
   ConsumerState<_AppVersionGate> createState() => _AppVersionGateState();
 }
 
-class _AppVersionGateState extends ConsumerState<_AppVersionGate> {
-  bool _dialogShown = false;
+class _AppVersionGateState extends ConsumerState<_AppVersionGate>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    widget.notifications?.setRouterReady(false);
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ref.read(versionGateDiagnosticsProvider)(VersionGateEvent.resumed);
+      ref.read(appVersionGateProvider.notifier).recheck();
+    }
+  }
+
+  // El Router no está montado durante el bloqueo: consume también el back
+  // del binding, que de otro modo podría cerrar la app al no tener dispatcher.
+  @override
+  Future<bool> didPopRoute() async {
+    final blocked = ref.read(appVersionGateProvider).blocksNavigation;
+    if (blocked) {
+      ref.read(versionGateDiagnosticsProvider)(VersionGateEvent.backBlocked);
+    }
+    return blocked;
+  }
+
+  @override
+  bool handleStartBackGesture(PredictiveBackEvent backEvent) =>
+      ref.read(appVersionGateProvider).blocksNavigation;
 
   @override
   Widget build(BuildContext context) {
-    ref.listen<AsyncValue<AppVersionCheck>>(appVersionCheckProvider, (
-      previous,
-      next,
-    ) {
-      final check = next.valueOrNull;
-      if (_dialogShown || check == null || !check.isUpdateRequired) return;
-      _dialogShown = true;
-      // Post-frame: `showDialog` no puede llamarse durante el `build` que
-      // este mismo `ref.listen` dispara.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        // El `context` de este widget NO sirve: `_AppVersionGate` envuelve a
-        // `child` (que contiene el `Navigator` de `go_router`), así que el
-        // `Navigator` es descendiente, no ancestro, de este `context` —
-        // `showDialog(context: context)` fallaba con "context that does not
-        // include a Navigator". Se usa el `context` del `Navigator` raíz vía
-        // `rootNavigatorKey` en su lugar (ver doc en `app_router.dart`).
-        final navigatorContext = rootNavigatorKey.currentContext;
-        if (navigatorContext == null) return;
-        showDialog<void>(
-          context: navigatorContext,
-          barrierDismissible: false,
-          builder: (_) => ForceUpdateDialog(minVersion: check.minVersion),
-        );
-      });
-    });
-
-    return widget.child ?? const SizedBox.shrink();
+    final gate = ref.watch(appVersionGateProvider);
+    widget.notifications?.setRouterReady(false);
+    if (!gate.blocksNavigation) {
+      if (widget.notifications != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !ref.read(appVersionGateProvider).blocksNavigation) {
+            widget.notifications?.setRouterReady(true);
+          }
+        });
+      }
+      return widget.child ?? const SizedBox.shrink();
+    }
+    // Navigator independiente: PopScope registra el bloqueo de Atrás y genera
+    // NavigationNotification también para el back predictivo de Android.
+    return Navigator(
+      pages: [
+        MaterialPage<void>(
+          key: const ValueKey('version-gate'),
+          child: PopScope(
+            canPop: false,
+            child: gate.status == AppVersionGateStatus.updateRequired
+                ? ForceUpdateScreen(
+                    minVersion: gate.minVersion,
+                    onStoreEvent: ref.read(versionGateDiagnosticsProvider),
+                  )
+                : const Scaffold(
+                    body: SafeArea(
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('CELTAS'),
+                            SizedBox(height: 24),
+                            CircularProgressIndicator(),
+                            SizedBox(height: 24),
+                            Text('Verificando tu versión…'),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+          ),
+        ),
+      ],
+      onDidRemovePage: (_) {},
+    );
   }
 }

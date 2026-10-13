@@ -44,12 +44,8 @@ const _protectedPaths = [
 bool _isProtectedPath(String location) =>
     _protectedPaths.any((p) => location == p || location.startsWith('$p/'));
 
-/// Key del `Navigator` raíz de `go_router`, expuesta para código fuera del
-/// árbol de rutas (`_AppVersionGate` en `app.dart`) que necesita un
-/// `BuildContext` con `Navigator` ancestro para llamar `showDialog` — el
-/// `context` del `builder` de `MaterialApp.router` NO sirve para esto: ese
-/// `builder` envuelve a `child` (que contiene el `Navigator`), por lo que el
-/// `Navigator` es descendiente de ese `context`, no ancestro.
+/// Key estable del Navigator raíz de go_router. El gate de versión utiliza
+/// su propia interfaz y no agrega rutas imperativas a este Navigator.
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 
 /// Router de la app.
@@ -60,8 +56,8 @@ final rootNavigatorKey = GlobalKey<NavigatorState>();
 /// Pedidos → detalle de pedido, etc.), que es lo que necesitan los módulos
 /// 3-8 y la feature de Estrellas.
 ///
-/// Guard de sesión: mientras el estado es `unknown` (bootstrap en curso) el
-/// Splash decide; autenticado → se bloquea Login/Registro y se va a /home;
+/// Guard de sesión: `unknown` y `error` mantienen las rutas protegidas en
+/// Splash; autenticado → se bloquea Login/Registro y se va a /home;
 /// sin sesión → las rutas del shell redirigen a /login.
 ///
 /// IMPORTANTE: el `GoRouter` se crea UNA sola vez. Recrearlo en cada cambio de
@@ -75,9 +71,11 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/',
     redirect: (context, state) {
       final status = ref.read(authControllerProvider).status;
-      if (status == AuthStatus.unknown) return null;
-
       final location = state.matchedLocation;
+
+      if (status == AuthStatus.unknown || status == AuthStatus.error) {
+        return _isProtectedPath(location) ? '/' : null;
+      }
 
       if (status == AuthStatus.authenticated) {
         // `/` es el Splash: con sesión activa no tiene sentido quedarse ahí.
@@ -89,7 +87,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         return null;
       }
 
-      // unauthenticated o error transitorio: rutas del shell → login.
+      // Sin credenciales válidas: las rutas protegidas llevan a Login.
       if (_isProtectedPath(location)) return '/login';
       return null;
     },

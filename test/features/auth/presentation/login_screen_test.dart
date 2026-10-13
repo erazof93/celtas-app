@@ -57,9 +57,15 @@ void main() {
     when(() => repository.readRefreshToken()).thenAnswer((_) async => null);
     // Flujo colgado en el POST al backend: el estado de carga se mantiene.
     final completer = Completer<AuthTokens>();
-    when(() => repository.loginWithGoogle())
-        .thenAnswer((_) => completer.future);
-    when(() => repository.saveRefreshToken(any())).thenAnswer((_) async {});
+    when(
+      () => repository.loginWithGoogle(),
+    ).thenAnswer((_) => completer.future);
+    when(
+      () => repository.saveRefreshToken(
+        any(),
+        isCurrent: any(named: 'isCurrent'),
+      ),
+    ).thenAnswer((_) async {});
 
     await pumpLogin(tester, repository);
 
@@ -82,13 +88,18 @@ void main() {
     expect(find.text('Conectando con Google…'), findsNothing);
   });
 
-  testWidgets('botón de Google: éxito → termina el estado de carga sin error',
-      (tester) async {
+  testWidgets('botón de Google: éxito → termina el estado de carga sin error', (
+    tester,
+  ) async {
     final repository = MockAuthRepository();
     when(() => repository.readRefreshToken()).thenAnswer((_) async => null);
     when(() => repository.loginWithGoogle()).thenAnswer((_) async => tokens);
-    when(() => repository.saveRefreshToken('refresh-google'))
-        .thenAnswer((_) async {});
+    when(
+      () => repository.saveRefreshToken(
+        'refresh-google',
+        isCurrent: any(named: 'isCurrent'),
+      ),
+    ).thenAnswer((_) async {});
 
     await pumpLogin(tester, repository);
 
@@ -105,8 +116,9 @@ void main() {
       'mensaje de error', (tester) async {
     final repository = MockAuthRepository();
     when(() => repository.readRefreshToken()).thenAnswer((_) async => null);
-    when(() => repository.loginWithGoogle())
-        .thenThrow(const GoogleSignInCanceledException());
+    when(
+      () => repository.loginWithGoogle(),
+    ).thenThrow(const GoogleSignInCanceledException());
 
     await pumpLogin(tester, repository);
 
@@ -144,8 +156,9 @@ void main() {
     expect(find.text('Conectando con Google…'), findsNothing);
   });
 
-  testWidgets('botón de Google: error de red → mensaje de conexión claro',
-      (tester) async {
+  testWidgets('botón de Google: error de red → mensaje de conexión claro', (
+    tester,
+  ) async {
     final repository = MockAuthRepository();
     when(() => repository.readRefreshToken()).thenAnswer((_) async => null);
     when(() => repository.loginWithGoogle()).thenThrow(

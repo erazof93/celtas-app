@@ -1,4 +1,4 @@
-import 'package:celtas_mobile/features/settings/presentation/widgets/force_update_dialog.dart';
+import 'package:celtas_mobile/features/settings/presentation/widgets/force_update_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,59 +14,45 @@ class FakeUrlLauncherPlatform extends Fake
   bool launchResult = true;
   Object? launchThrows;
   String? lastLaunchedUrl;
+  LaunchOptions? lastLaunchOptions;
 
   @override
   Future<bool> launchUrl(String url, LaunchOptions options) async {
     lastLaunchedUrl = url;
+    lastLaunchOptions = options;
     final error = launchThrows;
     if (error != null) throw error;
     return launchResult;
   }
 }
 
-/// `ForceUpdateDialog` (`app_version_check` — gate de actualización forzada):
-/// overlay obligatorio que se muestra cuando el backend reporta
-/// `min_app_version` por encima del build instalado (ver
-/// `appVersionCheckProvider`/`_AppVersionGate` en `app.dart`). Sin cobertura
-/// de widget test previa — solo la función pura y el provider tenían tests.
+/// Pantalla obligatoria y contrato del launcher, sin servicios externos.
 void main() {
   late FakeUrlLauncherPlatform fakeUrlLauncher;
+  late UrlLauncherPlatform originalLauncher;
 
   setUp(() {
+    originalLauncher = UrlLauncherPlatform.instance;
     fakeUrlLauncher = FakeUrlLauncherPlatform();
     UrlLauncherPlatform.instance = fakeUrlLauncher;
   });
 
-  Future<void> pumpDialog(
+  tearDown(() => UrlLauncherPlatform.instance = originalLauncher);
+
+  Future<void> pumpScreen(
     WidgetTester tester, {
     String? minVersion = '1.2.0+30',
   }) async {
     await tester.pumpWidget(
-      MaterialApp(
-        home: Builder(
-          builder: (context) => Scaffold(
-            body: Center(
-              child: ElevatedButton(
-                onPressed: () => showDialog<void>(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (_) => ForceUpdateDialog(minVersion: minVersion),
-                ),
-                child: const Text('abrir'),
-              ),
-            ),
-          ),
-        ),
-      ),
+      MaterialApp(home: ForceUpdateScreen(minVersion: minVersion)),
     );
-    await tester.tap(find.text('abrir'));
     await tester.pumpAndSettle();
   }
 
   testWidgets('muestra el título y el mensaje obligatorio de actualización', (
     tester,
   ) async {
-    await pumpDialog(tester);
+    await pumpScreen(tester);
 
     expect(find.text('Tu app está desactualizada'), findsOneWidget);
     expect(
@@ -79,7 +65,7 @@ void main() {
   testWidgets(
     'minVersion "1.2.0+30" → muestra solo la parte X.Y.Z, nunca el build',
     (tester) async {
-      await pumpDialog(tester);
+      await pumpScreen(tester);
 
       expect(find.text('Versión requerida: 1.2.0'), findsOneWidget);
       expect(find.textContaining('+30'), findsNothing);
@@ -89,7 +75,7 @@ void main() {
   testWidgets('minVersion null → no muestra la línea de versión requerida', (
     tester,
   ) async {
-    await pumpDialog(tester, minVersion: null);
+    await pumpScreen(tester, minVersion: null);
 
     expect(find.textContaining('Versión requerida'), findsNothing);
   });
@@ -99,7 +85,7 @@ void main() {
     'la ficha, modo externo, sin mostrar mensaje de error',
     (tester) async {
       fakeUrlLauncher.launchResult = true;
-      await pumpDialog(tester);
+      await pumpScreen(tester);
 
       await tester.tap(find.text('Abrir Play Store'));
       await tester.pumpAndSettle();
@@ -109,12 +95,12 @@ void main() {
         'https://play.google.com/store/apps/details?id=com.celtas.celtas_mobile',
       );
       expect(
-        find.textContaining('No se pudo abrir Play Store'),
-        findsNothing,
+        fakeUrlLauncher.lastLaunchOptions?.mode,
+        PreferredLaunchMode.externalApplication,
       );
-      // El diálogo sigue abierto: no hay ningún `Navigator.pop` alcanzable
-      // desde este flujo, ni siquiera tras un launch exitoso.
-      expect(find.byType(ForceUpdateDialog), findsOneWidget);
+      expect(find.textContaining('No se pudo abrir Play Store'), findsNothing);
+      // Abrir la tienda no retira la pantalla obligatoria.
+      expect(find.byType(ForceUpdateScreen), findsOneWidget);
     },
   );
 
@@ -123,7 +109,7 @@ void main() {
     'error claro, sin crash, diálogo sigue abierto',
     (tester) async {
       fakeUrlLauncher.launchResult = false;
-      await pumpDialog(tester);
+      await pumpScreen(tester);
 
       await tester.tap(find.text('Abrir Play Store'));
       await tester.pumpAndSettle();
@@ -132,7 +118,7 @@ void main() {
         find.textContaining('No se pudo abrir Play Store'),
         findsOneWidget,
       );
-      expect(find.byType(ForceUpdateDialog), findsOneWidget);
+      expect(find.byType(ForceUpdateScreen), findsOneWidget);
     },
   );
 
@@ -142,7 +128,7 @@ void main() {
       fakeUrlLauncher.launchThrows = PlatformException(
         code: 'ACTIVITY_NOT_FOUND',
       );
-      await pumpDialog(tester);
+      await pumpScreen(tester);
 
       await tester.tap(find.text('Abrir Play Store'));
       await tester.pumpAndSettle();
@@ -159,7 +145,7 @@ void main() {
     'PopScope: canPop es false — el botón atrás/gesto del sistema no puede '
     'descartar el diálogo por su cuenta',
     (tester) async {
-      await pumpDialog(tester);
+      await pumpScreen(tester);
 
       final popScope = tester.widget<PopScope>(find.byType(PopScope));
       expect(popScope.canPop, isFalse);
@@ -171,22 +157,19 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(handled, isTrue);
-      expect(find.byType(ForceUpdateDialog), findsOneWidget);
+      expect(find.byType(ForceUpdateScreen), findsOneWidget);
     },
   );
 
-  testWidgets(
-    'no hay ningún Navigator.pop alcanzable: tocar fuera del diálogo '
-    '(barrera) no lo cierra porque quien lo abre usa barrierDismissible: '
-    'false',
-    (tester) async {
-      await pumpDialog(tester);
+  testWidgets('tocar fuera del contenido no retira la pantalla obligatoria', (
+    tester,
+  ) async {
+    await pumpScreen(tester);
 
-      // Toca una esquina, fuera del `AlertDialog`.
-      await tester.tapAt(const Offset(5, 5));
-      await tester.pumpAndSettle();
+    // Toca una esquina, fuera del contenido.
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
 
-      expect(find.byType(ForceUpdateDialog), findsOneWidget);
-    },
-  );
+    expect(find.byType(ForceUpdateScreen), findsOneWidget);
+  });
 }

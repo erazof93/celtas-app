@@ -1,21 +1,29 @@
 /// Resultado de comparar la versión instalada de la app contra
 /// `min_app_version` (`GET /settings/public`).
 class AppVersionCheck {
-  const AppVersionCheck({required this.isUpdateRequired, required this.minVersion});
+  const AppVersionCheck({
+    required this.isUpdateRequired,
+    required this.minVersion,
+    this.hasComparableVersions = true,
+  });
 
   /// Sin bloqueo: falta `min_app_version` en el backend, viene mal formado,
-  /// o no se pudo consultar (ver [evaluateAppVersion] y
-  /// `appVersionCheckProvider`) — fail-open a propósito.
+  /// o no hay builds comparables. El gate permite continuar inicialmente,
+  /// pero este resultado no levanta un bloqueo previamente confirmado.
   static const AppVersionCheck noBlock = AppVersionCheck(
     isUpdateRequired: false,
     minVersion: null,
+    hasComparableVersions: false,
   );
 
   final bool isUpdateRequired;
 
+  /// Solo una comparación válida puede levantar un bloqueo ya confirmado.
+  final bool hasComparableVersions;
+
   /// `min_app_version` tal como la devolvió el backend (`X.Y.Z+BB`), o
   /// `null` si no hay bloqueo. La UI la usa solo para mostrar el "X.Y.Z" al
-  /// usuario (ver `ForceUpdateDialog`).
+  /// usuario (ver `ForceUpdateScreen`).
   final String? minVersion;
 }
 

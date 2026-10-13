@@ -143,41 +143,39 @@ void main() {
     expect(find.text('Entregar en'), findsOneWidget);
   });
 
-  testWidgets(
-    'header sin dirección guardada → invita a ingresar una',
-    (tester) async {
-      await pumpHome(tester);
+  testWidgets('header sin dirección guardada → invita a ingresar una', (
+    tester,
+  ) async {
+    await pumpHome(tester);
 
-      expect(find.text('Ingresa tu dirección'), findsOneWidget);
-    },
-  );
+    expect(find.text('Ingresa tu dirección'), findsOneWidget);
+  });
 
-  testWidgets(
-    'header con direcciones → muestra la principal (isDefault)',
-    (tester) async {
-      await pumpHome(
-        tester,
-        addresses: const [
-          Address(
-            id: 'a-1',
-            alias: 'Trabajo',
-            fullAddress: 'Av. Callao 850',
-            district: 'Surco',
-          ),
-          Address(
-            id: 'a-2',
-            alias: 'Casa',
-            fullAddress: 'Av. Los Álamos 123',
-            district: 'San Juan de Miraflores',
-            isDefault: true,
-          ),
-        ],
-      );
+  testWidgets('header con direcciones → muestra la principal (isDefault)', (
+    tester,
+  ) async {
+    await pumpHome(
+      tester,
+      addresses: const [
+        Address(
+          id: 'a-1',
+          alias: 'Trabajo',
+          fullAddress: 'Av. Callao 850',
+          district: 'Surco',
+        ),
+        Address(
+          id: 'a-2',
+          alias: 'Casa',
+          fullAddress: 'Av. Los Álamos 123',
+          district: 'San Juan de Miraflores',
+          isDefault: true,
+        ),
+      ],
+    );
 
-      expect(find.text('Casa · Av. Los Álamos 123'), findsOneWidget);
-      expect(find.text('Ingresa tu dirección'), findsNothing);
-    },
-  );
+    expect(find.text('Casa · Av. Los Álamos 123'), findsOneWidget);
+    expect(find.text('Ingresa tu dirección'), findsNothing);
+  });
 
   testWidgets(
     'header con direcciones pero ninguna principal → usa la primera',
@@ -232,32 +230,31 @@ void main() {
     },
   );
 
-  testWidgets(
-    'header con selección que ya no existe → cae a la principal',
-    (tester) async {
-      await pumpHome(
-        tester,
-        selectedAddressId: 'borrada',
-        addresses: const [
-          Address(
-            id: 'a-1',
-            alias: 'Trabajo',
-            fullAddress: 'Av. Callao 850',
-            district: 'Surco',
-          ),
-          Address(
-            id: 'a-2',
-            alias: 'Casa',
-            fullAddress: 'Av. Los Álamos 123',
-            district: 'San Juan de Miraflores',
-            isDefault: true,
-          ),
-        ],
-      );
+  testWidgets('header con selección que ya no existe → cae a la principal', (
+    tester,
+  ) async {
+    await pumpHome(
+      tester,
+      selectedAddressId: 'borrada',
+      addresses: const [
+        Address(
+          id: 'a-1',
+          alias: 'Trabajo',
+          fullAddress: 'Av. Callao 850',
+          district: 'Surco',
+        ),
+        Address(
+          id: 'a-2',
+          alias: 'Casa',
+          fullAddress: 'Av. Los Álamos 123',
+          district: 'San Juan de Miraflores',
+          isDefault: true,
+        ),
+      ],
+    );
 
-      expect(find.text('Casa · Av. Los Álamos 123'), findsOneWidget);
-    },
-  );
+    expect(find.text('Casa · Av. Los Álamos 123'), findsOneWidget);
+  });
 
   testWidgets('sin banners activos → el carrusel se oculta (no es error)', (
     tester,
@@ -397,7 +394,9 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           activeBannersProvider.overrideWith((ref) async => const []),
-          publicMenuProvider.overrideWith((ref) async => [withRequiredBeverage]),
+          publicMenuProvider.overrideWith(
+            (ref) async => [withRequiredBeverage],
+          ),
           businessHoursProvider.overrideWith(
             (ref) async => const BusinessHours(
               open: true,
@@ -633,7 +632,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('No se pudo cargar el menú'), findsOneWidget);
-    expect(find.text('REINTENTAR'), findsOneWidget);
+    expect(find.text('Reintentar'), findsOneWidget);
   });
 
   testWidgets('error de banners → mensaje con reintento (no se traga)', (
@@ -653,7 +652,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('No se pudieron cargar los banners'), findsOneWidget);
-    expect(find.text('REINTENTAR'), findsOneWidget);
+    expect(find.text('Reintentar'), findsOneWidget);
     // El menú sigue visible aunque los banners fallen.
     expect(find.text('Celtas Burgues Clasica'), findsOneWidget);
   });
@@ -738,7 +737,7 @@ void main() {
 
     // Reintentar desde el estado de error recupera los banners.
     fail = false;
-    await tester.tap(find.text('REINTENTAR'));
+    await tester.tap(find.text('Reintentar'));
     await tester.pumpAndSettle();
     expect(find.text('APROVECHA LA 2X1'), findsOneWidget);
   });
@@ -1111,10 +1110,7 @@ void main() {
     testWidgets('open: true → sin cartel', (tester) async {
       await pumpHome(tester, menu: [category]);
 
-      expect(
-        find.byKey(const ValueKey('home-closed-notice')),
-        findsNothing,
-      );
+      expect(find.byKey(const ValueKey('home-closed-notice')), findsNothing);
     });
 
     testWidgets(
@@ -1229,54 +1225,47 @@ void main() {
       },
     );
 
-    testWidgets(
-      'AppLifecycleState.resumed cancela cualquier timer pendiente y '
-      'reconsulta de inmediato (no deja dos timers corriendo a la vez)',
-      (tester) async {
-        var calls = 0;
-        final now = DateTime.now();
-        await pumpHome(
-          tester,
-          businessHoursOverride: businessHoursProvider.overrideWith((
-            ref,
-          ) async {
-            calls++;
-            // Fetch inicial: próximo cambio en 5 min. Fetch tras "resumed":
-            // en 20 min — valores bien separados para poder distinguir si
-            // el timer del fetch inicial quedó corriendo por error.
-            final next = calls == 1
-                ? now.add(const Duration(minutes: 5))
-                : now.add(const Duration(minutes: 20));
-            return BusinessHours(open: true, message: null, nextChangeAt: next);
-          }),
-        );
+    testWidgets('AppLifecycleState.resumed cancela cualquier timer pendiente y '
+        'reconsulta de inmediato (no deja dos timers corriendo a la vez)', (
+      tester,
+    ) async {
+      var calls = 0;
+      final now = DateTime.now();
+      await pumpHome(
+        tester,
+        businessHoursOverride: businessHoursProvider.overrideWith((ref) async {
+          calls++;
+          // Fetch inicial: próximo cambio en 5 min. Fetch tras "resumed":
+          // en 20 min — valores bien separados para poder distinguir si
+          // el timer del fetch inicial quedó corriendo por error.
+          final next = calls == 1
+              ? now.add(const Duration(minutes: 5))
+              : now.add(const Duration(minutes: 20));
+          return BusinessHours(open: true, message: null, nextChangeAt: next);
+        }),
+      );
 
-        expect(calls, 1);
+      expect(calls, 1);
 
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.paused,
-        );
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.resumed,
-        );
-        await tester.pumpAndSettle();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
 
-        // Reconsultó de inmediato al volver, sin esperar los 5 min.
-        expect(calls, 2);
+      // Reconsultó de inmediato al volver, sin esperar los 5 min.
+      expect(calls, 2);
 
-        // Si el timer del fetch inicial (5 min) NO se hubiera cancelado,
-        // dispararía acá un 3er refetch fantasma.
-        await tester.pump(const Duration(minutes: 5, seconds: 7));
-        await tester.pumpAndSettle();
-        expect(calls, 2);
+      // Si el timer del fetch inicial (5 min) NO se hubiera cancelado,
+      // dispararía acá un 3er refetch fantasma.
+      await tester.pump(const Duration(minutes: 5, seconds: 7));
+      await tester.pumpAndSettle();
+      expect(calls, 2);
 
-        // El timer reprogramado tras el resumed (20 min) sí dispara en su
-        // momento.
-        await tester.pump(const Duration(minutes: 15));
-        await tester.pumpAndSettle();
-        expect(calls, 3);
-      },
-    );
+      // El timer reprogramado tras el resumed (20 min) sí dispara en su
+      // momento.
+      await tester.pump(const Duration(minutes: 15));
+      await tester.pumpAndSettle();
+      expect(calls, 3);
+    });
 
     testWidgets(
       'resumed cancela el timer viejo de inmediato (síncrono), antes de que '
@@ -1316,9 +1305,7 @@ void main() {
 
         expect(calls, 1);
 
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.paused,
-        );
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
         tester.binding.handleAppLifecycleStateChanged(
           AppLifecycleState.resumed,
         );
@@ -1346,46 +1333,41 @@ void main() {
       },
     );
 
-    testWidgets(
-      'el timer se cancela al salir del Home (dispose) — no sigue '
-      'consultando en segundo plano',
-      (tester) async {
-        var calls = 0;
-        final firstChange = DateTime.now().add(const Duration(minutes: 10));
-        final container = await pumpHome(
-          tester,
-          businessHoursOverride: businessHoursProvider.overrideWith((
-            ref,
-          ) async {
-            calls++;
-            return BusinessHours(
-              open: true,
-              message: null,
-              nextChangeAt: firstChange,
-            );
-          }),
-        );
+    testWidgets('el timer se cancela al salir del Home (dispose) — no sigue '
+        'consultando en segundo plano', (tester) async {
+      var calls = 0;
+      final firstChange = DateTime.now().add(const Duration(minutes: 10));
+      final container = await pumpHome(
+        tester,
+        businessHoursOverride: businessHoursProvider.overrideWith((ref) async {
+          calls++;
+          return BusinessHours(
+            open: true,
+            message: null,
+            nextChangeAt: firstChange,
+          );
+        }),
+      );
 
-        expect(calls, 1);
+      expect(calls, 1);
 
-        // Desmonta el Home reemplazando el árbol de widgets → dispara
-        // `dispose()`, que debe cancelar el timer.
-        await tester.pumpWidget(
-          UncontrolledProviderScope(
-            container: container,
-            child: const MaterialApp(home: SizedBox.shrink()),
-          ),
-        );
-        await tester.pumpAndSettle();
+      // Desmonta el Home reemplazando el árbol de widgets → dispara
+      // `dispose()`, que debe cancelar el timer.
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: SizedBox.shrink()),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-        await tester.pump(const Duration(minutes: 15));
-        await tester.pumpAndSettle();
+      await tester.pump(const Duration(minutes: 15));
+      await tester.pumpAndSettle();
 
-        // Sin llamadas nuevas: si el timer siguiera corriendo, ya habría
-        // disparado un 2do refetch en el minuto 10.
-        expect(calls, 1);
-      },
-    );
+      // Sin llamadas nuevas: si el timer siguiera corriendo, ya habría
+      // disparado un 2do refetch en el minuto 10.
+      expect(calls, 1);
+    });
   });
 }
 

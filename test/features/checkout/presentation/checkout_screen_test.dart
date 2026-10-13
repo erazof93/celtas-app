@@ -197,6 +197,7 @@ void main() {
     String? userPhone = '987654321',
     UserProvider userProvider = UserProvider.local,
     String? selectedAddressId,
+    AuthState? initialSession,
   }) async {
     final historyRepo = orderHistoryRepository ?? MockOrderHistoryRepository();
     if (orderHistoryRepository == null) {
@@ -233,10 +234,11 @@ void main() {
         profileRepositoryProvider.overrideWithValue(profileRepo),
         authControllerProvider.overrideWith(
           () => _FakeAuthController(
-            AuthState.authenticated(
-              user: userWith(phone: userPhone, provider: userProvider),
-              accessToken: 'test-token',
-            ),
+            initialSession ??
+                AuthState.authenticated(
+                  user: userWith(phone: userPhone, provider: userProvider),
+                  accessToken: 'test-token',
+                ),
           ),
         ),
       ],
@@ -257,6 +259,44 @@ void main() {
     );
     await tester.pumpAndSettle();
     return container;
+  }
+
+  for (final session in [
+    const AuthState.unknown(),
+    const AuthState.error(),
+    const AuthState.unauthenticated(),
+  ]) {
+    testWidgets('confirmar sin sesión ${session.status} no envía pedido', (
+      tester,
+    ) async {
+      final addresses = MockAddressRepository();
+      when(addresses.getAddresses).thenAnswer((_) async => [home]);
+      final orders = MockOrderRepository();
+      final container = await pumpCheckout(
+        tester,
+        addressRepository: addresses,
+        orderRepository: orders,
+        items: [burger],
+        initialSession: session,
+      );
+      final button = tester.widget<CeltasButton>(
+        find.byKey(const ValueKey('checkout-confirm')),
+      );
+      button.onPressed!();
+      await tester.pumpAndSettle();
+      verifyNever(
+        () => orders.createOrder(
+          items: any(named: 'items'),
+          addressId: any(named: 'addressId'),
+          couponCode: any(named: 'couponCode'),
+        ),
+      );
+      expect(container.read(cartProvider).items, hasLength(1));
+      expect(
+        find.text('Restaura tu sesión antes de confirmar el pedido.'),
+        findsOneWidget,
+      );
+    });
   }
 
   /// Simula "tocar el mapa": invoca directamente el callback de
@@ -913,33 +953,35 @@ void main() {
   });
 
   group('resumen del pedido', () {
-    testWidgets('10.05 al 50% con envío 2 muestra descuento 5.03 y total 7.02', (
-      tester,
-    ) async {
-      final addresses = MockAddressRepository();
-      when(() => addresses.getAddresses()).thenAnswer((_) async => [home]);
-      final orders = MockOrderRepository();
-      when(() => orders.estimateDeliveryFee('addr-1'))
-          .thenAnswer((_) async => distanceEstimate(2));
-      await pumpCheckout(
-        tester,
-        addressRepository: addresses,
-        orderRepository: orders,
-        items: [burger.copyWith(price: 10.05)],
-        coupon: const ValidatedCoupon(
-          valid: true,
-          id: 'c-half',
-          code: 'HALF',
-          discountType: CouponDiscountType.percentage,
-          discountValue: 50,
-          description: '50%',
-        ),
-      );
-      expect(find.text('S/ 10.05'), findsNWidgets(2));
-      expect(find.text('-S/ 5.03'), findsOneWidget);
-      expect(find.text('S/ 2.00'), findsOneWidget);
-      expect(find.text('S/ 7.02'), findsOneWidget);
-    });
+    testWidgets(
+      '10.05 al 50% con envío 2 muestra descuento 5.03 y total 7.02',
+      (tester) async {
+        final addresses = MockAddressRepository();
+        when(() => addresses.getAddresses()).thenAnswer((_) async => [home]);
+        final orders = MockOrderRepository();
+        when(
+          () => orders.estimateDeliveryFee('addr-1'),
+        ).thenAnswer((_) async => distanceEstimate(2));
+        await pumpCheckout(
+          tester,
+          addressRepository: addresses,
+          orderRepository: orders,
+          items: [burger.copyWith(price: 10.05)],
+          coupon: const ValidatedCoupon(
+            valid: true,
+            id: 'c-half',
+            code: 'HALF',
+            discountType: CouponDiscountType.percentage,
+            discountValue: 50,
+            description: '50%',
+          ),
+        );
+        expect(find.text('S/ 10.05'), findsNWidgets(2));
+        expect(find.text('-S/ 5.03'), findsOneWidget);
+        expect(find.text('S/ 2.00'), findsOneWidget);
+        expect(find.text('S/ 7.02'), findsOneWidget);
+      },
+    );
 
     testWidgets('items, subtotal, cupón y total según el carrito', (
       tester,

@@ -1,4 +1,5 @@
 import 'package:celtas_mobile/core/theme/app_theme.dart';
+import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
 import 'package:celtas_mobile/features/rewards/application/reward_providers.dart';
 import 'package:celtas_mobile/features/rewards/data/models/reward_progress.dart';
 import 'package:celtas_mobile/features/rewards/data/models/reward_redemption_estado.dart';
@@ -12,6 +13,8 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../../support/authenticated_screen_test_controller.dart';
 
 class MockRewardRepository extends Mock implements RewardRepository {}
 
@@ -32,28 +35,32 @@ void main() {
 
   String? capturedEspecialParam;
 
-  GoRouter router() => GoRouter(
-    initialLocation: '/rewards',
-    routes: [
-      GoRoute(path: '/rewards', builder: (_, _) => const RewardsScreen()),
-      // Captura el query param `especial` real que le llega a la ruta de
-      // canje — mismo prefijo que cubre `app_router.dart`, sin necesidad
-      // de montar `RewardRedeemScreen` completa acá.
-      GoRoute(
-        path: '/rewards/redeem/:redemptionId',
-        builder: (context, state) {
-          capturedEspecialParam = state.uri.queryParameters['especial'];
-          return const Scaffold(body: Text('redeem-screen'));
-        },
-      ),
-      // Destino real de "Seguir comprando" en el overlay de celebración
-      // (`_RewardUnlockOverlayState`).
-      GoRoute(
-        path: '/home',
-        builder: (_, _) => const Scaffold(body: Text('HOME')),
-      ),
-    ],
-  );
+  GoRouter router() {
+    final instance = GoRouter(
+      initialLocation: '/rewards',
+      routes: [
+        GoRoute(path: '/rewards', builder: (_, _) => const RewardsScreen()),
+        // Captura el query param `especial` real que le llega a la ruta de
+        // canje — mismo prefijo que cubre `app_router.dart`, sin necesidad
+        // de montar `RewardRedeemScreen` completa acá.
+        GoRoute(
+          path: '/rewards/redeem/:redemptionId',
+          builder: (context, state) {
+            capturedEspecialParam = state.uri.queryParameters['especial'];
+            return const Scaffold(body: Text('redeem-screen'));
+          },
+        ),
+        // Destino real de "Seguir comprando" en el overlay de celebración
+        // (`_RewardUnlockOverlayState`).
+        GoRoute(
+          path: '/home',
+          builder: (_, _) => const Scaffold(body: Text('HOME')),
+        ),
+      ],
+    );
+    addTearDown(instance.dispose);
+    return instance;
+  }
 
   // `awaitSettle: false` cuando puede haber un `ConfettiWidget` activo (premio
   // nuevo detectado): su animación de partículas sigue programando frames
@@ -67,7 +74,12 @@ void main() {
   }) async {
     capturedEspecialParam = null;
     final container = ProviderContainer(
-      overrides: [rewardRepositoryProvider.overrideWithValue(repository)],
+      overrides: [
+        authControllerProvider.overrideWith(
+          AuthenticatedScreenTestController.new,
+        ),
+        rewardRepositoryProvider.overrideWithValue(repository),
+      ],
     );
     addTearDown(container.dispose);
 
@@ -361,10 +373,7 @@ void main() {
               .where((t) => t.textSpan?.toPlainText() == '12/25'),
           hasLength(1),
         );
-        expect(
-          find.byKey(const ValueKey('milestone-cell-25')),
-          findsOneWidget,
-        );
+        expect(find.byKey(const ValueKey('milestone-cell-25')), findsOneWidget);
         expect(find.text('Premio 1'), findsOneWidget);
         expect(find.text('Premio 2'), findsOneWidget);
         expect(find.text('Especial'), findsNWidgets(2));
@@ -502,36 +511,35 @@ void main() {
       },
     );
 
-    testWidgets(
-      'colores: estrella suelta activa (sin hito) es DORADA',
-      (tester) async {
-        final repository = MockRewardRepository();
-        when(() => repository.getProgress()).thenAnswer(
-          (_) async => const RewardProgress(
-            estrellasDelMes: 3,
-            hitos: [
-              RewardMilestoneProgress(
-                estrellasRequeridas: 5,
-                alcanzado: false,
-                esEspecial: false,
-              ),
-            ],
-            premiosDisponibles: [],
-          ),
-        );
+    testWidgets('colores: estrella suelta activa (sin hito) es DORADA', (
+      tester,
+    ) async {
+      final repository = MockRewardRepository();
+      when(() => repository.getProgress()).thenAnswer(
+        (_) async => const RewardProgress(
+          estrellasDelMes: 3,
+          hitos: [
+            RewardMilestoneProgress(
+              estrellasRequeridas: 5,
+              alcanzado: false,
+              esEspecial: false,
+            ),
+          ],
+          premiosDisponibles: [],
+        ),
+      );
 
-        await pumpScreen(tester, repository: repository);
+      await pumpScreen(tester, repository: repository);
 
-        // Estrella suelta 1-3 (rellena, sin hito): ícono dorado.
-        final filledStarIcon = tester.widget<Icon>(
-          find.descendant(
-            of: find.byKey(const ValueKey('milestone-cell-1')),
-            matching: find.byIcon(Icons.star_rounded),
-          ),
-        );
-        expect(filledStarIcon.color, CeltasColors.gold);
-      },
-    );
+      // Estrella suelta 1-3 (rellena, sin hito): ícono dorado.
+      final filledStarIcon = tester.widget<Icon>(
+        find.descendant(
+          of: find.byKey(const ValueKey('milestone-cell-1')),
+          matching: find.byIcon(Icons.star_rounded),
+        ),
+      );
+      expect(filledStarIcon.color, CeltasColors.gold);
+    });
 
     testWidgets(
       'colores del medallón (cuarta iteración): hito NORMAL alcanzado es '
@@ -614,8 +622,9 @@ void main() {
               ),
             )
             .firstWhere(
-              (c) => ((c.decoration as BoxDecoration?)?.gradient)
-                  is LinearGradient,
+              (c) =>
+                  ((c.decoration as BoxDecoration?)?.gradient)
+                      is LinearGradient,
             );
         final gradient =
             (medallionContainer.decoration as BoxDecoration).gradient
@@ -703,72 +712,71 @@ void main() {
       expect(capturedEspecialParam, 'true');
     });
 
-    testWidgets(
-      'séptima iteración: borde de la fila es NARANJA para un premio '
-      'normal y DORADO solo para el especial — el dorado no debe usarse '
-      'para un premio normal (se leía como si fuera especial sin serlo)',
-      (tester) async {
-        final repository = MockRewardRepository();
-        when(() => repository.getProgress()).thenAnswer(
-          (_) async => RewardProgress(
-            estrellasDelMes: 15,
-            hitos: const [],
-            premiosDisponibles: [
-              RewardSlot(
-                id: 'r-normal',
-                expiresAt: DateTime.now().add(const Duration(days: 10)),
-                esEspecial: false,
-              ),
-              RewardSlot(
-                id: 'r-especial',
-                expiresAt: DateTime.now().add(const Duration(days: 10)),
-                esEspecial: true,
-              ),
-            ],
-          ),
-        );
-        SharedPreferences.setMockInitialValues({
-          'seen_reward_redemption_ids': ['r-normal', 'r-especial'],
-        });
+    testWidgets('séptima iteración: borde de la fila es NARANJA para un premio '
+        'normal y DORADO solo para el especial — el dorado no debe usarse '
+        'para un premio normal (se leía como si fuera especial sin serlo)', (
+      tester,
+    ) async {
+      final repository = MockRewardRepository();
+      when(() => repository.getProgress()).thenAnswer(
+        (_) async => RewardProgress(
+          estrellasDelMes: 15,
+          hitos: const [],
+          premiosDisponibles: [
+            RewardSlot(
+              id: 'r-normal',
+              expiresAt: DateTime.now().add(const Duration(days: 10)),
+              esEspecial: false,
+            ),
+            RewardSlot(
+              id: 'r-especial',
+              expiresAt: DateTime.now().add(const Duration(days: 10)),
+              esEspecial: true,
+            ),
+          ],
+        ),
+      );
+      SharedPreferences.setMockInitialValues({
+        'seen_reward_redemption_ids': ['r-normal', 'r-especial'],
+      });
 
-        await pumpScreen(tester, repository: repository);
+      await pumpScreen(tester, repository: repository);
 
-        final normalDecoration =
-            tester
-                    .widget<Container>(
-                      find.byKey(const ValueKey('reward-slot-r-normal')),
-                    )
-                    .decoration
-                as BoxDecoration?;
-        final especialDecoration =
-            tester
-                    .widget<Container>(
-                      find.byKey(const ValueKey('reward-slot-r-especial')),
-                    )
-                    .decoration
-                as BoxDecoration?;
+      final normalDecoration =
+          tester
+                  .widget<Container>(
+                    find.byKey(const ValueKey('reward-slot-r-normal')),
+                  )
+                  .decoration
+              as BoxDecoration?;
+      final especialDecoration =
+          tester
+                  .widget<Container>(
+                    find.byKey(const ValueKey('reward-slot-r-especial')),
+                  )
+                  .decoration
+              as BoxDecoration?;
 
-        expect(normalDecoration?.border?.top.color, CeltasColors.orange);
-        expect(especialDecoration?.border?.top.color, CeltasColors.gold);
+      expect(normalDecoration?.border?.top.color, CeltasColors.orange);
+      expect(especialDecoration?.border?.top.color, CeltasColors.gold);
 
-        // Octava iteración: el ícono de regalo sigue el mismo criterio de
-        // color que el borde — naranja normal, dorado solo especial.
-        final normalIcon = tester.widget<Icon>(
-          find.descendant(
-            of: find.byKey(const ValueKey('reward-slot-r-normal')),
-            matching: find.byIcon(Icons.card_giftcard_rounded),
-          ),
-        );
-        final especialIcon = tester.widget<Icon>(
-          find.descendant(
-            of: find.byKey(const ValueKey('reward-slot-r-especial')),
-            matching: find.byIcon(Icons.card_giftcard_rounded),
-          ),
-        );
-        expect(normalIcon.color, CeltasColors.orange);
-        expect(especialIcon.color, CeltasColors.gold);
-      },
-    );
+      // Octava iteración: el ícono de regalo sigue el mismo criterio de
+      // color que el borde — naranja normal, dorado solo especial.
+      final normalIcon = tester.widget<Icon>(
+        find.descendant(
+          of: find.byKey(const ValueKey('reward-slot-r-normal')),
+          matching: find.byIcon(Icons.card_giftcard_rounded),
+        ),
+      );
+      final especialIcon = tester.widget<Icon>(
+        find.descendant(
+          of: find.byKey(const ValueKey('reward-slot-r-especial')),
+          matching: find.byIcon(Icons.card_giftcard_rounded),
+        ),
+      );
+      expect(normalIcon.color, CeltasColors.orange);
+      expect(especialIcon.color, CeltasColors.gold);
+    });
 
     testWidgets(
       'octava iteración: un premio con estado "redeemed" NO desaparece de '
@@ -845,58 +853,52 @@ void main() {
       },
     );
 
-    testWidgets(
-      'octava iteración: tocar un premio REDEEMED muestra el modal '
-      '"Premio reclamado" con la fecha real, en vez de navegar al canje',
-      (tester) async {
-        final repository = MockRewardRepository();
-        when(() => repository.getProgress()).thenAnswer(
-          (_) async => RewardProgress(
-            estrellasDelMes: 5,
-            hitos: const [],
-            premiosDisponibles: [
-              RewardSlot(
-                id: 'r-redeemed',
-                expiresAt: DateTime.now().add(const Duration(days: 10)),
-                esEspecial: true,
-                estado: RewardRedemptionEstado.redeemed,
-                usedAt: DateTime(2026, 8, 20),
-              ),
-            ],
-          ),
-        );
-        SharedPreferences.setMockInitialValues({
-          'seen_reward_redemption_ids': ['r-redeemed'],
-        });
+    testWidgets('octava iteración: tocar un premio REDEEMED muestra el modal '
+        '"Premio reclamado" con la fecha real, en vez de navegar al canje', (
+      tester,
+    ) async {
+      final repository = MockRewardRepository();
+      when(() => repository.getProgress()).thenAnswer(
+        (_) async => RewardProgress(
+          estrellasDelMes: 5,
+          hitos: const [],
+          premiosDisponibles: [
+            RewardSlot(
+              id: 'r-redeemed',
+              expiresAt: DateTime.now().add(const Duration(days: 10)),
+              esEspecial: true,
+              estado: RewardRedemptionEstado.redeemed,
+              usedAt: DateTime(2026, 8, 20),
+            ),
+          ],
+        ),
+      );
+      SharedPreferences.setMockInitialValues({
+        'seen_reward_redemption_ids': ['r-redeemed'],
+      });
 
-        await pumpScreen(tester, repository: repository);
+      await pumpScreen(tester, repository: repository);
 
-        await tester.tap(
-          find.byKey(const ValueKey('reward-redeem-r-redeemed')),
-        );
-        await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('reward-redeem-r-redeemed')));
+      await tester.pumpAndSettle();
 
-        expect(
-          find.byKey(const ValueKey('reward-claimed-dialog')),
-          findsOneWidget,
-        );
-        expect(find.text('Premio reclamado'), findsOneWidget);
-        expect(
-          find.text('Ya reclamaste este premio el 20 ago 2026.'),
-          findsOneWidget,
-        );
-        // NUNCA navegó al canje real.
-        expect(find.text('redeem-screen'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('reward-claimed-dialog')),
+        findsOneWidget,
+      );
+      expect(find.text('Premio reclamado'), findsOneWidget);
+      expect(
+        find.text('Ya reclamaste este premio el 20 ago 2026.'),
+        findsOneWidget,
+      );
+      // NUNCA navegó al canje real.
+      expect(find.text('redeem-screen'), findsNothing);
 
-        await tester.tap(find.text('OK'));
-        await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
 
-        expect(
-          find.byKey(const ValueKey('reward-claimed-dialog')),
-          findsNothing,
-        );
-      },
-    );
+      expect(find.byKey(const ValueKey('reward-claimed-dialog')), findsNothing);
+    });
 
     testWidgets(
       'octava iteración: un premio reclamado se ve desaturado (blanco y '
@@ -1125,330 +1127,316 @@ void main() {
     );
   });
 
-  group(
-    'segunda iteración visual (fondo ambiental, header, sin naranja, '
-    'responsive)',
-    () {
-      /// Viewport lógico real de teléfono (390×844, mismo patrón que
-      /// `product_detail_screen_test.dart`) — el viewport 800×600 por
-      /// defecto de los widget tests es mucho más ancho que un celular
-      /// real y no habría detectado un overflow del nuevo header (subtítulo
-      /// + "¡Gracias por ser parte!" a la derecha).
-      void setPhoneViewport(WidgetTester tester) {
-        tester.view.physicalSize = const Size(1170, 2532);
-        tester.view.devicePixelRatio = 3.0;
-        addTearDown(tester.view.resetPhysicalSize);
-        addTearDown(tester.view.resetDevicePixelRatio);
-      }
+  group('segunda iteración visual (fondo ambiental, header, sin naranja, '
+      'responsive)', () {
+    /// Viewport lógico real de teléfono (390×844, mismo patrón que
+    /// `product_detail_screen_test.dart`) — el viewport 800×600 por
+    /// defecto de los widget tests es mucho más ancho que un celular
+    /// real y no habría detectado un overflow del nuevo header (subtítulo
+    /// + "¡Gracias por ser parte!" a la derecha).
+    void setPhoneViewport(WidgetTester tester) {
+      tester.view.physicalSize = const Size(1170, 2532);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+    }
 
-      testWidgets(
-        'header + tablero con 15 hitos caben en un viewport de teléfono '
-        'real (390×844 lógicos) sin overflow ni excepciones',
-        (tester) async {
-          setPhoneViewport(tester);
-          final repository = MockRewardRepository();
-          when(() => repository.getProgress()).thenAnswer(
-            (_) async => RewardProgress(
-              estrellasDelMes: 4,
-              hitos: List.generate(
-                15,
-                (i) => RewardMilestoneProgress(
-                  estrellasRequeridas: i + 1,
-                  alcanzado: i < 4,
-                  esEspecial: i == 14,
-                ),
+    testWidgets(
+      'header + tablero con 15 hitos caben en un viewport de teléfono '
+      'real (390×844 lógicos) sin overflow ni excepciones',
+      (tester) async {
+        setPhoneViewport(tester);
+        final repository = MockRewardRepository();
+        when(() => repository.getProgress()).thenAnswer(
+          (_) async => RewardProgress(
+            estrellasDelMes: 4,
+            hitos: List.generate(
+              15,
+              (i) => RewardMilestoneProgress(
+                estrellasRequeridas: i + 1,
+                alcanzado: i < 4,
+                esEspecial: i == 14,
               ),
-              premiosDisponibles: [
-                RewardSlot(
-                  id: 'r-1',
-                  expiresAt: DateTime.now().add(const Duration(days: 10)),
-                  esEspecial: false,
-                ),
-              ],
             ),
-          );
-          SharedPreferences.setMockInitialValues({
-            'seen_reward_redemption_ids': ['r-1'],
-          });
-
-          // `awaitSettle: false`: 4 hitos ya alcanzados → trofeo/glow en
-          // loop infinito por diseño (mismo motivo que el resto de los
-          // tests con hitos alcanzados en este archivo).
-          await pumpScreen(tester, repository: repository, awaitSettle: false);
-
-          expect(tester.takeException(), isNull);
-        },
-      );
-
-      testWidgets(
-        'tablero con 30 hitos (máximo configurable de referencia en este '
-        'grupo) sigue sin overflow en viewport de teléfono — scroll '
-        'vertical, nunca estrellas diminutas',
-        (tester) async {
-          setPhoneViewport(tester);
-          final repository = MockRewardRepository();
-          when(() => repository.getProgress()).thenAnswer(
-            (_) async => RewardProgress(
-              estrellasDelMes: 10,
-              hitos: List.generate(
-                30,
-                (i) => RewardMilestoneProgress(
-                  estrellasRequeridas: i + 1,
-                  alcanzado: i < 10,
-                  esEspecial: i == 29,
-                ),
+            premiosDisponibles: [
+              RewardSlot(
+                id: 'r-1',
+                expiresAt: DateTime.now().add(const Duration(days: 10)),
+                esEspecial: false,
               ),
-              premiosDisponibles: const [],
+            ],
+          ),
+        );
+        SharedPreferences.setMockInitialValues({
+          'seen_reward_redemption_ids': ['r-1'],
+        });
+
+        // `awaitSettle: false`: 4 hitos ya alcanzados → trofeo/glow en
+        // loop infinito por diseño (mismo motivo que el resto de los
+        // tests con hitos alcanzados en este archivo).
+        await pumpScreen(tester, repository: repository, awaitSettle: false);
+
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'tablero con 30 hitos (máximo configurable de referencia en este '
+      'grupo) sigue sin overflow en viewport de teléfono — scroll '
+      'vertical, nunca estrellas diminutas',
+      (tester) async {
+        setPhoneViewport(tester);
+        final repository = MockRewardRepository();
+        when(() => repository.getProgress()).thenAnswer(
+          (_) async => RewardProgress(
+            estrellasDelMes: 10,
+            hitos: List.generate(
+              30,
+              (i) => RewardMilestoneProgress(
+                estrellasRequeridas: i + 1,
+                alcanzado: i < 10,
+                esEspecial: i == 29,
+              ),
             ),
-          );
+            premiosDisponibles: const [],
+          ),
+        );
 
-          await pumpScreen(tester, repository: repository, awaitSettle: false);
+        await pumpScreen(tester, repository: repository, awaitSettle: false);
 
-          expect(tester.takeException(), isNull);
-          expect(find.text('10 de 30 estrellas'), findsOneWidget);
-        },
-      );
+        expect(tester.takeException(), isNull);
+        expect(find.text('10 de 30 estrellas'), findsOneWidget);
+      },
+    );
 
-      testWidgets(
-        'grid de estrellas y sección "TU PROGRESO" comparten UN SOLO '
+    testWidgets('grid de estrellas y sección "TU PROGRESO" comparten UN SOLO '
         'contenedor (quinta iteración: el grid ya no tiene su propio '
-        'Container separado)',
-        (tester) async {
-          final repository = MockRewardRepository();
-          when(() => repository.getProgress()).thenAnswer(
-            (_) async => const RewardProgress(
-              estrellasDelMes: 3,
-              hitos: [
-                RewardMilestoneProgress(
-                  estrellasRequeridas: 5,
-                  alcanzado: false,
-                  esEspecial: false,
-                ),
-              ],
-              premiosDisponibles: [],
+        'Container separado)', (tester) async {
+      final repository = MockRewardRepository();
+      when(() => repository.getProgress()).thenAnswer(
+        (_) async => const RewardProgress(
+          estrellasDelMes: 3,
+          hitos: [
+            RewardMilestoneProgress(
+              estrellasRequeridas: 5,
+              alcanzado: false,
+              esEspecial: false,
             ),
-          );
-
-          await pumpScreen(tester, repository: repository);
-
-          // Ancestro `Container` con el relleno sólido `_cardDecoration`
-          // (`color: CeltasColors.black`, sexta iteración — ya no hay
-          // gradiente que buscar) tanto para el grid como para "TU
-          // PROGRESO".
-          final gridAncestorContainer = tester
-              .widgetList<Container>(
-                find.ancestor(
-                  of: find.byKey(const ValueKey('milestone-cell-1')),
-                  matching: find.byType(Container),
-                ),
-              )
-              .firstWhere(
-                (c) => (c.decoration as BoxDecoration?)?.color ==
-                    CeltasColors.black,
-              );
-          final progressAncestorContainer = tester
-              .widgetList<Container>(
-                find.ancestor(
-                  of: find.text('TU PROGRESO'),
-                  matching: find.byType(Container),
-                ),
-              )
-              .firstWhere(
-                (c) => (c.decoration as BoxDecoration?)?.color ==
-                    CeltasColors.black,
-              );
-
-          // Mismo objeto `_cardDecoration` (no dos cajas anidadas) —
-          // confirma que el grid ya no está envuelto en su propia caja
-          // decorada por separado.
-          expect(
-            identical(
-              gridAncestorContainer.decoration,
-              progressAncestorContainer.decoration,
-            ),
-            isTrue,
-          );
-        },
+          ],
+          premiosDisponibles: [],
+        ),
       );
 
-      testWidgets(
-        'badge "Premio N" alcanzado es naranja sólido (pedido explícito de '
-        'tercera iteración, revierte el oscuro/translúcido de la segunda)',
-        (tester) async {
-          final repository = MockRewardRepository();
-          when(() => repository.getProgress()).thenAnswer(
-            (_) async => const RewardProgress(
-              estrellasDelMes: 5,
-              hitos: [
-                RewardMilestoneProgress(
-                  estrellasRequeridas: 5,
-                  alcanzado: true,
-                  esEspecial: false,
-                ),
-              ],
-              premiosDisponibles: [],
+      await pumpScreen(tester, repository: repository);
+
+      // Ancestro `Container` con el relleno sólido `_cardDecoration`
+      // (`color: CeltasColors.black`, sexta iteración — ya no hay
+      // gradiente que buscar) tanto para el grid como para "TU
+      // PROGRESO".
+      final gridAncestorContainer = tester
+          .widgetList<Container>(
+            find.ancestor(
+              of: find.byKey(const ValueKey('milestone-cell-1')),
+              matching: find.byType(Container),
             ),
+          )
+          .firstWhere(
+            (c) =>
+                (c.decoration as BoxDecoration?)?.color == CeltasColors.black,
+          );
+      final progressAncestorContainer = tester
+          .widgetList<Container>(
+            find.ancestor(
+              of: find.text('TU PROGRESO'),
+              matching: find.byType(Container),
+            ),
+          )
+          .firstWhere(
+            (c) =>
+                (c.decoration as BoxDecoration?)?.color == CeltasColors.black,
           );
 
-          await pumpScreen(tester, repository: repository, awaitSettle: false);
-
-          final premioTagContainer = tester.widget<Container>(
-            find
-                .ancestor(
-                  of: find.text('Premio 1'),
-                  matching: find.byType(Container),
-                )
-                .first,
-          );
-          final decoration = premioTagContainer.decoration as BoxDecoration?;
-          expect(decoration?.color, CeltasColors.orange);
-        },
+      // Mismo objeto `_cardDecoration` (no dos cajas anidadas) —
+      // confirma que el grid ya no está envuelto en su propia caja
+      // decorada por separado.
+      expect(
+        identical(
+          gridAncestorContainer.decoration,
+          progressAncestorContainer.decoration,
+        ),
+        isTrue,
       );
+    });
 
-      testWidgets(
-        'fondo sólido (sexta iteración): tarjeta del tablero y fila de '
+    testWidgets(
+      'badge "Premio N" alcanzado es naranja sólido (pedido explícito de '
+      'tercera iteración, revierte el oscuro/translúcido de la segunda)',
+      (tester) async {
+        final repository = MockRewardRepository();
+        when(() => repository.getProgress()).thenAnswer(
+          (_) async => const RewardProgress(
+            estrellasDelMes: 5,
+            hitos: [
+              RewardMilestoneProgress(
+                estrellasRequeridas: 5,
+                alcanzado: true,
+                esEspecial: false,
+              ),
+            ],
+            premiosDisponibles: [],
+          ),
+        );
+
+        await pumpScreen(tester, repository: repository, awaitSettle: false);
+
+        final premioTagContainer = tester.widget<Container>(
+          find
+              .ancestor(
+                of: find.text('Premio 1'),
+                matching: find.byType(Container),
+              )
+              .first,
+        );
+        final decoration = premioTagContainer.decoration as BoxDecoration?;
+        expect(decoration?.color, CeltasColors.orange);
+      },
+    );
+
+    testWidgets('fondo sólido (sexta iteración): tarjeta del tablero y fila de '
         'premio disponible son CeltasColors.black sin degradado — probado '
         'en dispositivo real contra design-reference/estrellas/'
         'screenshot.png, un degradado dorado (incluso a alpha bajo) se veía '
-        'demasiado amarillo sumado al glow de los medallones alcanzados',
-        (tester) async {
-          final repository = MockRewardRepository();
-          when(() => repository.getProgress()).thenAnswer(
-            (_) async => RewardProgress(
-              estrellasDelMes: 3,
-              hitos: const [],
-              premiosDisponibles: [
-                RewardSlot(
-                  id: 'r-1',
-                  expiresAt: DateTime.now().add(const Duration(days: 5)),
-                  esEspecial: false,
-                ),
-              ],
+        'demasiado amarillo sumado al glow de los medallones alcanzados', (
+      tester,
+    ) async {
+      final repository = MockRewardRepository();
+      when(() => repository.getProgress()).thenAnswer(
+        (_) async => RewardProgress(
+          estrellasDelMes: 3,
+          hitos: const [],
+          premiosDisponibles: [
+            RewardSlot(
+              id: 'r-1',
+              expiresAt: DateTime.now().add(const Duration(days: 5)),
+              esEspecial: false,
             ),
-          );
-          SharedPreferences.setMockInitialValues({
-            'seen_reward_redemption_ids': ['r-1'],
-          });
+          ],
+        ),
+      );
+      SharedPreferences.setMockInitialValues({
+        'seen_reward_redemption_ids': ['r-1'],
+      });
 
-          await pumpScreen(tester, repository: repository);
+      await pumpScreen(tester, repository: repository);
 
-          // Tarjeta del tablero (hitos vacío usa la misma `_cardDecoration`).
-          final boardContainers = tester.widgetList<Container>(
-            find.ancestor(
-              of: find.text('3 estrellas este mes'),
-              matching: find.byType(Container),
-            ),
-          );
-          expect(
-            boardContainers.any(
-              (c) => (c.decoration as BoxDecoration?)?.color ==
-                  CeltasColors.black,
-            ),
-            isTrue,
-          );
-          expect(
-            boardContainers.every(
-              (c) => (c.decoration as BoxDecoration?)?.gradient == null,
-            ),
-            isTrue,
-          );
-
-          // Fila de premio disponible.
-          final slotContainer = tester.widget<Container>(
-            find.byKey(const ValueKey('reward-slot-r-1')),
-          );
-          final slotDecoration = slotContainer.decoration as BoxDecoration?;
-          expect(slotDecoration?.color, CeltasColors.black);
-          expect(slotDecoration?.gradient, isNull);
-        },
+      // Tarjeta del tablero (hitos vacío usa la misma `_cardDecoration`).
+      final boardContainers = tester.widgetList<Container>(
+        find.ancestor(
+          of: find.text('3 estrellas este mes'),
+          matching: find.byType(Container),
+        ),
+      );
+      expect(
+        boardContainers.any(
+          (c) => (c.decoration as BoxDecoration?)?.color == CeltasColors.black,
+        ),
+        isTrue,
+      );
+      expect(
+        boardContainers.every(
+          (c) => (c.decoration as BoxDecoration?)?.gradient == null,
+        ),
+        isTrue,
       );
 
-      testWidgets(
-        'anillo de progreso: el número actual se renderiza más grande que '
-        'el "/total"',
-        (tester) async {
-          final repository = MockRewardRepository();
-          when(() => repository.getProgress()).thenAnswer(
-            (_) async => const RewardProgress(
-              estrellasDelMes: 12,
-              hitos: [
-                RewardMilestoneProgress(
-                  estrellasRequeridas: 15,
-                  alcanzado: false,
-                  esEspecial: false,
-                ),
-              ],
-              premiosDisponibles: [],
-            ),
-          );
-
-          await pumpScreen(tester, repository: repository);
-
-          final ringText = tester
-              .widgetList<Text>(find.byType(Text))
-              .firstWhere((t) => t.textSpan?.toPlainText() == '12/15');
-          final spans = (ringText.textSpan! as TextSpan).children!;
-          final currentSize = (spans[0] as TextSpan).style!.fontSize!;
-          final totalSize = (spans[1] as TextSpan).style!.fontSize!;
-          expect(currentSize, greaterThan(totalSize));
-        },
+      // Fila de premio disponible.
+      final slotContainer = tester.widget<Container>(
+        find.byKey(const ValueKey('reward-slot-r-1')),
       );
+      final slotDecoration = slotContainer.decoration as BoxDecoration?;
+      expect(slotDecoration?.color, CeltasColors.black);
+      expect(slotDecoration?.gradient, isNull);
+    });
 
-      testWidgets(
-        'ícono de regalo (card_giftcard) aparece en cada fila de premio '
-        'disponible',
-        (tester) async {
-          final repository = MockRewardRepository();
-          when(() => repository.getProgress()).thenAnswer(
-            (_) async => RewardProgress(
-              estrellasDelMes: 6,
-              hitos: const [],
-              premiosDisponibles: [
-                RewardSlot(
-                  id: 'r-1',
-                  expiresAt: DateTime.now().add(const Duration(days: 5)),
-                  esEspecial: false,
-                ),
-              ],
-            ),
-          );
-          SharedPreferences.setMockInitialValues({
-            'seen_reward_redemption_ids': ['r-1'],
-          });
+    testWidgets(
+      'anillo de progreso: el número actual se renderiza más grande que '
+      'el "/total"',
+      (tester) async {
+        final repository = MockRewardRepository();
+        when(() => repository.getProgress()).thenAnswer(
+          (_) async => const RewardProgress(
+            estrellasDelMes: 12,
+            hitos: [
+              RewardMilestoneProgress(
+                estrellasRequeridas: 15,
+                alcanzado: false,
+                esEspecial: false,
+              ),
+            ],
+            premiosDisponibles: [],
+          ),
+        );
 
-          await pumpScreen(tester, repository: repository);
+        await pumpScreen(tester, repository: repository);
 
-          expect(
-            find.byIcon(Icons.card_giftcard_rounded),
-            findsOneWidget,
-          );
-        },
-      );
+        final ringText = tester
+            .widgetList<Text>(find.byType(Text))
+            .firstWhere((t) => t.textSpan?.toPlainText() == '12/15');
+        final spans = (ringText.textSpan! as TextSpan).children!;
+        final currentSize = (spans[0] as TextSpan).style!.fontSize!;
+        final totalSize = (spans[1] as TextSpan).style!.fontSize!;
+        expect(currentSize, greaterThan(totalSize));
+      },
+    );
 
-      testWidgets(
-        'no hay fila "Más estrellas, más premios" (eliminada en la quinta '
-        'iteración): sin premios disponibles, la pantalla pasa directo del '
-        'tablero a "Términos y condiciones"',
-        (tester) async {
-          final repository = MockRewardRepository();
-          when(() => repository.getProgress()).thenAnswer(
-            (_) async => const RewardProgress(
-              estrellasDelMes: 2,
-              hitos: [],
-              premiosDisponibles: [],
-            ),
-          );
+    testWidgets(
+      'ícono de regalo (card_giftcard) aparece en cada fila de premio '
+      'disponible',
+      (tester) async {
+        final repository = MockRewardRepository();
+        when(() => repository.getProgress()).thenAnswer(
+          (_) async => RewardProgress(
+            estrellasDelMes: 6,
+            hitos: const [],
+            premiosDisponibles: [
+              RewardSlot(
+                id: 'r-1',
+                expiresAt: DateTime.now().add(const Duration(days: 5)),
+                esEspecial: false,
+              ),
+            ],
+          ),
+        );
+        SharedPreferences.setMockInitialValues({
+          'seen_reward_redemption_ids': ['r-1'],
+        });
 
-          await pumpScreen(tester, repository: repository);
+        await pumpScreen(tester, repository: repository);
 
-          expect(find.text('Más estrellas, más premios'), findsNothing);
-          expect(
-            find.byKey(const ValueKey('rewards-redeem-cta')),
-            findsNothing,
-          );
-          expect(find.text('Términos y condiciones'), findsOneWidget);
-        },
-      );
-    },
-  );
+        expect(find.byIcon(Icons.card_giftcard_rounded), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'no hay fila "Más estrellas, más premios" (eliminada en la quinta '
+      'iteración): sin premios disponibles, la pantalla pasa directo del '
+      'tablero a "Términos y condiciones"',
+      (tester) async {
+        final repository = MockRewardRepository();
+        when(() => repository.getProgress()).thenAnswer(
+          (_) async => const RewardProgress(
+            estrellasDelMes: 2,
+            hitos: [],
+            premiosDisponibles: [],
+          ),
+        );
+
+        await pumpScreen(tester, repository: repository);
+
+        expect(find.text('Más estrellas, más premios'), findsNothing);
+        expect(find.byKey(const ValueKey('rewards-redeem-cta')), findsNothing);
+        expect(find.text('Términos y condiciones'), findsOneWidget);
+      },
+    );
+  });
 }

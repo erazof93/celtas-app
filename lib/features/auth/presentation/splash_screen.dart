@@ -2,7 +2,6 @@ import 'package:celtas_mobile/core/theme/app_theme.dart';
 import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
 import 'package:celtas_mobile/features/auth/application/auth_state.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
-import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -88,11 +87,14 @@ class SplashScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildBottom(BuildContext context, WidgetRef ref, AuthState authState) {
+  Widget _buildBottom(
+    BuildContext context,
+    WidgetRef ref,
+    AuthState authState,
+  ) {
     switch (authState.status) {
       case AuthStatus.unknown:
-        // Bootstrap en curso: spinner + aviso si el backend tarda (cold start
-        // de Render, 30-50s la primera request tras inactividad).
+        // El presupuesto global del controlador limita esta espera.
         return const Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -100,7 +102,9 @@ class SplashScreen extends ConsumerWidget {
               padding: EdgeInsets.only(bottom: 24),
               child: CircularProgressIndicator(),
             ),
-            SlowBackendNotice(),
+            Text('Restaurando tu sesión…'),
+            SizedBox(height: 16),
+            CeltasButton(label: 'Reintentar', angled: true, onPressed: null),
           ],
         );
       case AuthStatus.error:
@@ -108,16 +112,17 @@ class SplashScreen extends ConsumerWidget {
         return Column(
           children: [
             Text(
-              'No pudimos restaurar tu sesión.\nRevisa tu conexión e inténtalo de nuevo.',
+              authState.errorMessage ??
+                  'No pudimos restaurar tu sesión. Inténtalo nuevamente.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: CeltasColors.redLight,
-                    fontSize: 13,
-                  ),
+                color: CeltasColors.redLight,
+                fontSize: 13,
+              ),
             ),
             const SizedBox(height: 16),
             CeltasButton(
-              label: 'REINTENTAR',
+              label: 'Reintentar',
               angled: true,
               onPressed: () =>
                   ref.read(authControllerProvider.notifier).bootstrap(),

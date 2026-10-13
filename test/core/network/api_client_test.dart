@@ -40,7 +40,9 @@ ResponseBody jsonResponse(Object body, int statusCode) =>
     ResponseBody.fromString(
       jsonEncode(body),
       statusCode,
-      headers: {'content-type': ['application/json']},
+      headers: {
+        'content-type': ['application/json'],
+      },
     );
 
 /// Envelope de tokens que devuelve `POST /auth/refresh` (contrato real).
@@ -81,125 +83,187 @@ void main() {
     // Singleton: limpiar el hook entre tests para no arrastrar callbacks.
     ApiClient.instance.onSessionRefreshed = null;
     when(() => session.accessToken).thenReturn(null);
-    when(() => session.readRefreshToken()).thenAnswer((_) async => 'refresh-old');
-    when(() => session.saveRefreshToken(any())).thenAnswer((_) async {});
-    when(() => session.applyRefreshedTokens(any())).thenAnswer((_) async {});
-    when(() => session.clearSession()).thenAnswer((_) async {});
+    when(() => session.revision).thenReturn(0);
+    when(() => session.canRefresh).thenReturn(true);
+    when(
+      () => session.readRefreshToken(),
+    ).thenAnswer((_) async => 'refresh-old');
+    when(
+      () => session.commitRefreshedTokens(
+        any(),
+        expectedRevision: any(named: 'expectedRevision'),
+        isCurrent: any(named: 'isCurrent'),
+      ),
+    ).thenAnswer((_) async => true);
+    when(
+      () => session.clearSession(
+        expectedRevision: any(named: 'expectedRevision'),
+      ),
+    ).thenAnswer((_) async {});
   });
 
   group('interceptor de error — 401 dispara refresh UNA sola vez', () {
-    test('401 → refresh → reintenta la request original con el token nuevo',
-        () async {
-      var menuCalls = 0;
-      final adapter = StubAdapter((options) async {
-        if (options.path == '/auth/refresh') {
-          return jsonResponse({'success': true, 'data': refreshTokensBody}, 200);
-        }
-        menuCalls++;
-        if (menuCalls == 1) {
-          return jsonResponse(
-            {'success': false, 'message': 'No autorizado', 'statusCode': 401},
-            401,
-          );
-        }
-        return jsonResponse({'success': true, 'data': {'ok': true}}, 200);
-      });
-      ApiClient.instance.dio.httpClientAdapter = adapter;
+    test(
+      '401 → refresh → reintenta la request original con el token nuevo',
+      () async {
+        var menuCalls = 0;
+        final adapter = StubAdapter((options) async {
+          if (options.path == '/auth/refresh') {
+            return jsonResponse({
+              'success': true,
+              'data': refreshTokensBody,
+            }, 200);
+          }
+          menuCalls++;
+          if (menuCalls == 1) {
+            return jsonResponse({
+              'success': false,
+              'message': 'No autorizado',
+              'statusCode': 401,
+            }, 401);
+          }
+          return jsonResponse({
+            'success': true,
+            'data': {'ok': true},
+          }, 200);
+        });
+        ApiClient.instance.dio.httpClientAdapter = adapter;
 
-      final response = await ApiClient.instance.dio.get('/menu');
+        final response = await ApiClient.instance.dio.get('/menu');
 
-      expect(response.statusCode, 200);
-      expect(response.data, {'ok': true});
+        expect(response.statusCode, 200);
+        expect(response.data, {'ok': true});
 
-      // El refresh se ejecutó exactamente una vez y rotó el refresh token.
-      verify(() => session.saveRefreshToken('refresh-new')).called(1);
-      verify(() => session.applyRefreshedTokens(any())).called(1);
-      verifyNever(() => session.clearSession());
-
-      // La request original se reintentó una vez, con el access token nuevo.
-      final menuRequests =
-          adapter.requests.where((r) => r.path == '/menu').toList();
-      expect(menuRequests.length, 2);
-      expect(menuRequests[1].headers['Authorization'], 'Bearer access-new');
-
-      final refreshRequests =
-          adapter.requests.where((r) => r.path == '/auth/refresh').toList();
-      expect(refreshRequests.length, 1);
-    });
-
-    test('si el reintento vuelve a fallar con 401, NO refresca de nuevo (no loop)',
-        () async {
-      var menuCalls = 0;
-      final adapter = StubAdapter((options) async {
-        if (options.path == '/auth/refresh') {
-          return jsonResponse({'success': true, 'data': refreshTokensBody}, 200);
-        }
-        menuCalls++;
-        return jsonResponse(
-          {'success': false, 'message': 'No autorizado', 'statusCode': 401},
-          401,
-        );
-      });
-      ApiClient.instance.dio.httpClientAdapter = adapter;
-
-      await expectLater(
-        ApiClient.instance.dio.get('/menu'),
-        throwsA(
-          isA<DioException>().having(
-            (e) => e.response?.statusCode,
-            'statusCode',
-            401,
+        // El refresh se ejecutó exactamente una vez y rotó el refresh token.
+        verify(
+          () => session.commitRefreshedTokens(
+            any(),
+            expectedRevision: 0,
+            isCurrent: any(named: 'isCurrent'),
           ),
-        ),
-      );
+        ).called(1);
 
-      // El refresh ocurrió una sola vez: el reintento marcado con `_retry`
-      // no vuelve a entrar al ciclo.
-      verify(() => session.saveRefreshToken('refresh-new')).called(1);
-      verify(() => session.applyRefreshedTokens(any())).called(1);
-      expect(menuCalls, 2); // original + reintento, nada más.
-      final refreshRequests =
-          adapter.requests.where((r) => r.path == '/auth/refresh').toList();
-      expect(refreshRequests.length, 1);
-    });
-
-    test('401 sin refresh token guardado → limpia sesión y no reintenta',
-        () async {
-      when(() => session.readRefreshToken()).thenAnswer((_) async => null);
-      final adapter = StubAdapter((options) async {
-        return jsonResponse(
-          {'success': false, 'message': 'No autorizado', 'statusCode': 401},
-          401,
+        verifyNever(
+          () => session.clearSession(
+            expectedRevision: any(named: 'expectedRevision'),
+          ),
         );
-      });
-      ApiClient.instance.dio.httpClientAdapter = adapter;
 
-      await expectLater(
-        ApiClient.instance.dio.get('/menu'),
-        throwsA(isA<DioException>()),
-      );
+        // La request original se reintentó una vez, con el access token nuevo.
+        final menuRequests = adapter.requests
+            .where((r) => r.path == '/menu')
+            .toList();
+        expect(menuRequests.length, 2);
+        expect(menuRequests[1].headers['Authorization'], 'Bearer access-new');
 
-      verify(() => session.clearSession()).called(1);
-      verifyNever(() => session.saveRefreshToken(any()));
-      expect(
-        adapter.requests.where((r) => r.path == '/auth/refresh'),
-        isEmpty,
-      );
-      expect(adapter.requests.where((r) => r.path == '/menu').length, 1);
-    });
+        final refreshRequests = adapter.requests
+            .where((r) => r.path == '/auth/refresh')
+            .toList();
+        expect(refreshRequests.length, 1);
+      },
+    );
+
+    test(
+      'si el reintento vuelve a fallar con 401, NO refresca de nuevo (no loop)',
+      () async {
+        var menuCalls = 0;
+        final adapter = StubAdapter((options) async {
+          if (options.path == '/auth/refresh') {
+            return jsonResponse({
+              'success': true,
+              'data': refreshTokensBody,
+            }, 200);
+          }
+          menuCalls++;
+          return jsonResponse({
+            'success': false,
+            'message': 'No autorizado',
+            'statusCode': 401,
+          }, 401);
+        });
+        ApiClient.instance.dio.httpClientAdapter = adapter;
+
+        await expectLater(
+          ApiClient.instance.dio.get('/menu'),
+          throwsA(
+            isA<DioException>().having(
+              (e) => e.response?.statusCode,
+              'statusCode',
+              401,
+            ),
+          ),
+        );
+
+        // El refresh ocurrió una sola vez: el reintento marcado con `_retry`
+        // no vuelve a entrar al ciclo.
+        verify(
+          () => session.commitRefreshedTokens(
+            any(),
+            expectedRevision: 0,
+            isCurrent: any(named: 'isCurrent'),
+          ),
+        ).called(1);
+
+        expect(menuCalls, 2); // original + reintento, nada más.
+        final refreshRequests = adapter.requests
+            .where((r) => r.path == '/auth/refresh')
+            .toList();
+        expect(refreshRequests.length, 1);
+      },
+    );
+
+    test(
+      '401 sin refresh token guardado → limpia sesión y no reintenta',
+      () async {
+        when(() => session.readRefreshToken()).thenAnswer((_) async => null);
+        final adapter = StubAdapter((options) async {
+          return jsonResponse({
+            'success': false,
+            'message': 'No autorizado',
+            'statusCode': 401,
+          }, 401);
+        });
+        ApiClient.instance.dio.httpClientAdapter = adapter;
+
+        await expectLater(
+          ApiClient.instance.dio.get('/menu'),
+          throwsA(isA<DioException>()),
+        );
+
+        verify(
+          () => session.clearSession(
+            expectedRevision: any(named: 'expectedRevision'),
+          ),
+        ).called(1);
+        verifyNever(
+          () => session.commitRefreshedTokens(
+            any(),
+            expectedRevision: any(named: 'expectedRevision'),
+            isCurrent: any(named: 'isCurrent'),
+          ),
+        );
+        expect(
+          adapter.requests.where((r) => r.path == '/auth/refresh'),
+          isEmpty,
+        );
+        expect(adapter.requests.where((r) => r.path == '/menu').length, 1);
+      },
+    );
 
     test('refresh responde 401 definitivo → limpia sesión', () async {
       final adapter = StubAdapter((options) async {
         if (options.path == '/auth/refresh') {
-          return jsonResponse(
-            {'success': false, 'message': 'Refresh inválido', 'statusCode': 401},
-            401,
-          );
+          return jsonResponse({
+            'success': false,
+            'message': 'Refresh inválido',
+            'statusCode': 401,
+          }, 401);
         }
-        return jsonResponse(
-          {'success': false, 'message': 'No autorizado', 'statusCode': 401},
-          401,
-        );
+        return jsonResponse({
+          'success': false,
+          'message': 'No autorizado',
+          'statusCode': 401,
+        }, 401);
       });
       ApiClient.instance.dio.httpClientAdapter = adapter;
 
@@ -208,8 +272,18 @@ void main() {
         throwsA(isA<DioException>()),
       );
 
-      verify(() => session.clearSession()).called(1);
-      verifyNever(() => session.saveRefreshToken(any()));
+      verify(
+        () => session.clearSession(
+          expectedRevision: any(named: 'expectedRevision'),
+        ),
+      ).called(1);
+      verifyNever(
+        () => session.commitRefreshedTokens(
+          any(),
+          expectedRevision: any(named: 'expectedRevision'),
+          isCurrent: any(named: 'isCurrent'),
+        ),
+      );
     });
   });
 
@@ -224,17 +298,24 @@ void main() {
         if (options.path == '/auth/refresh') {
           refreshSeen.complete();
           await refreshGate.future;
-          return jsonResponse({'success': true, 'data': refreshTokensBody}, 200);
+          return jsonResponse({
+            'success': true,
+            'data': refreshTokensBody,
+          }, 200);
         }
         menuCalls++;
         // Los reintentos (tras el flush) viajan con el access token nuevo.
         if (options.headers['Authorization'] == 'Bearer access-new') {
-          return jsonResponse({'success': true, 'data': {'ok': true}}, 200);
+          return jsonResponse({
+            'success': true,
+            'data': {'ok': true},
+          }, 200);
         }
-        return jsonResponse(
-          {'success': false, 'message': 'No autorizado', 'statusCode': 401},
-          401,
-        );
+        return jsonResponse({
+          'success': false,
+          'message': 'No autorizado',
+          'statusCode': 401,
+        }, 401);
       });
       ApiClient.instance.dio.httpClientAdapter = adapter;
 
@@ -258,10 +339,17 @@ void main() {
       }
 
       // Un solo refresh para las tres requests.
-      verify(() => session.saveRefreshToken('refresh-new')).called(1);
-      verify(() => session.applyRefreshedTokens(any())).called(1);
-      final refreshRequests =
-          adapter.requests.where((r) => r.path == '/auth/refresh').toList();
+      verify(
+        () => session.commitRefreshedTokens(
+          any(),
+          expectedRevision: 0,
+          isCurrent: any(named: 'isCurrent'),
+        ),
+      ).called(1);
+
+      final refreshRequests = adapter.requests
+          .where((r) => r.path == '/auth/refresh')
+          .toList();
       expect(refreshRequests.length, 1);
 
       // 3 originales con 401 + 3 reintentos con el token nuevo.
@@ -283,7 +371,10 @@ void main() {
         if (options.path == '/auth/refresh') {
           refreshSeen.complete();
           await refreshGate.future;
-          return jsonResponse({'success': true, 'data': refreshTokensBody}, 200);
+          return jsonResponse({
+            'success': true,
+            'data': refreshTokensBody,
+          }, 200);
         }
         // Requests originales (sin token): 401.
         if (options.headers['Authorization'] == null) {
@@ -292,30 +383,36 @@ void main() {
           } else {
             originalB = options;
           }
-          return jsonResponse(
-            {'success': false, 'message': 'No autorizado', 'statusCode': 401},
-            401,
-          );
+          return jsonResponse({
+            'success': false,
+            'message': 'No autorizado',
+            'statusCode': 401,
+          }, 401);
         }
         // Reintentos (con el token recién rotado).
         if (identical(options, originalA)) {
           // A: reintento lento → mantiene `_isRefreshing` en true mientras el
           // reintento de B (401) se procesa.
           await aRetryGate.future;
-          return jsonResponse({'success': true, 'data': {'ok': true}}, 200);
+          return jsonResponse({
+            'success': true,
+            'data': {'ok': true},
+          }, 200);
         }
         // B: el token recién rotado es rechazado → 401 en el reintento.
         if (identical(options, originalB)) {
           bRetrySeen.complete();
-          return jsonResponse(
-            {'success': false, 'message': 'No autorizado', 'statusCode': 401},
-            401,
-          );
+          return jsonResponse({
+            'success': false,
+            'message': 'No autorizado',
+            'statusCode': 401,
+          }, 401);
         }
-        return jsonResponse(
-          {'success': false, 'message': 'No autorizado', 'statusCode': 401},
-          401,
-        );
+        return jsonResponse({
+          'success': false,
+          'message': 'No autorizado',
+          'statusCode': 401,
+        }, 401);
       });
       ApiClient.instance.dio.httpClientAdapter = adapter;
 
@@ -327,10 +424,7 @@ void main() {
       final futureB = ApiClient.instance.dio.get('/menu');
       // Listener inmediato: el 401 final de B se captura como valor para no
       // disparar "unhandled error" mientras el test espera el flujo del refresh.
-      final bResult = futureB.then<Object?>(
-        (r) => r,
-        onError: (Object e) => e,
-      );
+      final bResult = futureB.then<Object?>((r) => r, onError: (Object e) => e);
       await pumpEventQueue();
       await Future<void>.delayed(const Duration(milliseconds: 20));
 
@@ -354,12 +448,134 @@ void main() {
       expect(responseA.data, {'ok': true});
 
       // Un solo refresh en todo el flujo: B NO dispara un segundo ciclo.
-      verify(() => session.saveRefreshToken('refresh-new')).called(1);
-      verify(() => session.applyRefreshedTokens(any())).called(1);
-      final refreshRequests =
-          adapter.requests.where((r) => r.path == '/auth/refresh').toList();
+      verify(
+        () => session.commitRefreshedTokens(
+          any(),
+          expectedRevision: 0,
+          isCurrent: any(named: 'isCurrent'),
+        ),
+      ).called(1);
+
+      final refreshRequests = adapter.requests
+          .where((r) => r.path == '/auth/refresh')
+          .toList();
       expect(refreshRequests.length, 1);
     });
+  });
+
+  group('identidad de sesión durante refresh silencioso', () {
+    test(
+      'cambio de cuenta desde el hook evita reenvío de la request antigua',
+      () async {
+        var revision = 0;
+        when(() => session.revision).thenAnswer((_) => revision);
+        ApiClient.instance.onSessionRefreshed = () => revision++;
+        final adapter = StubAdapter(
+          (options) async => options.path == '/auth/refresh'
+              ? jsonResponse({'success': true, 'data': refreshTokensBody}, 200)
+              : jsonResponse({'message': 'unauthorized'}, 401),
+        );
+        ApiClient.instance.dio.httpClientAdapter = adapter;
+        await expectLater(
+          ApiClient.instance.dio.get('/menu'),
+          throwsA(isA<DioException>()),
+        );
+        expect(adapter.requests.where((r) => r.path == '/menu'), hasLength(1));
+      },
+    );
+    for (final status in [200, 401]) {
+      test(
+        'respuesta tardía $status no persiste ni borra otra cuenta',
+        () async {
+          var revision = 0;
+          when(() => session.revision).thenAnswer((_) => revision);
+          final started = Completer<void>();
+          final pending = Completer<void>();
+          var hooks = 0;
+          ApiClient.instance.onSessionRefreshed = () => hooks++;
+          final adapter = StubAdapter((options) async {
+            if (options.path == '/auth/refresh') {
+              started.complete();
+              await pending.future;
+              return jsonResponse(
+                status == 200
+                    ? {'success': true, 'data': refreshTokensBody}
+                    : {'message': 'invalid'},
+                status,
+              );
+            }
+            return jsonResponse({'message': 'unauthorized'}, 401);
+          });
+          ApiClient.instance.dio.httpClientAdapter = adapter;
+          final outcome = ApiClient.instance.dio
+              .get('/menu')
+              .then<Object?>((r) => r, onError: (Object e) => e);
+          await started.future;
+          revision++;
+          pending.complete();
+          expect(await outcome, isA<DioException>());
+          verifyNever(
+            () => session.commitRefreshedTokens(
+              any(),
+              expectedRevision: any(named: 'expectedRevision'),
+              isCurrent: any(named: 'isCurrent'),
+            ),
+          );
+          verifyNever(
+            () => session.clearSession(
+              expectedRevision: any(named: 'expectedRevision'),
+            ),
+          );
+          expect(hooks, 0);
+          expect(
+            adapter.requests.where((r) => r.path == '/menu'),
+            hasLength(1),
+          );
+        },
+      );
+    }
+
+    test(
+      '401 de una request vieja no refresca credenciales de la cuenta nueva',
+      () async {
+        var revision = 0;
+        when(() => session.revision).thenAnswer((_) => revision);
+        final started = Completer<void>();
+        final pending = Completer<void>();
+        final adapter = StubAdapter((options) async {
+          started.complete();
+          await pending.future;
+          return jsonResponse({'message': 'unauthorized'}, 401);
+        });
+        ApiClient.instance.dio.httpClientAdapter = adapter;
+        final outcome = ApiClient.instance.dio
+            .get('/menu')
+            .then<Object?>((r) => r, onError: (Object e) => e);
+        await started.future;
+        revision++;
+        pending.complete();
+        expect(await outcome, isA<DioException>());
+        expect(adapter.requests, hasLength(1));
+        verifyNever(() => session.readRefreshToken());
+      },
+    );
+
+    test(
+      'bootstrap pendiente no dispara refresh silencioso paralelo',
+      () async {
+        when(() => session.canRefresh).thenReturn(false);
+        final adapter = StubAdapter(
+          (_) async => jsonResponse({'message': 'unauthorized'}, 401),
+        );
+        ApiClient.instance.dio.httpClientAdapter = adapter;
+        await expectLater(
+          ApiClient.instance.dio.get('/menu'),
+          throwsA(isA<DioException>()),
+        );
+        expect(adapter.requests, hasLength(1));
+        verifyNever(() => session.readRefreshToken());
+      },
+    );
   });
 
   group('interceptor de error — hook onSessionRefreshed', () {
@@ -370,16 +586,23 @@ void main() {
       var menuCalls = 0;
       final adapter = StubAdapter((options) async {
         if (options.path == '/auth/refresh') {
-          return jsonResponse({'success': true, 'data': refreshTokensBody}, 200);
+          return jsonResponse({
+            'success': true,
+            'data': refreshTokensBody,
+          }, 200);
         }
         menuCalls++;
         if (menuCalls == 1) {
-          return jsonResponse(
-            {'success': false, 'message': 'No autorizado', 'statusCode': 401},
-            401,
-          );
+          return jsonResponse({
+            'success': false,
+            'message': 'No autorizado',
+            'statusCode': 401,
+          }, 401);
         }
-        return jsonResponse({'success': true, 'data': {'ok': true}}, 200);
+        return jsonResponse({
+          'success': true,
+          'data': {'ok': true},
+        }, 200);
       });
       ApiClient.instance.dio.httpClientAdapter = adapter;
 
@@ -395,15 +618,17 @@ void main() {
 
       final adapter = StubAdapter((options) async {
         if (options.path == '/auth/refresh') {
-          return jsonResponse(
-            {'success': false, 'message': 'Refresh inválido', 'statusCode': 401},
-            401,
-          );
+          return jsonResponse({
+            'success': false,
+            'message': 'Refresh inválido',
+            'statusCode': 401,
+          }, 401);
         }
-        return jsonResponse(
-          {'success': false, 'message': 'No autorizado', 'statusCode': 401},
-          401,
-        );
+        return jsonResponse({
+          'success': false,
+          'message': 'No autorizado',
+          'statusCode': 401,
+        }, 401);
       });
       ApiClient.instance.dio.httpClientAdapter = adapter;
 
@@ -412,66 +637,84 @@ void main() {
         throwsA(isA<DioException>()),
       );
 
-      verify(() => session.clearSession()).called(1);
+      verify(
+        () => session.clearSession(
+          expectedRevision: any(named: 'expectedRevision'),
+        ),
+      ).called(1);
       expect(calls, 0);
     });
 
-    test('NO se invoca si el refresh falla por error transitorio (5xx)',
-        () async {
-      var calls = 0;
-      ApiClient.instance.onSessionRefreshed = () => calls++;
+    test(
+      'NO se invoca si el refresh falla por error transitorio (5xx)',
+      () async {
+        var calls = 0;
+        ApiClient.instance.onSessionRefreshed = () => calls++;
 
-      final adapter = StubAdapter((options) async {
-        if (options.path == '/auth/refresh') {
-          return jsonResponse(
-            {'success': false, 'message': 'Server dormido', 'statusCode': 503},
-            503,
-          );
-        }
-        return jsonResponse(
-          {'success': false, 'message': 'No autorizado', 'statusCode': 401},
-          401,
+        final adapter = StubAdapter((options) async {
+          if (options.path == '/auth/refresh') {
+            return jsonResponse({
+              'success': false,
+              'message': 'Server dormido',
+              'statusCode': 503,
+            }, 503);
+          }
+          return jsonResponse({
+            'success': false,
+            'message': 'No autorizado',
+            'statusCode': 401,
+          }, 401);
+        });
+        ApiClient.instance.dio.httpClientAdapter = adapter;
+
+        await expectLater(
+          ApiClient.instance.dio.get('/menu'),
+          throwsA(isA<DioException>()),
         );
-      });
-      ApiClient.instance.dio.httpClientAdapter = adapter;
 
-      await expectLater(
-        ApiClient.instance.dio.get('/menu'),
-        throwsA(isA<DioException>()),
-      );
+        expect(calls, 0);
+      },
+    );
 
-      expect(calls, 0);
-    });
+    test(
+      'un callback que lanza no rompe el reintento de la request original',
+      () async {
+        ApiClient.instance.onSessionRefreshed = () =>
+            throw StateError('callback roto');
 
-    test('un callback que lanza no rompe el reintento de la request original',
-        () async {
-      ApiClient.instance.onSessionRefreshed =
-          () => throw StateError('callback roto');
+        var menuCalls = 0;
+        final adapter = StubAdapter((options) async {
+          if (options.path == '/auth/refresh') {
+            return jsonResponse({
+              'success': true,
+              'data': refreshTokensBody,
+            }, 200);
+          }
+          menuCalls++;
+          if (menuCalls == 1) {
+            return jsonResponse({
+              'success': false,
+              'message': 'No autorizado',
+              'statusCode': 401,
+            }, 401);
+          }
+          return jsonResponse({
+            'success': true,
+            'data': {'ok': true},
+          }, 200);
+        });
+        ApiClient.instance.dio.httpClientAdapter = adapter;
 
-      var menuCalls = 0;
-      final adapter = StubAdapter((options) async {
-        if (options.path == '/auth/refresh') {
-          return jsonResponse({'success': true, 'data': refreshTokensBody}, 200);
-        }
-        menuCalls++;
-        if (menuCalls == 1) {
-          return jsonResponse(
-            {'success': false, 'message': 'No autorizado', 'statusCode': 401},
-            401,
-          );
-        }
-        return jsonResponse({'success': true, 'data': {'ok': true}}, 200);
-      });
-      ApiClient.instance.dio.httpClientAdapter = adapter;
+        final response = await ApiClient.instance.dio.get('/menu');
 
-      final response = await ApiClient.instance.dio.get('/menu');
-
-      expect(response.statusCode, 200);
-      expect(response.data, {'ok': true});
-      final menuRequests =
-          adapter.requests.where((r) => r.path == '/menu').toList();
-      expect(menuRequests.length, 2);
-      expect(menuRequests[1].headers['Authorization'], 'Bearer access-new');
-    });
+        expect(response.statusCode, 200);
+        expect(response.data, {'ok': true});
+        final menuRequests = adapter.requests
+            .where((r) => r.path == '/menu')
+            .toList();
+        expect(menuRequests.length, 2);
+        expect(menuRequests[1].headers['Authorization'], 'Bearer access-new');
+      },
+    );
   });
 }

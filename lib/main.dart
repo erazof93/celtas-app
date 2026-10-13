@@ -1,46 +1,23 @@
-import 'package:celtas_mobile/app.dart';
-import 'package:celtas_mobile/features/addresses/data/address_selection_storage.dart';
-import 'package:celtas_mobile/features/cart/data/cart_storage.dart';
-import 'package:celtas_mobile/features/notifications/application/notification_service.dart';
-import 'package:celtas_mobile/firebase_options.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'package:celtas_mobile/core/startup/celtas_startup_app.dart';
+import 'package:celtas_mobile/core/startup/dev_preparation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/services.dart';
 
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
-  // `SharedPreferences` se pre-carga acá (no tiene API síncrona) para que
-  // `CartNotifier.build()` pueda rehidratar el carrito de la caché local de
-  // forma síncrona, sin un frame con el carrito/badge en cero al abrir.
-  final prefs = await SharedPreferences.getInstance();
-
-  // Se crea el `ProviderContainer` a mano (en vez de dejar que `ProviderScope`
-  // lo cree internamente) para que `NotificationService` pueda leer/invalidar
-  // providers y navegar fuera del árbol de widgets — necesario porque
-  // `getInitialMessage()` (notificación que abrió la app desde terminada) se
-  // resuelve antes de que exista ningún `BuildContext`.
-  final container = ProviderContainer(
-    overrides: [
-      cartStorageProvider.overrideWithValue(CartStorage(prefs)),
-      addressSelectionStorageProvider.overrideWithValue(
-        AddressSelectionStorage(prefs),
+  const dev = bool.fromEnvironment('CELTAS_DEV');
+  if (dev || appFlavor != null) {
+    runApp(
+      CeltasStartupApp(
+        controller: devPreparation(
+          flavor: appFlavor,
+          enabled: dev,
+          configuration: const String.fromEnvironment('CELTAS_DEV_ENV'),
+        ),
+        disposeController: true,
       ),
-    ],
-  );
-  await NotificationService.instance.init(container);
-
-  // `CeltasApp` es un `ConsumerWidget` (usa `ref.watch(routerProvider)`):
-  // necesita un `ProviderScope` en la raíz o crashea con
-  // "Bad state: No ProviderScope found".
-  runApp(
-    UncontrolledProviderScope(
-      container: container,
-      child: const CeltasApp(),
-    ),
-  );
+    );
+  } else {
+    runApp(const CeltasStartupApp());
+  }
 }

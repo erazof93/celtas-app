@@ -6,6 +6,7 @@ import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
 import 'package:celtas_mobile/features/cart/data/models/cart_item.dart';
 import 'package:celtas_mobile/features/home/application/home_providers.dart';
 import 'package:celtas_mobile/features/home/data/models/public_menu_item.dart';
+import 'package:celtas_mobile/features/home/presentation/widgets/content_recovery_notice.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_button.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_snackbar.dart';
 import 'package:celtas_mobile/shared/widgets/slow_backend_notice.dart';
@@ -105,10 +106,14 @@ class ProductDetailScreen extends ConsumerWidget {
     final menuAsync = ref.watch(publicMenuProvider);
 
     return menuAsync.when(
+      skipError: true,
+      skipLoadingOnReload: true,
       loading: () => const _DetailLoading(),
       error: (error, _) => _DetailError(
-        message: error.toString(),
-        onRetry: () => ref.invalidate(publicMenuProvider),
+        error: error,
+        onRetry: menuAsync.isLoading
+            ? null
+            : () => unawaited(ref.read(homeRefreshProvider).menu()),
       ),
       data: (categories) {
         for (final category in categories) {
@@ -173,8 +178,7 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
     final editingItem = widget.editingItem;
     _quantity = editingItem?.quantity ?? 1;
     _selectedSauceIds = {
-      for (final sauce in editingItem?.selectedSauces ?? const [])
-        sauce.id,
+      for (final sauce in editingItem?.selectedSauces ?? const []) sauce.id,
     };
     _explicitlyNoSauces = editingItem?.explicitlyNoSauces ?? false;
     _selectedBeverageIds = {
@@ -186,7 +190,8 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
       for (final extraPortion in editingItem?.selectedExtraPortions ?? const [])
         extraPortion.id,
     };
-    _explicitlyNoExtraPortions = editingItem?.explicitlyNoExtraPortions ?? false;
+    _explicitlyNoExtraPortions =
+        editingItem?.explicitlyNoExtraPortions ?? false;
     // Tipos de papas: en modo edición se precarga lo que ya tenía la fila;
     // si no tenía nada (producto nuevo o fila agregada antes de que existiera
     // este selector), arranca con el/los `isDefault` del backend
@@ -374,8 +379,7 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
         .toList();
     final selectedExtraPortions = item.extraPortions
         .where(
-          (extraPortion) =>
-              _selectedExtraPortionIds.contains(extraPortion.id),
+          (extraPortion) => _selectedExtraPortionIds.contains(extraPortion.id),
         )
         .toList();
     final selectedFriesTypes = item.friesTypes
@@ -387,7 +391,9 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
     final rawComment = _commentController.text.trim();
     final comment = rawComment.isEmpty ? null : rawComment;
     if (editingItem != null) {
-      ref.read(cartProvider.notifier).updateLine(
+      ref
+          .read(cartProvider.notifier)
+          .updateLine(
             editingItem.lineKey,
             quantity: _quantity,
             selectedSauces: selectedSauces,
@@ -400,7 +406,9 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
             comment: comment,
           );
     } else {
-      ref.read(cartProvider.notifier).addItem(
+      ref
+          .read(cartProvider.notifier)
+          .addItem(
             item,
             quantity: _quantity,
             selectedSauces: selectedSauces,
@@ -601,12 +609,15 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
+    final menu = ref.watch(publicMenuProvider);
     // Mismo cálculo que `CartItem.lineTotal`/el backend
     // (`OrdersService.buildItems`): `(unitPrice + extrasUnitPrice) *
     // quantity` — bebidas y porciones extras suman su precio una vez por
     // unidad, las salsas no.
     final totalPrice =
-        (item.price + _selectedBeveragesUnitPrice + _selectedExtraPortionsUnitPrice) *
+        (item.price +
+            _selectedBeveragesUnitPrice +
+            _selectedExtraPortionsUnitPrice) *
         _quantity;
 
     return Scaffold(
@@ -672,6 +683,18 @@ class _ProductDetailBodyState extends ConsumerState<_ProductDetailBody> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (menu.hasError || menu.isLoading) ...[
+                      ContentRecoveryNotice(
+                        error: menu.error,
+                        hasPreviousData: true,
+                        onRetry: menu.isLoading
+                            ? null
+                            : () => unawaited(
+                                ref.read(homeRefreshProvider).menu(),
+                              ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     Text(
                       item.name,
                       style: Theme.of(context).textTheme.headlineSmall
@@ -1230,10 +1253,7 @@ class _OptionGroupDropdown extends StatelessWidget {
             // `_ProductDetailBodyState._handleValidationFailure` usa para
             // `Scrollable.ensureVisible` hacia este campo concreto.
             key: fieldKey,
-            padding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 12,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               color: CeltasColors.surface,
               border: Border.all(color: borderColor, width: borderWidth),
@@ -1401,10 +1421,10 @@ class _DetailLoading extends StatelessWidget {
 }
 
 class _DetailError extends StatelessWidget {
-  const _DetailError({required this.message, required this.onRetry});
+  const _DetailError({required this.error, required this.onRetry});
 
-  final String message;
-  final VoidCallback onRetry;
+  final Object error;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -1427,15 +1447,11 @@ class _DetailError extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 const SizedBox(height: 6),
-                Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: CeltasColors.textMuted,
-                  ),
+                ContentRecoveryNotice(
+                  error: error,
+                  hasPreviousData: false,
+                  onRetry: onRetry,
                 ),
-                const SizedBox(height: 16),
-                CeltasButton(label: 'REINTENTAR', onPressed: onRetry),
               ],
             ),
           ),

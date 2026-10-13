@@ -24,7 +24,12 @@ enum AuthStatus {
 /// y se recupera con el refresh al reabrir la app.
 @immutable
 class AuthState {
-  const AuthState._({required this.status, this.user, this.accessToken});
+  const AuthState._({
+    required this.status,
+    this.user,
+    this.accessToken,
+    this.errorMessage,
+  });
 
   const AuthState.unknown() : this._(status: AuthStatus.unknown);
 
@@ -32,16 +37,19 @@ class AuthState {
     required User user,
     required String accessToken,
   }) : this._(
-          status: AuthStatus.authenticated,
-          user: user,
-          accessToken: accessToken,
-        );
+         status: AuthStatus.authenticated,
+         user: user,
+         accessToken: accessToken,
+       );
 
-  const AuthState.unauthenticated() : this._(status: AuthStatus.unauthenticated);
+  const AuthState.unauthenticated()
+    : this._(status: AuthStatus.unauthenticated);
 
-  const AuthState.error() : this._(status: AuthStatus.error);
+  const AuthState.error({String? message})
+    : this._(status: AuthStatus.error, errorMessage: message);
 
   final AuthStatus status;
   final User? user;
   final String? accessToken;
+  final String? errorMessage;
 }

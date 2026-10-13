@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:celtas_mobile/core/network/api_client.dart';
 import 'package:celtas_mobile/features/settings/application/app_version_check.dart';
 import 'package:celtas_mobile/features/settings/data/models/business_hours.dart';
 import 'package:celtas_mobile/features/settings/data/settings_repository.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -28,22 +31,62 @@ final currentAppVersionProvider = FutureProvider<String>((ref) async {
 
 /// Compara la versión instalada contra `min_app_version` (`GET
 /// /settings/public`). `CeltasApp` lo observa para mostrar el overlay
-/// obligatorio de actualización (`ForceUpdateDialog`) cuando
+/// obligatorio de actualización cuando
 /// `isUpdateRequired` es `true`.
 ///
-/// Fail-open ante cualquier falla de red (timeout, sin conexión, backend
-/// dormido de Render): un usuario no debe quedar bloqueado fuera de la app
-/// porque el chequeo de versión no pudo completarse — ver
-/// `ApiClient`/`apiExceptionFromDio` para los timeouts configurados.
+/// Conserva los errores como AsyncError. El controlador del gate decide el
+/// fail-open inicial y conserva cualquier bloqueo previamente confirmado.
 final appVersionCheckProvider = FutureProvider<AppVersionCheck>((ref) async {
-  final currentVersion = await ref.watch(currentAppVersionProvider.future);
-  try {
-    final settings = await ref.watch(settingsRepositoryProvider).getPublicSettings();
+  final cancelToken = CancelToken();
+  final result = Completer<AppVersionCheck>();
+  Timer? deadline;
+  var active = true;
+  void cancel() {
+    active = false;
+    deadline?.cancel();
+    cancelToken.cancel('Version check ended');
+  }
+
+  ref.onDispose(() {
+    cancel();
+    if (!result.isCompleted) {
+      result.completeError(StateError('Obsolete version check'));
+    }
+  });
+  // One budget for the complete attempt, including PackageInfo and settings.
+  deadline = Timer(const Duration(seconds: 20), () {
+    cancel();
+    result.completeError(TimeoutException('Version check exceeded 20 seconds'));
+  });
+  // Late platform results must not read a disposed ref or start a request.
+  final version = ref.watch(currentAppVersionProvider.future);
+  Future<AppVersionCheck> check() async {
+    final currentVersion = await version;
+    if (!active) throw StateError('Obsolete version check');
+    final repository = ref.read(settingsRepositoryProvider);
+    final settings = await repository.getPublicSettings(
+      cancelToken: cancelToken,
+    );
+    if (!active) throw StateError('Obsolete version check');
     return evaluateAppVersion(
       currentVersion: currentVersion,
       minVersion: settings['min_app_version'] as String?,
     );
-  } on ApiException {
-    return AppVersionCheck.noBlock;
   }
+
+  unawaited(
+    check().then(
+      (value) {
+        if (!active) return;
+        cancel();
+        result.complete(value);
+      },
+      onError: (Object error, StackTrace stack) {
+        if (!active) return;
+        cancel();
+        result.completeError(error, stack);
+      },
+    ),
+  );
+  return result.future;
 });

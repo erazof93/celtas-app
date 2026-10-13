@@ -1,14 +1,22 @@
+import 'package:celtas_mobile/core/config/app_environment.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 /// Configuración de entorno leída desde `.env` via `flutter_dotenv`.
 ///
-/// Valores por defecto orientados a desarrollo: si `.env` falta o no define
-/// `API_BASE_URL`, se apunta al backend de producción.
+/// Producción conserva su fallback vigente. DEV requiere configuración validada
+/// explícita y nunca utiliza ese fallback.
 class AppConfig {
   AppConfig._();
 
-  static final String apiBaseUrl =
-      dotenv.env['API_BASE_URL'] ?? 'https://backend-celtas.onrender.com';
+  static final String apiBaseUrl = _apiBaseUrl();
+
+  static String _apiBaseUrl() {
+    if (const bool.fromEnvironment('CELTAS_DEV')) {
+      DevConfiguration(dotenv.env);
+      return dotenv.env['API_BASE_URL']!;
+    }
+    return dotenv.env['API_BASE_URL'] ?? 'https://backend-celtas.onrender.com';
+  }
 
   /// Client ID "Web application" de Google Cloud (proyecto `celtas-b0bd5`),
   /// el mismo que usa el backend para verificar el `idToken` en

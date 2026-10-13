@@ -18,11 +18,15 @@ class NotificationRepository {
 
   final Dio _dio;
 
-  Future<void> updateFcmToken(String fcmToken) async {
+  Future<void> updateFcmToken(
+    String fcmToken, {
+    CancelToken? cancelToken,
+  }) async {
     try {
       await _dio.patch<void>(
         '/users/me/fcm-token',
         data: {'fcmToken': fcmToken},
+        cancelToken: cancelToken,
       );
     } on DioException catch (e) {
       throw apiExceptionFromDio(e);

@@ -26,7 +26,8 @@ class MockAuthRepository extends Mock implements AuthRepository {}
 class MockNotificationPermissionRepository extends Mock
     implements NotificationPermissionRepository {}
 
-class MockNotificationRepository extends Mock implements NotificationRepository {}
+class MockNotificationRepository extends Mock
+    implements NotificationRepository {}
 
 void main() {
   final user = User(
@@ -49,27 +50,27 @@ void main() {
   });
 
   GoRouter router() => GoRouter(
-        initialLocation: '/profile',
-        routes: [
-          GoRoute(path: '/profile', builder: (_, _) => const ProfileScreen()),
-          GoRoute(
-            path: '/addresses',
-            builder: (_, _) => const Scaffold(body: Text('DIRECCIONES')),
-          ),
-          GoRoute(
-            path: '/coupons',
-            builder: (_, _) => const Scaffold(body: Text('CUPONES')),
-          ),
-          GoRoute(
-            path: '/orders',
-            builder: (_, _) => const Scaffold(body: Text('PEDIDOS')),
-          ),
-          GoRoute(
-            path: '/login',
-            builder: (_, _) => const Scaffold(body: Text('LOGIN')),
-          ),
-        ],
-      );
+    initialLocation: '/profile',
+    routes: [
+      GoRoute(path: '/profile', builder: (_, _) => const ProfileScreen()),
+      GoRoute(
+        path: '/addresses',
+        builder: (_, _) => const Scaffold(body: Text('DIRECCIONES')),
+      ),
+      GoRoute(
+        path: '/coupons',
+        builder: (_, _) => const Scaffold(body: Text('CUPONES')),
+      ),
+      GoRoute(
+        path: '/orders',
+        builder: (_, _) => const Scaffold(body: Text('PEDIDOS')),
+      ),
+      GoRoute(
+        path: '/login',
+        builder: (_, _) => const Scaffold(body: Text('LOGIN')),
+      ),
+    ],
+  );
 
   Future<ProviderContainer> pumpScreen(
     WidgetTester tester, {
@@ -111,18 +112,16 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: MaterialApp.router(
-          theme: AppTheme.dark,
-          routerConfig: router(),
-        ),
+        child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router()),
       ),
     );
     await tester.pumpAndSettle();
     return container;
   }
 
-  testWidgets('muestra nombre, email, teléfono e iniciales del avatar',
-      (tester) async {
+  testWidgets('muestra nombre, email, teléfono e iniciales del avatar', (
+    tester,
+  ) async {
     final repository = MockProfileRepository();
     when(() => repository.getProfile()).thenAnswer((_) async => user);
 
@@ -136,8 +135,9 @@ void main() {
 
   testWidgets('error al cargar → mensaje real y REINTENTAR', (tester) async {
     final repository = MockProfileRepository();
-    when(() => repository.getProfile())
-        .thenThrow(const ApiException('No se pudo conectar'));
+    when(
+      () => repository.getProfile(),
+    ).thenThrow(const ApiException('No se pudo conectar'));
 
     await pumpScreen(tester, profileRepository: repository);
 
@@ -145,61 +145,71 @@ void main() {
     expect(find.text('REINTENTAR'), findsOneWidget);
   });
 
-  testWidgets('editar perfil → PATCH con fullName/phone, el email no se envía',
-      (tester) async {
-    final repository = MockProfileRepository();
-    when(() => repository.getProfile()).thenAnswer((_) async => user);
-    final updated = user.copyWith(fullName: 'Ragnar Lodbrok', phone: '+51 1');
-    when(() => repository.updateProfile(
+  testWidgets(
+    'editar perfil → PATCH con fullName/phone, el email no se envía',
+    (tester) async {
+      final repository = MockProfileRepository();
+      when(() => repository.getProfile()).thenAnswer((_) async => user);
+      final updated = user.copyWith(fullName: 'Ragnar Lodbrok', phone: '+51 1');
+      when(
+        () => repository.updateProfile(
           fullName: 'Ragnar Lodbrok',
           phone: '+51 1',
-        )).thenAnswer((_) async => updated);
+        ),
+      ).thenAnswer((_) async => updated);
 
-    await pumpScreen(tester, profileRepository: repository);
+      await pumpScreen(tester, profileRepository: repository);
 
-    await tester.tap(find.byKey(const ValueKey('profile-edit')));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('profile-edit')));
+      await tester.pumpAndSettle();
 
-    // El email se muestra de solo lectura, no como campo editable.
-    expect(find.text('El email no se puede editar'), findsOneWidget);
+      // El email se muestra de solo lectura, no como campo editable.
+      expect(find.text('El email no se puede editar'), findsOneWidget);
 
-    await tester.enterText(
-      find.byKey(const ValueKey('profile-fullname')),
-      'Ragnar Lodbrok',
-    );
-    await tester.enterText(
-      find.byKey(const ValueKey('profile-phone')),
-      '+51 1',
-    );
-    await tester.tap(find.byKey(const ValueKey('profile-save')));
-    await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('profile-fullname')),
+        'Ragnar Lodbrok',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('profile-phone')),
+        '+51 1',
+      );
+      await tester.tap(find.byKey(const ValueKey('profile-save')));
+      await tester.pumpAndSettle();
 
-    verify(() => repository.updateProfile(
+      verify(
+        () => repository.updateProfile(
           fullName: 'Ragnar Lodbrok',
           phone: '+51 1',
-        )).called(1);
-    expect(find.text('Ragnar Lodbrok'), findsOneWidget);
-  });
+        ),
+      ).called(1);
+      expect(find.text('Ragnar Lodbrok'), findsOneWidget);
+    },
+  );
 
-  testWidgets('error del backend al guardar → mensaje real, formulario sigue abierto',
-      (tester) async {
-    final repository = MockProfileRepository();
-    when(() => repository.getProfile()).thenAnswer((_) async => user);
-    when(() => repository.updateProfile(
+  testWidgets(
+    'error del backend al guardar → mensaje real, formulario sigue abierto',
+    (tester) async {
+      final repository = MockProfileRepository();
+      when(() => repository.getProfile()).thenAnswer((_) async => user);
+      when(
+        () => repository.updateProfile(
           fullName: any(named: 'fullName'),
           phone: any(named: 'phone'),
-        )).thenThrow(const ApiException('El teléfono es inválido'));
+        ),
+      ).thenThrow(const ApiException('El teléfono es inválido'));
 
-    await pumpScreen(tester, profileRepository: repository);
+      await pumpScreen(tester, profileRepository: repository);
 
-    await tester.tap(find.byKey(const ValueKey('profile-edit')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('profile-save')));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('profile-edit')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('profile-save')));
+      await tester.pumpAndSettle();
 
-    expect(find.text('El teléfono es inválido'), findsOneWidget);
-    expect(find.byKey(const ValueKey('profile-fullname')), findsOneWidget);
-  });
+      expect(find.text('El teléfono es inválido'), findsOneWidget);
+      expect(find.byKey(const ValueKey('profile-fullname')), findsOneWidget);
+    },
+  );
 
   testWidgets('Direcciones guardadas → navega a /addresses', (tester) async {
     final repository = MockProfileRepository();
@@ -225,8 +235,9 @@ void main() {
     expect(find.text('CUPONES'), findsOneWidget);
   });
 
-  testWidgets('Cerrar sesión → confirma, cierra sesión real y navega a Login',
-      (tester) async {
+  testWidgets('Cerrar sesión → confirma, cierra sesión real y navega a Login', (
+    tester,
+  ) async {
     final repository = MockProfileRepository();
     when(() => repository.getProfile()).thenAnswer((_) async => user);
     final authRepo = MockAuthRepository();
@@ -314,46 +325,41 @@ void main() {
       expect(find.text('Desactivadas'), findsOneWidget);
     });
 
-    testWidgets(
-      'notDetermined → tocar el renglón dispara requestPermission(), '
-      'NUNCA openSystemSettings()',
-      (tester) async {
-        final repository = MockProfileRepository();
-        when(() => repository.getProfile()).thenAnswer((_) async => user);
-        final permissionRepo = MockNotificationPermissionRepository();
-        var calls = 0;
-        when(() => permissionRepo.getStatus()).thenAnswer((_) async {
-          calls++;
-          // Primera consulta (build inicial): notDetermined. Tras el tap,
-          // handleTap() nunca asume el resultado de requestPermission() —
-          // vuelve a preguntar el estado real (refresh()), que ya debe
-          // reflejar el cambio.
-          return calls == 1
-              ? AuthorizationStatus.notDetermined
-              : AuthorizationStatus.authorized;
-        });
-        when(
-          () => permissionRepo.requestPermission(),
-        ).thenAnswer((_) async => AuthorizationStatus.authorized);
+    testWidgets('notDetermined → tocar el renglón dispara requestPermission(), '
+        'NUNCA openSystemSettings()', (tester) async {
+      final repository = MockProfileRepository();
+      when(() => repository.getProfile()).thenAnswer((_) async => user);
+      final permissionRepo = MockNotificationPermissionRepository();
+      var calls = 0;
+      when(() => permissionRepo.getStatus()).thenAnswer((_) async {
+        calls++;
+        // Primera consulta (build inicial): notDetermined. Tras el tap,
+        // handleTap() nunca asume el resultado de requestPermission() —
+        // vuelve a preguntar el estado real (refresh()), que ya debe
+        // reflejar el cambio.
+        return calls == 1
+            ? AuthorizationStatus.notDetermined
+            : AuthorizationStatus.authorized;
+      });
+      when(
+        () => permissionRepo.requestPermission(),
+      ).thenAnswer((_) async => AuthorizationStatus.authorized);
 
-        await pumpScreen(
-          tester,
-          profileRepository: repository,
-          notificationPermissionRepository: permissionRepo,
-        );
+      await pumpScreen(
+        tester,
+        profileRepository: repository,
+        notificationPermissionRepository: permissionRepo,
+      );
 
-        await tester.tap(
-          find.byKey(const ValueKey('profile-notifications-tap')),
-        );
-        await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('profile-notifications-tap')));
+      await tester.pumpAndSettle();
 
-        verify(() => permissionRepo.requestPermission()).called(1);
-        verifyNever(() => permissionRepo.openSystemSettings());
-        expect(calls, 2);
-        // Refrescó tras el pedido: ahora muestra el estado real nuevo.
-        expect(find.text('Activadas'), findsOneWidget);
-      },
-    );
+      verify(() => permissionRepo.requestPermission()).called(1);
+      verifyNever(() => permissionRepo.openSystemSettings());
+      expect(calls, 2);
+      // Refrescó tras el pedido: ahora muestra el estado real nuevo.
+      expect(find.text('Activadas'), findsOneWidget);
+    });
 
     testWidgets(
       'denied → tocar el renglón abre Configuración del sistema, NUNCA '
@@ -438,9 +444,7 @@ void main() {
 
         expect(find.text('Desactivadas'), findsOneWidget);
 
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.paused,
-        );
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
         tester.binding.handleAppLifecycleStateChanged(
           AppLifecycleState.resumed,
         );

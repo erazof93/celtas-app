@@ -22,6 +22,37 @@ final publicMenuProvider = FutureProvider<List<PublicMenuCategory>>(
   (ref) => ref.watch(homeRepositoryProvider).getMenu(),
 );
 
+/// User-triggered refreshes share an in-flight FutureProvider request.
+/// Errors remain in AsyncValue for the UI; callbacks never throw to gestures.
+final homeRefreshProvider = Provider<HomeRefresh>((ref) => HomeRefresh(ref));
+
+class HomeRefresh {
+  HomeRefresh(this._ref);
+  final Ref _ref;
+
+  Future<void> menu() => _refresh(publicMenuProvider);
+  Future<void> banners() => _refresh(activeBannersProvider);
+
+  Future<void> _refresh<T>(FutureProvider<T> provider) async {
+    if (!_ref.read(provider).isLoading) _ref.invalidate(provider);
+    try {
+      await _ref.read(provider.future);
+    } catch (_) {
+      // The provider exposes the failure and retains its previous data.
+    }
+  }
+
+  Future<void> all() async {
+    await Future.wait([menu(), banners()]);
+  }
+
+  Future<void> failed() async {
+    final menuFailed = _ref.read(publicMenuProvider).hasError;
+    final bannersFailed = _ref.read(activeBannersProvider).hasError;
+    await Future.wait([if (menuFailed) menu(), if (bannersFailed) banners()]);
+  }
+}
+
 /// Categoría seleccionada en los chips del menú (`null` = "Todas").
 ///
 /// Vive acá (no como estado local de `_MenuList`) porque un banner con

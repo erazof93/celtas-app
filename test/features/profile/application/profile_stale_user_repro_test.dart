@@ -6,6 +6,7 @@ import 'package:celtas_mobile/features/notifications/application/notification_pr
 import 'package:celtas_mobile/features/notifications/data/notification_repository.dart';
 import 'package:celtas_mobile/features/profile/application/profile_providers.dart';
 import 'package:celtas_mobile/features/profile/data/profile_repository.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -14,19 +15,20 @@ class MockProfileRepository extends Mock implements ProfileRepository {}
 
 class MockAuthRepository extends Mock implements AuthRepository {}
 
-class MockNotificationRepository extends Mock implements NotificationRepository {}
+class MockNotificationRepository extends Mock
+    implements NotificationRepository {}
 
 User _mk(String id, String name) => User(
-      id: id,
-      email: '$id@email.com',
-      fullName: name,
-      provider: UserProvider.local,
-      phone: '+51 1',
-      totalSpent: 0,
-      role: UserRole.cliente,
-      createdAt: DateTime.utc(2026),
-      updatedAt: DateTime.utc(2026),
-    );
+  id: id,
+  email: '$id@email.com',
+  fullName: name,
+  provider: UserProvider.local,
+  phone: '+51 1',
+  totalSpent: 0,
+  role: UserRole.cliente,
+  createdAt: DateTime.utc(2026),
+  updatedAt: DateTime.utc(2026),
+);
 
 // CORREGIDO (sesion de mantenimiento posterior a 2026-09-02): `profileProvider`
 // es un `AsyncNotifierProvider` keep-alive (no autoDispose); ahora se invalida
@@ -36,6 +38,11 @@ User _mk(String id, String name) => User(
 // otra cuenta sin reiniciar la app. Se eligio esta capa (no
 // `AuthController.logout()`) para no invertir la dependencia auth->profile.
 void main() {
+  setUpAll(
+    () => dotenv.loadFromString(
+      envString: 'API_BASE_URL=https://example.invalid',
+    ),
+  );
   test(
     'profileProvider ya NO queda con el user anterior tras logout + login de '
     'otra cuenta',
@@ -52,7 +59,12 @@ void main() {
 
       final authRepo = MockAuthRepository();
       when(() => authRepo.readRefreshToken()).thenAnswer((_) async => null);
-      when(() => authRepo.saveRefreshToken(any())).thenAnswer((_) async {});
+      when(
+        () => authRepo.saveRefreshToken(
+          any(),
+          isCurrent: any(named: 'isCurrent'),
+        ),
+      ).thenAnswer((_) async {});
       when(() => authRepo.clearRefreshToken()).thenAnswer((_) async {});
       when(() => authRepo.signOutFromGoogle()).thenAnswer((_) async {});
       when(
@@ -61,11 +73,8 @@ void main() {
           password: any(named: 'password'),
         ),
       ).thenAnswer(
-        (_) async => AuthTokens(
-          accessToken: 'at-b',
-          refreshToken: 'rt-b',
-          user: userB,
-        ),
+        (_) async =>
+            AuthTokens(accessToken: 'at-b', refreshToken: 'rt-b', user: userB),
       );
 
       final notifRepo = MockNotificationRepository();
@@ -101,7 +110,11 @@ void main() {
             'profileProvider sigue cacheando al user A; nadie lo invalida en '
             'logout/login',
       );
-      expect(calls.length, 2, reason: 'getProfile() debe re-consultarse tras el login de otra cuenta');
+      expect(
+        calls.length,
+        2,
+        reason: 'getProfile() debe re-consultarse tras el login de otra cuenta',
+      );
     },
   );
 }

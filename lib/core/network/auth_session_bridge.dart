@@ -14,17 +14,26 @@ abstract class AuthSessionBridge {
   /// propósito; se recupera con el refresh al reabrir).
   String? get accessToken;
 
+  /// Changes on restore/login/logout, so old HTTP responses cannot commit
+  /// credentials or replay requests in a different account.
+  int get revision;
+
+  /// Permite renovar la sesión autenticada, incluido el desregistro FCM
+  /// durante logout; nunca inicia otro refresh durante el bootstrap.
+  bool get canRefresh;
+
   /// Lee el refresh token persistido en `flutter_secure_storage`.
   Future<String?> readRefreshToken();
 
-  /// Persiste el refresh token (rotación: el backend emite uno nuevo en cada
-  /// refresh).
-  Future<void> saveRefreshToken(String refreshToken);
-
-  /// Aplica los tokens recién emitidos por el refresh al estado en memoria
-  /// (accessToken + user actualizado).
-  Future<void> applyRefreshedTokens(AuthTokens tokens);
+  /// Persiste y publica tokens solo si pertenecen a la sesión esperada.
+  /// Devuelve false cuando el resultado ya es obsoleto.
+  /// `isCurrent` also guards queued persistence when a global budget expires.
+  Future<bool> commitRefreshedTokens(
+    AuthTokens tokens, {
+    required int expectedRevision,
+    bool Function()? isCurrent,
+  });
 
   /// Limpia la sesión completa: refresh token persistido + estado en memoria.
-  Future<void> clearSession();
+  Future<void> clearSession({int? expectedRevision});
 }

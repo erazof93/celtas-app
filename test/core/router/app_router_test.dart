@@ -18,6 +18,7 @@ import 'package:celtas_mobile/features/notifications/data/notification_repositor
 import 'package:celtas_mobile/features/rewards/application/reward_providers.dart';
 import 'package:celtas_mobile/features/rewards/data/models/reward_progress.dart';
 import 'package:celtas_mobile/features/rewards/data/reward_repository.dart';
+import 'package:celtas_mobile/features/settings/application/app_version_check.dart';
 import 'package:celtas_mobile/features/settings/application/settings_providers.dart';
 import 'package:celtas_mobile/features/settings/data/models/business_hours.dart';
 import 'package:celtas_mobile/shared/widgets/celtas_bottom_nav.dart';
@@ -34,7 +35,8 @@ class MockAuthRepository extends Mock implements AuthRepository {}
 
 class MockRewardRepository extends Mock implements RewardRepository {}
 
-class MockNotificationRepository extends Mock implements NotificationRepository {}
+class MockNotificationRepository extends Mock
+    implements NotificationRepository {}
 
 /// `NotificationRepository` con `clearFcmToken()` stubbeado a no-op — lo único
 /// que `logout()` le pide.
@@ -104,6 +106,9 @@ void main() {
     RewardRepository? rewardRepository,
     List<Address> addresses = const [],
   }) => [
+    appVersionCheckProvider.overrideWith(
+      (ref) async => AppVersionCheck.noBlock,
+    ),
     authRepositoryProvider.overrideWithValue(repository),
     // El header del Home observa `addressListProvider` — sin este override
     // dispararía un `GET /users/me/addresses` real en el entorno de test.
@@ -149,7 +154,10 @@ void main() {
       ),
     ).thenAnswer((_) async => tokens);
     when(
-      () => repository.saveRefreshToken('refresh-1'),
+      () => repository.saveRefreshToken(
+        'refresh-1',
+        isCurrent: any(named: 'isCurrent'),
+      ),
     ).thenAnswer((_) async {});
 
     await tester.pumpWidget(
@@ -347,9 +355,17 @@ void main() {
     when(
       () => repository.readRefreshToken(),
     ).thenAnswer((_) async => 'refresh-1');
-    when(() => repository.refresh('refresh-1')).thenAnswer((_) async => tokens);
     when(
-      () => repository.saveRefreshToken('refresh-1'),
+      () => repository.refresh(
+        'refresh-1',
+        cancelToken: any(named: 'cancelToken'),
+      ),
+    ).thenAnswer((_) async => tokens);
+    when(
+      () => repository.saveRefreshToken(
+        'refresh-1',
+        isCurrent: any(named: 'isCurrent'),
+      ),
     ).thenAnswer((_) async {});
 
     await tester.pumpWidget(
@@ -505,22 +521,19 @@ void main() {
     expect(find.byType(CeltasBottomNav), findsNothing);
   });
 
-  testWidgets(
-    'header del Home sin direcciones → "Ingresa tu dirección" abre '
-    'AddressesScreen directo en el form de alta (?new=1)',
-    (tester) async {
-      final repository = MockAuthRepository();
-      await login(tester, repository);
+  testWidgets('header del Home sin direcciones → "Ingresa tu dirección" abre '
+      'AddressesScreen directo en el form de alta (?new=1)', (tester) async {
+    final repository = MockAuthRepository();
+    await login(tester, repository);
 
-      expect(find.text('Ingresa tu dirección'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('home-address-label')));
-      await tester.pumpAndSettle();
+    expect(find.text('Ingresa tu dirección'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('home-address-label')));
+    await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('addresses-form')), findsOneWidget);
-      expect(find.text('Nueva dirección'), findsOneWidget);
-      expect(find.byType(CeltasBottomNav), findsNothing);
-    },
-  );
+    expect(find.byKey(const ValueKey('addresses-form')), findsOneWidget);
+    expect(find.text('Nueva dirección'), findsOneWidget);
+    expect(find.byType(CeltasBottomNav), findsNothing);
+  });
 
   testWidgets(
     'header del Home con dirección → el texto abre AddressesScreen en '

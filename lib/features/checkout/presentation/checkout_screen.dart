@@ -6,6 +6,7 @@ import 'package:celtas_mobile/features/addresses/data/models/address.dart';
 import 'package:celtas_mobile/features/addresses/presentation/widgets/address_form_card.dart';
 import 'package:celtas_mobile/features/addresses/presentation/widgets/principal_badge.dart';
 import 'package:celtas_mobile/features/auth/application/auth_providers.dart';
+import 'package:celtas_mobile/features/auth/application/auth_state.dart';
 import 'package:celtas_mobile/features/cart/application/cart_provider.dart';
 import 'package:celtas_mobile/features/checkout/application/checkout_providers.dart';
 import 'package:celtas_mobile/features/checkout/data/models/delivery_estimate.dart';
@@ -169,6 +170,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   Future<void> _confirmOrder() async {
     if (_confirming || _preparingOrder) return;
+    final session = ref.read(authControllerProvider);
+    if (session.status != AuthStatus.authenticated ||
+        session.accessToken == null) {
+      setState(
+        () => _orderError = 'Restaura tu sesión antes de confirmar el pedido.',
+      );
+      return;
+    }
     final address = _currentAddress();
     if (address == null) return;
     final estimate = _currentCoveredEstimate(address.id);
@@ -196,6 +205,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       // No enviar el snapshot capturado si cambió durante el modal o si la
       // cotización se invalidó. El usuario revisa los datos nuevos primero.
       if (!mounted) return;
+      final currentSession = ref.read(authControllerProvider);
+      if (currentSession.status != AuthStatus.authenticated ||
+          currentSession.accessToken == null ||
+          currentSession.user?.id != session.user?.id) {
+        setState(
+          () => _orderError =
+              'Tu sesión cambió. Revisa el pedido e inténtalo nuevamente.',
+        );
+        return;
+      }
       if (_currentAddress() != address ||
           _currentCoveredEstimate(addressId) != estimate ||
           ref.read(cartProvider) != cart ||

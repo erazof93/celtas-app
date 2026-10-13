@@ -30,6 +30,21 @@ class AuthRepository {
   final FlutterSecureStorage _secureStorage;
 
   static const _refreshTokenKey = 'celtas_refresh_token';
+  Future<void> _credentialWrites = Future.value();
+
+  // Native storage writes cannot be cancelled. Keep newer writes/deletes
+  // behind them, and check ownership again before starting queued mutations.
+  Future<void> _mutateCredentials(
+    Future<void> Function() mutation,
+    bool Function()? isCurrent,
+  ) {
+    final scheduled = _credentialWrites.then((_) async {
+      if (isCurrent != null && !isCurrent()) return;
+      await mutation();
+    });
+    _credentialWrites = scheduled.catchError((_) {});
+    return scheduled;
+  }
 
   /// La SDK de Google exige `initialize()` UNA sola vez por proceso (llamarlo
   /// más de una vez es "undefined behavior" según su documentación). La app
@@ -141,22 +156,37 @@ class AuthRepository {
 
   /// Renueva el access token con el refresh token (rotación: devuelve un
   /// refresh token nuevo que hay que persistir).
-  Future<AuthTokens> refresh(String refreshToken) async {
+  Future<AuthTokens> refresh(
+    String refreshToken, {
+    CancelToken? cancelToken,
+  }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/auth/refresh',
       data: {'refreshToken': refreshToken},
+      cancelToken: cancelToken,
     );
     return AuthTokens.fromJson(response.data!);
   }
 
   // --- Persistencia del refresh token (flutter_secure_storage). ---
 
-  Future<void> saveRefreshToken(String refreshToken) =>
-      _secureStorage.write(key: _refreshTokenKey, value: refreshToken);
+  Future<void> saveRefreshToken(
+    String refreshToken, {
+    bool Function()? isCurrent,
+  }) => _mutateCredentials(
+    () => _secureStorage.write(key: _refreshTokenKey, value: refreshToken),
+    isCurrent,
+  );
 
-  Future<String?> readRefreshToken() =>
-      _secureStorage.read(key: _refreshTokenKey);
+  Future<String?> readRefreshToken() async {
+    await _credentialWrites;
+    return _secureStorage.read(key: _refreshTokenKey);
+  }
 
-  Future<void> clearRefreshToken() =>
-      _secureStorage.delete(key: _refreshTokenKey);
+  // Deletion is authorized when queued. It must run before subsequent writes
+  // even if a later login fails, otherwise a logged-out token could survive.
+  Future<void> clearRefreshToken() => _mutateCredentials(
+    () => _secureStorage.delete(key: _refreshTokenKey),
+    null,
+  );
 }

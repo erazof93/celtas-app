@@ -32,10 +32,13 @@ class SettingsRepository {
   /// que este repositorio necesite cambiar — cada consumidor lee solo la
   /// key que le importa (ver `appVersionCheckProvider`, que lee
   /// `min_app_version`).
-  Future<Map<String, dynamic>> getPublicSettings() async {
+  Future<Map<String, dynamic>> getPublicSettings({
+    CancelToken? cancelToken,
+  }) async {
     try {
       final response = await _dio.get<Map<String, dynamic>>(
         '/settings/public',
+        cancelToken: cancelToken,
       );
       return response.data ?? const {};
     } on DioException catch (e) {
